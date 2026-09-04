@@ -23,12 +23,12 @@ Our first client planning meeting is **9/12/2026 at 1:00pm**.
 
 Primary channel: **Slack, #refrogteam3**. Client contact goes through **Wendy Macias (w.macias@tcu.edu)**.
 
-We reply within **24** hours on weekdays.
+We reply within **24** hours on weekdays. Anything urgent: **text the Slack chat**.
 
 ## 3. How we decide
 
 Routine calls: whoever owns the use case decides.
-Anything affecting the whole team: discussed at the weekly meeting.
+Anything affecting the whole team: discussed at the weekly meeting, decided by majority vote.
 A decision that survives the meeting is written down in our [weekly meeting minutes doc](https://docs.google.com/document/d/1e5lhVox60dBIgWSU1XA2-u0phgaDFue-6sH4He0c6po/edit?usp=sharing).
 
 ## 4. How work is claimed
@@ -53,6 +53,7 @@ A reviewer reads the issue before the diff. Blocking a merge: failing CI, an unr
 We use **Claude Code or Codex**. Our charter lives in `AGENTS.md`.
 Every member can explain any line submitted under their name.
 We do not merge agent output that nobody has read.
+Additional limits we agree on: **none**.
 
 ## 7. When someone does not deliver
 
