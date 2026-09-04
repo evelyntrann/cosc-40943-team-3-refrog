@@ -67,4 +67,4 @@ Each member adds their own line, in their own commit.
 
 - Evelyn Tran, September 4, 2026
 - Alexa Mercado, September 4, 2026
-- Alfonso Rodriguez-Tomax 4, 2026
+- Alfonso Rodriguez-Tomax, September 4, 2026
