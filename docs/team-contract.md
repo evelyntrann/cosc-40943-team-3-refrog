@@ -65,4 +65,4 @@ Still unresolved: we escalate to our TA, then to the instructor. We escalate ear
 
 Each member adds their own line, in their own commit.
 
-- <name>, <date>
+- Evelyn Tran, September 4, 2026
