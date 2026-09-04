@@ -21,7 +21,7 @@ Our first client planning meeting is **9/12/2026 at 1:00pm**.
 
 ## 2. Communication
 
-Primary channel: **Slack, #refrogteam3**.
+Primary channel: **Slack, #refrogteam3**. Client contact goes through **Wendy Macias (w.macias@tcu.edu)**.
 
 We reply within **24** hours on weekdays.
 
