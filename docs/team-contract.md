@@ -70,3 +70,4 @@ Each member adds their own line, in their own commit.
 - Alfonso Rodriguez-Tomax, September 4, 2026
 - Ethan Wong, September 4, 2026
 - Ananye Kejriwal, September 4, 2026
+- Spencer Scherger, September 8, 2026
