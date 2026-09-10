@@ -61,6 +61,19 @@ First: the use case owner raises it directly with the person within 48 hours of 
 If it happens again: it's raised at the next team meeting, the remaining work is reassigned, and the meeting minutes note it.
 Still unresolved: we escalate to our TA, then to the instructor. We escalate early rather than waiting until it threatens the deadline.
 
+## 8. Team lead schedule
+
+The team lead role rotates on this schedule:
+
+| Team lead | Dates |
+| --- | --- |
+| Ethan | September 10–23 |
+| Evelyn | September 24–October 7 |
+| Ananye | October 12–25 |
+| Alfonso | October 26–November 8 |
+| Alexa | November 9–22 |
+| Spencer | November 30–December 13 |
+
 ## Signatures
 
 Each member adds their own line, in their own commit.
