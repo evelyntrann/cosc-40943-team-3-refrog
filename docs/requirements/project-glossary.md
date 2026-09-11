@@ -1,9 +1,9 @@
 # Project Glossary
 
-**Project:** _[Your project name]_
-**Team:** _[Team NN]_
-**Client:** _[Client name and organization]_
-**Version:** 0.1
+**Project:** _[Refrog]_
+**Team:** _[Team 03]_
+**Client:** _[Refrog & TCU Sustainability]_
+**Version:** 0
 
 ---
 
@@ -50,7 +50,7 @@ _Rules:_
 
 | Date | Version | Description | Author |
 |---|---|---|---|
-| _[YYYY-MM-DD]_ | 0.1 | Initial terms from the client brief and first client meeting | _[Name]_ |
+| _[2026-09-11]_ | 0.0 | Initial terms from the client brief | _[Ethan Wong]_ |
 
 ---
 
@@ -81,3 +81,73 @@ _**Synonyms:** WAR, used conversationally by the client and in the existing spre
 _**Source:** the client's existing Google Sheets process, described in [vision-and-scope.md](vision-and-scope.md) section 1.2._
 
 _[End of worked examples. Delete them and write your own terms below.]_
+
+---
+
+### Diversion / Diverted Item
+
+An item that was donated through ReFrog and either shopped or redistributed to a partner, thereby kept out of a landfill. The brief uses dumpsters diverted as its primary impact metric.
+
+**Not to be confused with:** a donated item that goes unclaimed and may still end up discarded.
+
+**Source:** client brief, "Year-to-Year ReFrog™ Assessment Data" — "Est. number of 8-yard dumpsters diverted from landfill."
+
+### Donation Location
+
+A designated physical site on or near the TCU campus where student donators drop off items during move-out. ReFrog operated 2 locations in Year 1, growing to 7 by Year 3.
+
+**Not to be confused with:** a Donation Partner organization, which receives surplus items after the event.
+
+### Donation Partner
+
+An external organization (e.g., a charity or resale shop) that receives items collected by ReFrog that were not shopped during the event.
+
+### Donator
+
+A TCU student who is in the process of moving out and contributes items they no longer need to a donation location.
+
+**Synonyms:** donor — use *donator* to match the client's language.
+
+### Item
+
+The fundamental unit tracked by ReFrog: any physical object donated at a donation location, including furniture, appliances, clothing, linens, and household goods. Items are counted at donation and again at shopping, and their aggregate is used to estimate landfill diversion.
+
+**Not to be confused with:** a category of item (e.g., "furniture"); Item refers to a single countable object regardless of category.
+
+### Move-out
+
+The annual period at the end of the academic year when TCU students vacate campus housing and residence halls. ReFrog's donation and shopping activity is concentrated entirely within this window.
+
+### Shopper
+
+A TCU student, faculty member, staff member, or volunteer eligible to take donated items from a ReFrog event at no charge. Shopping is limited to these groups; TCU ID is checked at point of entry to verify eligibility.
+
+**Not to be confused with:** a Donator, who brings items in rather than taking them out.
+
+### Shopping
+
+The act of a verified Shopper selecting and taking donated items at no charge from a ReFrog event. Treated as a distinct tracked transaction from donation.
+
+**Not to be confused with:** retail shopping; no money changes hands.
+
+### Shopping Abuse
+
+A pattern in which a Shopper acquires a disproportionate number of items, preventing equitable access for other Shoppers. The brief uses the word "hoarding" and identifies monitoring it as a key goal of the app.
+
+**Synonyms:** hoarding — the client's informal term for the same concept.
+
+### TCU ID
+
+A Texas Christian University–issued identification card used to verify that a Shopper is an eligible member of the TCU community (student, faculty, staff, or volunteer). IDs are checked at point of entry to a shopping session.
+
+### Volunteer
+
+A person who works at a ReFrog event in an operational capacity — managing donation locations, assisting shoppers, or performing logistical tasks — without compensation. Volunteers may be TCU students, staff, faculty, administrators, or community members. Volunteers are also eligible to shop.
+
+**Not to be confused with:** a Shopper, who participates only in the shopping portion; a Volunteer may also shop but is not defined by that role.
+
+### Volunteer Hours
+
+The total time a volunteer works across one or more shifts during a move-out event. Used as a key year-over-year metric (e.g., 520 hours in Year 4).
+
+
