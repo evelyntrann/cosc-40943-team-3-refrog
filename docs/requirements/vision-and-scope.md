@@ -110,6 +110,10 @@ _[Projects are launched in the belief that creating or changing a product will p
 
 _[State the problem being solved or the opportunity being exploited, in the client's own terms. One or two paragraphs. This is the answer to "why is anyone paying for this?"]_
 
+ReFrog is a 100% volunteer-run program that collects usable items TCU students discard during move-out — furniture, appliances, clothing, linens, and household goods — and gets them into the hands of people who can use them, instead of the dumpster. Since launching with two donation sites in 2023, it has grown to seven sites and now handles close to 20,000 donated items and 9,600 shopped items a year, run by around 190 volunteers.
+
+That growth has outpaced the manual, paper- and memory-based way the program currently tracks itself. There is no system today for logging what is donated, verifying that a shopper is a TCU student, staff, or faculty member entitled to shop, signing volunteers up for shifts, or noticing when the same shopper may be taking far more than their share. As the program scales toward more locations and more volunteers each year, that manual tracking is the bottleneck — not donor or volunteer interest, which the year-over-year numbers show is still growing.
+
 ### 2.2 Business Objectives
 
 _[Summarize the business benefits the product will provide, **quantitatively and measurably**. Platitudes ("become recognized as a world-class provider") and vague improvements ("provide a more rewarding customer experience") are neither helpful nor verifiable.]_
