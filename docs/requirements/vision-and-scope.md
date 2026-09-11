@@ -51,6 +51,14 @@ _Example: "The client, XYZ Logistics, is a mid-sized shipping company that speci
 
 _**Checklist:** Would a reader who has never heard of this organization understand what it does and why this project exists?]_
 
+ReFrog™ is an entirely volunteer initiative at Texas Christian University (TCU), founded by Courtney Hendrix, Erik Trevino, and Wendy Macias to help TCU reduce move-out waste. It collects usable items that students do not want to keep or cannot take home, including furniture, appliances, clothing, linens, and household goods. These items were historically discarded during move-out; ReFrog redirects them to people who can use them, reducing landfill waste and supporting the community.
+
+Beginning with two donation locations in 2023, ReFrog grew to seven locations in 2025 and 2026. According to the client brief, it collected an estimated 48,000-plus items over its first four years, with 190 volunteers contributing 520 hours in 2026. Its participants include student donors, volunteers, donation and infrastructure partners, university administrative stakeholders, and shoppers. “Shopping” means taking donated items that shoppers can use without charge and is open to TCU students, faculty, staff, and volunteers. This practice evolved as organizers recognized that it helped keep more usable items out of landfills and benefit more people.
+
+As ReFrog has grown, organizers have identified a need to keep shopping professional and organized while supporting the initiative's mission. The client has requested an app that they hope will help track volunteer, donation, and shopping data; verify TCU IDs; support volunteer signup; and monitor potential shopping abuse, such as hoarding items. These are the client's stated hopes for the project.
+
+Source: *ReFrog™: Helping TCU Reduce Move-out Waste*, client brief for the computer science capstone team, provided before the first meeting.
+
 ### 1.2 Current Process Flows (As-Is Process Flows)
 
 _[Most projects require everyone involved to have a firm grasp of the business process being created, replicated, or improved. Without that understanding there is little chance users adopt the new solution. Process flows are the most effective model for building it.]_
