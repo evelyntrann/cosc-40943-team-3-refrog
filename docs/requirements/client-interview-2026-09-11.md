@@ -36,7 +36,7 @@ This is about order, not silence. Some clients want to think out loud with you, 
 | **Date** | _[2026-09-10]_ |
 | **Time and location** | _[TCU Moudy South 18, in person]_ |
 | **Client participants** | _[Wendy Macias, Co-Founder of Refrog]_ |
-| **Team participants** | _[Name (lead), Name (scribe), Name (observer), ...]_ |
+| **Team participants** | _[Alexa Mercado (lead), Ananye Kejriwal (scribe), Ethan Wong (scribe), Spencer Scherger(observer), Evelyn Tran(observer), Alfonso Rodriguez-Tomax(observer)]_ |
 | **Recording** | _[Asked? Granted or declined]_ |
 | **Photos of screens or forms** | _[Asked? Granted or declined]_ |
 
@@ -66,7 +66,8 @@ Most first meetings run 60 to 90 minutes. Budget for the short one.
 
 _**Must ask. 5 min.** Not small talk. Whose problem is this, how much of the domain lives only in this person's head, and how much of their own time do they have for you? A client fitting this around a full job answers email slowly, and you want to know that in week 3 rather than week 9._
 
-_Adapt: Tell me about being an HR manager. How did you choose that line of work? What do you most and least like about it? How does this project fit alongside the rest of your work?_
+_Adapt: Tell me about being a communication professor at TCU. What piqued your interest in founding refrog?
+
 
 **What they said:**
 
@@ -78,7 +79,7 @@ _Adapt: Tell me about being an HR manager. How did you choose that line of work?
 
 _**Must ask. 5 min.** You are here for vocabulary as much as facts. Every term you do not recognize goes in the glossary before you leave. When your client says "cycle" in one sentence and "sprint" in the next, ask which they mean while they are still in front of you; an agent reading the transcript afterward cannot ask._
 
-_Adapt: Give us some background on recruiting here. Why does it matter to the company? Who else is involved? Any documents, slides, or videos that would get us up to speed on the terminology? When you say [term], what does that cover?_
+_Adapt: Give us some background on refrog. Who else is involved? Any documents, slides, or videos that would get us up to speed on the terminology?
 
 **What they said:**
 
@@ -90,7 +91,7 @@ _**Must ask. 5 min.** Why this, why now. These become your business objectives, 
 
 _Expect to miss it here. Baselines surface in section 4, when they are looking at the thing that takes the time. Ask the objective now, listen for the number all hour, and close the gap in the read-back._
 
-_Adapt: Why did you propose this project? What is the main problem, or the opportunity? Who is affected, and who benefits? What happens if we do nothing? How will you know it worked, and what is that number today?_
+_Adapt: Did you want to have a mobile application or a web based application?
 
 **What they said:**
 
@@ -106,7 +107,7 @@ _**Must ask. 10 min, the best ten in the meeting.** Ask them to show you rather 
 
 _Walk one real recent case end to end. "Take me through the last one you did" beats "how does it usually work", because the general shape is a summary they have given before and the last real one has the exceptions in it._
 
-_Adapt: What are the steps in hiring a technical candidate? Could you show me your interview guide, and the notes from the last few? Who does what at each step? Where does it get stuck? What do you do when it goes wrong?_
+_Adapt: What are the steps end-to-end on a refrog event? Could you show me your volunteer sign up form, and how you track items? Who does what at each step?_
 
 **What they said:** _[Numbered steps, in their order, not yours.]_
 
@@ -116,7 +117,8 @@ _Adapt: What are the steps in hiring a technical candidate? Could you show me yo
 
 _**Must ask. 5 min.** The complaint is usually the requirement. Listen for "must", "unless", "only", and "except", which arrive unannounced in the middle of a story about something else. Those sentences are business rules, and they exist whether or not your software does._
 
-_Adapt: What is the most frustrating part? Walk me through the last time it went badly. What takes longest? What do you have to redo? What do people get wrong? What do you check by hand because you do not trust the system?_
+_Adapt:  Where does it get stuck? What do you do when it goes wrong?
+What is the most frustrating part about your current system? Walk me through the last time it went badly. 
 
 **What they said:**
 
@@ -126,7 +128,7 @@ _Adapt: What is the most frustrating part? Walk me through the last time it went
 
 _**Must ask. 3 min.** Ask what is good before you propose replacing it. A team that removes something the client liked has lost trust it will not get back this semester, and nobody volunteers this unasked._
 
-_Adapt: What would you keep exactly as it is? What would you miss if it disappeared? Has anything been tried before that did not work, and why?_
+_Adapt: Is there anything you like about reFrog currently that you wouldn't want to change? Has anything been tried before that did not work, and why?_
 
 **What they said:** _[Explicitly: what must not change.]_
 
@@ -134,7 +136,7 @@ _Adapt: What would you keep exactly as it is? What would you miss if it disappea
 
 _**Must ask. 3 min.** These numbers decide most of your architecture, and they are cheap to ask for and expensive to guess. Twenty records a semester and two hundred thousand a day are different systems._
 
-_Adapt: How many of these in a week? A year? How many at the busiest moment, and when is that? How big is the largest one? How much history has to stay available? How many people use it at once on the worst day?_
+_Adapt: How many people do you expect at your events? What do you use amount of inventory and other data for? Do you seperate items donated by category?
 
 **What they said:** _[Get a number, or record that you did not.]_
 
@@ -144,7 +146,7 @@ _**Must ask. 4 min.** The person who commissions software is often not the perso
 
 _**If you cannot reach the real users, that is a project risk, not a scheduling detail.** Record it as an `RI-<slug>` the same day. Building from a proxy's account is the most common way a capstone ships something nobody uses, and it is survivable only if you know you are doing it._
 
-_Adapt: Who uses this day to day? How many? What do they use today? Can we talk to two or three, and watch one of them work? Will they test it before handover?_
+_Adapt: Who is going to interact with the refrog app? Who is the primary user for the refrog app?
 
 **What they said:**
 
@@ -158,7 +160,10 @@ _Adapt: Who uses this day to day? How many? What do they use today? Can we talk 
 
 _**Must ask. 4 min.** Nobody asks these in meeting 1 and everybody regrets it in November. A constraint restricts how you may build, and it is a requirement even though it describes no behavior. Ask directly; clients do not volunteer these, they assume you know._
 
-_Adapt: Is there anything we are required to use, or forbidden from using? Does IT have to approve the technology, and how long does that take? Does this touch personal data, student records, health information, or payments? Any regulations or policies it has to satisfy? Any hard dates we do not know about? Is there a budget for hosting, and who signs off?_
+_Adapt: 
+Is there anything we are required to use, or forbidden from using when building the app?
+ Does this touch personal data, student records, health information, or payments? 
+ Any regulations or policies it has to satisfy? Is there a budget for hosting, and who signs off?_
 
 **What they said:**
 
@@ -166,7 +171,8 @@ _Adapt: Is there anything we are required to use, or forbidden from using? Does 
 
 _**Must ask. 3 min.** What your system has to talk to. Access credentials take weeks to obtain, so the ask has to happen now._
 
-_Adapt: What other systems does this exchange data with, in which direction, in what format? Who owns them, and who do we ask for access? How long does that usually take? Is there documentation? What does the service cost, and who pays?_
+_Adapt:
+
 
 **What they said:**
 
@@ -174,7 +180,9 @@ _Adapt: What other systems does this exchange data with, in which direction, in 
 
 _**Must ask. 2 min.** The question students never ask and every client can answer. **Who runs this after we graduate, and what do they already know how to run?** It constrains your entire technology choice, so ask before you pick a stack rather than after._
 
-_Adapt: How long should this keep running? Who supports it after we graduate from TCU? What do they already maintain, in what languages? Who pays for hosting next year, and who owns the accounts?_
+_Adapt:
+What top features would you like to see implemented first?
+How long should this keep running? Who supports it after we graduate from TCU? What do they already maintain, in what languages? Who pays for hosting next year, and who owns the accounts?_
 
 **What they said:**
 
@@ -182,7 +190,7 @@ _Adapt: How long should this keep running? Who supports it after we graduate fro
 
 _**If there is time. 1 min.** Cheap, and occasionally it turns out somebody with a veto has not been consulted._
 
-_Adapt: Who else could influence this, or be affected by it? Whose approval do we need? Anyone who would rather this project did not happen?_
+_Adapt: Who else could influence this, or be affected by it? Whose approval do we need?_
 
 **What they said:**
 
