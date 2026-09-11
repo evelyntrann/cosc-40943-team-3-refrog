@@ -1,8 +1,8 @@
 # Vision and Scope
 
-**Project:** _[Your project name]_
-**Team:** _[Team NN]_
-**Client:** _[Client name and organization]_
+**Project:** _[Refrog]_
+**Team:** _[Team 3]_
+**Client:** _[Wendy Macias, Texas Christian University]_
 **Version:** 0.1
 
 ---
@@ -50,6 +50,14 @@ _**Step 1: Describe the business.** Introduce the organization. Cover what it do
 _Example: "The client, XYZ Logistics, is a mid-sized shipping company that specializes in last-mile delivery services for e-commerce businesses. The company operates in five major cities, employs 200 delivery staff, and handles over 10,000 deliveries per day. The goal is to optimize delivery efficiency and customer satisfaction."_
 
 _**Checklist:** Would a reader who has never heard of this organization understand what it does and why this project exists?]_
+
+ReFrog™ is an entirely volunteer initiative at Texas Christian University (TCU), founded by Courtney Hendrix, Erik Trevino, and Wendy Macias to help TCU reduce move-out waste. It collects usable items that students do not want to keep or cannot take home, including furniture, appliances, clothing, linens, and household goods. These items were historically discarded during move-out; ReFrog redirects them to people who can use them, reducing landfill waste and supporting the community.
+
+Beginning with two donation locations in 2023, ReFrog grew to seven locations in 2025 and 2026. According to the client brief, it collected an estimated 48,000-plus items over its first four years, with 190 volunteers contributing 520 hours in 2026. Its participants include student donors, volunteers, donation and infrastructure partners, university administrative stakeholders, and shoppers. “Shopping” means taking donated items that shoppers can use without charge and is open to TCU students, faculty, staff, and volunteers. This practice evolved as organizers recognized that it helped keep more usable items out of landfills and benefit more people.
+
+As ReFrog has grown, organizers have identified a need to keep shopping professional and organized while supporting the initiative's mission. The client has requested an app that they hope will help track volunteer, donation, and shopping data; verify TCU IDs; support volunteer signup; and monitor potential shopping abuse, such as hoarding items. These are the client's stated hopes for the project.
+
+Source: *ReFrog™: Helping TCU Reduce Move-out Waste*, client brief for the computer science capstone team, provided before the first meeting.
 
 ### 1.2 Current Process Flows (As-Is Process Flows)
 
@@ -102,6 +110,10 @@ _[Projects are launched in the belief that creating or changing a product will p
 
 _[State the problem being solved or the opportunity being exploited, in the client's own terms. One or two paragraphs. This is the answer to "why is anyone paying for this?"]_
 
+ReFrog is a 100% volunteer-run program that collects usable items TCU students discard during move-out — furniture, appliances, clothing, linens, and household goods — and gets them into the hands of people who can use them, instead of the dumpster. Since launching with two donation sites in 2023, it has grown to seven sites and now handles close to 20,000 donated items and 9,600 shopped items a year, run by around 190 volunteers.
+
+That growth has outpaced the manual, paper- and memory-based way the program currently tracks itself. There is no system today for logging what is donated, verifying that a shopper is a TCU student, staff, or faculty member entitled to shop, signing volunteers up for shifts, or noticing when the same shopper may be taking far more than their share. As the program scales toward more locations and more volunteers each year, that manual tracking is the bottleneck — not donor or volunteer interest, which the year-over-year numbers show is still growing.
+
 ### 2.2 Business Objectives
 
 _[Summarize the business benefits the product will provide, **quantitatively and measurably**. Platitudes ("become recognized as a world-class provider") and vague improvements ("provide a more rewarding customer experience") are neither helpful nor verifiable.]_
@@ -114,7 +126,7 @@ _Examples:_
 
 _**How to elicit these.** Clients rarely volunteer numbers. Ask: What business problem are you trying to solve? What is the motivation for solving it now? What would a highly successful solution do for you? What is a successful solution worth? If the answer contains no number, ask what the number is today._
 
-_**Checklist:** A year from now, could someone tell whether each objective was met? Does each one contain a quantity?]_
+_**Checklist:**_[A year from now, could someone tell whether each objective was met? Does each one contain a quantity?]_
 
 ### 2.3 Success Metrics
 
@@ -135,7 +147,7 @@ _**How to elicit these.** Ask "how will you know this worked?", then ask what th
 
 _**Choose your success metrics wisely. Make sure they measure what is important to the business, not just what is easy to measure.** "Reduce product development costs by 20 percent" is easy to measure, and also easy to achieve by laying off employees or investing less in innovation, neither of which is the intended outcome. Prefer a metric that gets worse if you build the wrong thing._
 
-_**Checklist:** Does each metric name its source, its baseline, and its deadline? Can this software actually move it? Can it be measured during testing or shortly after release, rather than a year later? Does every business objective have at least one metric behind it, and does every metric trace back to an objective?]_
+_**Checklist:** -[ Does each metric name its source, its baseline, and its deadline? Can this software actually move it? Can it be measured during testing or shortly after release, rather than a year later? Does every business objective have at least one metric behind it, and does every metric trace back to an objective?]_
 
 ### 2.4 Vision Statement
 
@@ -143,12 +155,12 @@ _[One statement summarizing, at the highest level, the position this product int
 
 | | |
 |---|---|
-| **For** | _[target customer]_ |
-| **Who** | _[the need or opportunity]_ |
-| **The** _[product name]_ | _[is a ...]_ |
-| **That** | _[major capabilities, key benefit, compelling reason to use it]_ |
-| **Unlike** | _[the current process, or the competing alternative]_ |
-| **Our product** | _[primary differentiation and advantage]_ |
+| **For** | _[ volunteers, student donors and reFrog administration]_ |
+| **Who** | _[ need an easiser way to track items donated, volunteer sign up and verify student identity]_ |
+| **The** _[Refrog app]_ | _[is a..]_ |
+| **That** | _[lets volunteers sign up to help, lets students verify their student status, keeps track of inventory in locations]_ |
+| **Unlike** | _[the current process of having volunteers sign up on the TCU sustainability website and manually tracking all assets]_ |
+| **Our product** | _[ takes away manual labor of having different sheets and forms]_ |
 
 _Worked example:_
 
