@@ -96,9 +96,88 @@ _**Step 5: Write for an outsider.** Assume your reader knows nothing about this 
 
 _**Checklist:** Is the business context clear to someone unfamiliar with it? Does the flow give step-by-step detail? Are all actors and tools described? Are the inefficiencies illustrated with specific examples? Is there a mermaid diagram with one subgraph per actor?]_
 
+**Volunteer recruitment & scheduling**
+
+```mermaid
+flowchart TD
+  subgraph Committee["TCU Sustainability Committee (Wendy, Courtney, Erik + members)"]
+    A["Meet periodically through the year to plan locations and logistics"] --> B["About a month before finals week, open volunteer sign-up via Sign Up Genius"]
+    B --> C["Send reminder emails, monitor sign-ups"]
+    G["Learn a volunteer canceled last-minute"] --> H["Cover the shift personally"]
+  end
+  subgraph Volunteer
+    D["See an open shift on Sign Up Genius"] --> E["Sign up for the shift"]
+    E --> F{"Still able to make it?"}
+    F -- No --> G
+    F -- Yes --> I["Work the shift during event week"]
+  end
+  C --> D
+```
+
+**Event-day donation, shopping, and pickup**
+
+```mermaid
+flowchart TD
+  subgraph Donor
+    A["Arrive at a donation site with items to give away"] --> B["Scan the site's QR code"]
+    B --> C["Open the Google Form"]
+    C --> D["Enter drop-off location"]
+    D --> E["Enter number of items being dropped off"]
+    E --> F["Submit the form"]
+    F --> G["Hand items to a volunteer"]
+  end
+  subgraph Volunteer
+    G --> H["Loosely sort items by type at the site"]
+    H --> I{"Someone wants to shop?"}
+    I -- Yes --> J["Check TCU ID visually - physical card or phone"]
+    J -- Not TCU-affiliated --> K["Turn away, or shopper leaves without checking in"]
+    J -- TCU-affiliated --> L["Let shopper browse the site's pods"]
+  end
+  subgraph Shopper
+    L --> M["Take wanted items"]
+    M --> N["Scan a separate QR code"]
+    N --> O["Log date, location, and number of items taken"]
+  end
+  subgraph Partners["Donation Partners (Wellman Project, TRIO, Archway)"]
+    Q["Arrive on a scheduled pickup day, usually starting Thursday"] --> R["Wellman Project takes teacher-related items first"]
+    R --> S["TRIO takes business-professional wear"]
+    S --> T["Archway takes everything left over, near the end"]
+  end
+```
+
+Volunteer scheduling and the event itself run on separate timelines. About a month before finals week, the TCU Sustainability Committee — founders Wendy Macias, Courtney Hendrix, and Erik Trevino, along with a few other members — opens volunteer sign-up through Sign Up Genius and sends reminder emails. When a volunteer cancels close to the date, there is no system to find a replacement automatically; one of the three founders covers the shift personally.
+
+During the event itself (Monday through Saturday of finals week, starting around 2pm), a donor arriving at a site scans a QR code, opens a Google Form, and enters the drop-off location and the number of items being dropped off before handing the items to a volunteer. The volunteer loosely sorts what comes in by type. When someone wants to shop, a volunteer checks their TCU affiliation by eye — a physical card or a phone ID — before letting them browse the site's pods; someone without TCU affiliation is turned away, though catching that depends entirely on the volunteer noticing. A shopper who is let in takes what they want, then scans a separate QR code and logs the date, location, and number of items taken in a second Google Form.
+
+From Thursday on, donation partners arrive on a set order to collect what remains: the Wellman Project takes teacher-related items first, TRIO takes business-professional wear next, and Archway takes everything left over near the end of the week.
+
+**Current tools, and their limitations:**
+
+- **Sign Up Genius** — volunteer scheduling and sign-up. No automated way to fill a shift when someone cancels last-minute; one of the three founders covers it personally.
+- **QR code → Google Form (donation)** — logs drop-off location and number of items only, with no item-level description. A couch and a notebook both count as "1 item," so the totals do not reflect real volume or type.
+- **QR code → Google Form (shopping)**, a separate form from the donation one — logs date, location, and number of items taken per visit. Nothing links one shopper's visits together, so there is no way to see a pattern of repeated or excessive shopping.
+- **Visual TCU ID check** — a volunteer checks a physical or phone ID by eye before letting someone shop. Not recorded anywhere, easy for someone to simply decline to show it, and enforcement depends entirely on the volunteer noticing during a busy period.
+- **Google Sheets**, auto-generated from the two Forms — the only source used to report ReFrog's impact at year-end. Reconciled by hand after the event, which is where Wendy Macias says an "unknown amount of error" enters the numbers.
+- **Manual headcount of donation-partner truckloads** — dumpsters-diverted and tonnage figures are estimated from memory of how many truckloads each partner took. Not tracked in any form or spreadsheet at all; it is an after-the-fact estimate by the three founders.
+
+**Pain points:**
+
+- Last-minute volunteer cancellations fall entirely on the three founders to absorb personally, which will not scale as ReFrog adds an eighth location next year.
+- Counting every item the same way — "a couch is equivalent to a notebook," in Wendy Macias's words — means the totals ReFrog reports do not reflect true volume, which is why she describes the data as having an "unknown amount of error."
+- Shopping abuse (a shopper "accumulating hundreds of items," or someone without TCU affiliation shopping) is only ever suspected, never confirmed, because no system links a shopper's visits together.
+- Donation-partner handoffs are not tracked at all: Archway said it received fewer usable items than expected even though ReFrog had described the volume in advance, because neither side had real numbers to check the handoff against.
+
 ### 1.3 References
 
 _[List every document referenced elsewhere in this one: the client's project brief, existing forms and reports, regulations, standards, competing products. Identify each by title, date, and where it can be obtained. The spreadsheet or screenshot your client showed you belongs here.]_
+
+- **ReFrog™: Helping TCU Reduce Move-out Waste** — client brief for the computer science capstone team, provided before the first meeting.
+- **ReFrog Donation Form** (Google Form) — donors log drop-off location and item count; referenced in §1.2. Obtained from Wendy Macias, September 11, 2026. https://docs.google.com/forms/d/e/1FAIpQLSfcGInBK4-Fl2dIWAFvCGyz2Ao5YDikI6DvYOGiOYrml7F_XA/viewform
+- **ReFrog Shopping Form** (Google Form) — shoppers log date, location, and item count taken; referenced in §1.2. Obtained from Wendy Macias, September 11, 2026. https://docs.google.com/forms/d/e/1FAIpQLSfd3-MKcCjhyJ3LtwXUyRx-qR6Ott06KG17Ka2QN6PFEqJg-Q/viewform
+- **ReFrog Volunteer Sign-In Form** (Google Form) — obtained from Wendy Macias, September 11, 2026. https://docs.google.com/forms/d/e/1FAIpQLSdr6j-Xd1ZMyDPwEJ9AwD7vgFLTZXmA7uoV-PGwWPdX297Mww/viewform
+- **Google Form Responses Sheet** (Google Sheet) — aggregated responses from the forms above; the source Wendy Macias reconciles by hand to report ReFrog's year-end impact, referenced in §1.2. Obtained September 11, 2026. https://docs.google.com/spreadsheets/d/1ciADnXltBiOuhxixqcflfXXphSHhaUc7wTqGUY0OHHA/view
+- _[Title needed — what does this sheet track?]_ (Google Sheet) — obtained September 11, 2026. https://docs.google.com/spreadsheets/d/1BpwtBPWajHj6jQDZ_XhCY0T-t3ioInGgNj1Vx6CLnKg/view
+- **Year-to-Year Comparison Sheet** (Google Sheet) — cumulative metrics comparing each year of ReFrog's operation. Obtained September 11, 2026. https://docs.google.com/spreadsheets/d/1lqYD15tJUPqRsM40l8BN6dHLbyBUlsOK/edit?gid=1442495151#gid=1442495151
 
 ---
 
@@ -136,7 +215,7 @@ _ReFrog Business objectives:_
 
 _**How to elicit these.** Clients rarely volunteer numbers. Ask: What business problem are you trying to solve? What is the motivation for solving it now? What would a highly successful solution do for you? What is a successful solution worth? If the answer contains no number, ask what the number is today._
 
-_**Checklist:**_[A year from now, could someone tell whether each objective was met? Does each one contain a quantity?]_
+_**Checklist:** A year from now, could someone tell whether each objective was met? Does each one contain a quantity?]_
 
 ### 2.3 Success Metrics
 
@@ -157,7 +236,7 @@ _**How to elicit these.** Ask "how will you know this worked?", then ask what th
 
 _**Choose your success metrics wisely. Make sure they measure what is important to the business, not just what is easy to measure.** "Reduce product development costs by 20 percent" is easy to measure, and also easy to achieve by laying off employees or investing less in innovation, neither of which is the intended outcome. Prefer a metric that gets worse if you build the wrong thing._
 
-_**Checklist:** -[ Does each metric name its source, its baseline, and its deadline? Can this software actually move it? Can it be measured during testing or shortly after release, rather than a year later? Does every business objective have at least one metric behind it, and does every metric trace back to an objective?]_
+_**Checklist:** Does each metric name its source, its baseline, and its deadline? Can this software actually move it? Can it be measured during testing or shortly after release, rather than a year later? Does every business objective have at least one metric behind it, and does every metric trace back to an objective?]_
 
 ### 2.4 Vision Statement
 
@@ -165,12 +244,6 @@ _[One statement summarizing, at the highest level, the position this product int
 
 | | |
 |---|---|
-| **For** | _[ volunteers, student donors and reFrog administration]_ |
-| **Who** | _[ need an easiser way to track items donated, volunteer sign up and verify student identity]_ |
-| **The** _[Refrog app]_ | _[is a..]_ |
-| **That** | _[lets volunteers sign up to help, lets students verify their student status, keeps track of inventory in locations]_ |
-| **Unlike** | _[the current process of having volunteers sign up on the TCU sustainability website and manually tracking all assets]_ |
-| **Our product** | _[ takes away manual labor of having different sheets and forms]_ |
 | **For** | _[student donors, shoppers, volunteers, and ReFrog's organizers]_ |
 | **Who** | _[need an easier way to sign up for volunteer shifts and cover last-minute cancellations, verify TCU affiliation, and see reliable numbers on donations and shopping instead of piecing them together by hand]_ |
 | **The** _[ReFrog app]_ | _[is a mobile-first application (exact platform not yet finalized, see `OI-1`)]_ |
