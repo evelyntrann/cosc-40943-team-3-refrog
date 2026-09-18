@@ -218,6 +218,15 @@ _A stakeholder is not always a user. The person paying for the software, the per
 | Stakeholder | Major value or benefit from this product | Attitude | Major features of interest | Constraints | End user? |
 |---|---|---|---|---|---|
 | _[Role]_ | _[What they get out of it]_ | _[Supportive, skeptical, unaware, opposed]_ | _[What they care about]_ | _[What limits them]_ | _[Yes or no]_ |
+| TCU Sustainability | Better management of ReFrog event, Brand loyalty |  | Volunteer management, Datatracking, ID verification | Honesty Data system, understaffed, Volunteer cancels | Yes |
+| Volunteers | Easier coordination and time management | | Signup, Management schedule of own volunteer hours | Finals Week | Yes |
+| Donators | Easy way to donate |  | Donation items submission tracking | Easier to just throw in dumpster | Yes |
+| Shoppers | Easy way to claim items | | Item shopping submission tracking |  | Yes |
+| TCU Community | Streamlined way to participate, staying informed | | Event Info/guide/maps | Downloading the app | Yes |
+| TCU Administration | Helping prevent waste, organization and audit trails |  | Data Tracking | Requires event to appear tidy, decision to fund ReFrog | No |
+| Wellman Project | Better coordination | | Schedule management, Information guide | Getting to right locations (on time), and past moveouts | Maybe |
+| Archway/Berry Good Buys | Better coordination | | Schedule management, Information guide | Getting to right locations (on time), and past moveouts | Maybe |
+| Trio | Better coordination | | Schedule management, Information guide | Getting to right locations (on time), and past moveouts | Maybe |
 
 _**Attitude is the column students leave blank, and the one that predicts trouble.** A stakeholder whose workload increases because of your software is not automatically supportive, and finding that out in December is too late._
 
@@ -230,6 +239,11 @@ _[Describe the working environment of the target users:_
 - _Any environmental constraints: mobile, outdoors, noisy, gloved hands, poor connectivity?_
 - _Which platforms are in use today, and which are planned?_
 - _What other applications are in use, and does yours have to integrate with them?]_
+- 
+- 
+- 
+- 
+- 
 
 ### 3.3 Alternatives and Competition
 
