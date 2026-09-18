@@ -136,7 +136,7 @@ _ReFrog Business objectives:_
 
 _**How to elicit these.** Clients rarely volunteer numbers. Ask: What business problem are you trying to solve? What is the motivation for solving it now? What would a highly successful solution do for you? What is a successful solution worth? If the answer contains no number, ask what the number is today._
 
-_**Checklist:** A year from now, could someone tell whether each objective was met? Does each one contain a quantity?]_
+_**Checklist:**_[A year from now, could someone tell whether each objective was met? Does each one contain a quantity?]_
 
 ### 2.3 Success Metrics
 
@@ -157,7 +157,7 @@ _**How to elicit these.** Ask "how will you know this worked?", then ask what th
 
 _**Choose your success metrics wisely. Make sure they measure what is important to the business, not just what is easy to measure.** "Reduce product development costs by 20 percent" is easy to measure, and also easy to achieve by laying off employees or investing less in innovation, neither of which is the intended outcome. Prefer a metric that gets worse if you build the wrong thing._
 
-_**Checklist:** Does each metric name its source, its baseline, and its deadline? Can this software actually move it? Can it be measured during testing or shortly after release, rather than a year later? Does every business objective have at least one metric behind it, and does every metric trace back to an objective?]_
+_**Checklist:** -[ Does each metric name its source, its baseline, and its deadline? Can this software actually move it? Can it be measured during testing or shortly after release, rather than a year later? Does every business objective have at least one metric behind it, and does every metric trace back to an objective?]_
 
 ### 2.4 Vision Statement
 
@@ -165,6 +165,12 @@ _[One statement summarizing, at the highest level, the position this product int
 
 | | |
 |---|---|
+| **For** | _[ volunteers, student donors and reFrog administration]_ |
+| **Who** | _[ need an easiser way to track items donated, volunteer sign up and verify student identity]_ |
+| **The** _[Refrog app]_ | _[is a..]_ |
+| **That** | _[lets volunteers sign up to help, lets students verify their student status, keeps track of inventory in locations]_ |
+| **Unlike** | _[the current process of having volunteers sign up on the TCU sustainability website and manually tracking all assets]_ |
+| **Our product** | _[ takes away manual labor of having different sheets and forms]_ |
 | **For** | _[student donors, shoppers, volunteers, and ReFrog's organizers]_ |
 | **Who** | _[need an easier way to sign up for volunteer shifts and cover last-minute cancellations, verify TCU affiliation, and see reliable numbers on donations and shopping instead of piecing them together by hand]_ |
 | **The** _[ReFrog app]_ | _[is a mobile-first application (exact platform not yet finalized, see `OI-1`)]_ |
