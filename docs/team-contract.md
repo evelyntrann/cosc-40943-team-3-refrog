@@ -67,11 +67,11 @@ The team lead role rotates on this schedule:
 
 | Team lead | Dates |
 | --- | --- |
-| Ethan | September 10–23 |
+| Alexa | September 10–23 |
 | Evelyn | September 24–October 7 |
 | Ananye | October 12–25 |
 | Alfonso | October 26–November 8 |
-| Alexa | November 9–22 |
+| Ethan | November 9–22 |
 | Spencer | November 30–December 13 |
 
 ## Signatures

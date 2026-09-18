@@ -29,6 +29,7 @@ _[Send the shortlist to your client the day before. A client who has seen the qu
 
 | ID | Question | Why it matters | Who can answer | Raised |
 |---|---|---|---|---|
+| OI-2 | What business benefit should this project improve, expressed as a measurable quantity? | Without a quantified business objective, we cannot complete the Business Objectives section or prioritize requirements in [vision-and-scope.md](vision-and-scope.md). | Client: Wendy Macias | 2026-09-11 |
 | OI-1 | _[ is refrog a web application or mobile application?]_ | _[ Blocks deciding what tech stack to use.]_ | _[Client]_ | _[2026-09-11]_
 |
 
