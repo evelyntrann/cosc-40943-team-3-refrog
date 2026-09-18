@@ -242,7 +242,12 @@ _[Describe the working environment of the target users:_
 
 **How many people are involved, and is that changing?**
 
-ReFrog involves four distinct user groups whose sizes differ sharply. The TCU Sustainability Committee — Wendy Macias, Courtney Hendrix, Erik Trevino, and a small number of student helpers — acts as the permanent organizing body and primary administrator of any system. Volunteers numbered 193 in Year 4 across 7 locations, with 2–3 per site, contributing 520 hours total; an eighth location is planned for the coming year, which will require additional volunteers the organizers already describe as hard to recruit. Shoppers reached an estimated 2,573 in the most recent event, of whom approximately 72% were students and 22% were staff. Donators are not tracked separately by headcount today. Three external Donation Recipient Partners (Wellman Project, Trio, and Archway/Berry Good Buys) attend near the end of each event to collect remaining items by truck. All groups are growing year-over-year.
+ReFrog involves four distinct user groups whose sizes differ sharply. 
+The TCU Sustainability Committee: Wendy Macias, Courtney Hendrix, Erik Trevino, and a small number of student helpers acts as the permanent organizing body and primary administrator of any system. 
+Volunteers numbered 193 in Year 4 across 7 locations, with 2–3 per site, contributing 520 hours total; an eighth location is planned for the coming year, which will require additional volunteers the organizers already describe as hard to recruit. 
+Shoppers reached an estimated 2,573 in the most recent event, of whom approximately 72% were students and 22% were staff. 
+Donators are not tracked separately by headcount today. 
+Three external Donation Recipient Partners (Wellman Project, Trio, and Archway/Berry Good Buys) attend near the end of each event to collect remaining items by truck. All groups are growing year-over-year.
 
 **How long is a task cycle, and how much time goes into each activity?**
 
@@ -250,15 +255,17 @@ The annual event cycle has two phases. The **planning phase** begins roughly one
 
 **Environmental constraints?**
 
-All event activity takes place outdoors or in open campus spaces during finals week. Volunteers work on their feet across physically spread-out sites managing a fast-moving, often chaotic crowd. Donators and shoppers interact at the point of drop-off or browsing, typically on a personal smartphone. The current QR-code-to-Google-Form workflow confirms that smartphone use is already the expected interaction model. Noise and pace during peak hours make any multi-step or slow-loading interface a friction point — the client stated explicitly that convenience must beat the ease of throwing an item in a dumpster. Accordingly, friction for donators and volunteers must be minimized; some friction for shoppers is acceptable. TCU campus Wi-Fi coverage at outdoor pod sites and connectivity for non-TCU visitors is unconfirmed (see `OI-connectivity`).
+All event activity takes place outdoors or in open campus spaces during finals week. Volunteers work on their feet across physically spread-out sites managing a fast-moving, often chaotic crowd. Donators and shoppers interact at the point of drop-off or browsing, typically on a personal smartphone. Noise and pace during peak hours make any multi-step or slow-loading interface a friction point — the client stated explicitly that convenience must beat the ease of throwing an item in a dumpster. Accordingly, friction for donators and volunteers must be minimized; some friction for shoppers is acceptable.
 
 **Which platforms are in use today, and which are planned?**
 
-Today ReFrog operates entirely on consumer Google tools: SignUpGenius for volunteer scheduling, Google Forms accessed via QR code at each site for donation and shopping logging, and Google Sheets for post-event data aggregation. The client expressed interest in a mobile app and identified Google Sign-In as the first authentication priority. The exact delivery platform — native iOS, native Android, cross-platform, or mobile-first web — has not been decided; the client said they are flexible on what is delivered, prioritizing function over platform choice (see `OI-platform`). The committee members who will serve as administrators are non-technical, so the administrative interface must require no engineering knowledge to operate.
+Today ReFrog operates entirely on consumer Google tools: SignUpGenius for volunteer scheduling, Google Forms accessed via QR code at each site for donation and shopping logging, and Google Sheets for post-event data aggregation. The client expressed interest in a mobile app. 
+The exact deliverable has not been decided.
+The committee members who will serve as administrators are non-technical, so the administrative interface must require no engineering knowledge to operate.
 
 **What other applications are in use, and does the new system have to integrate with them?**
 
-The current toolchain consists of SignUpGenius (volunteer sign-up), Google Forms via QR code (donation and shopping logging), Google Sheets (data aggregation), and the ReFrog website (public-facing event information). The client mentioned SignUpGenius as a potential integration point but did not commit to retaining it; whether the new system replaces or sits alongside it must be clarified before volunteer sign-up is designed (see `OI-signupgenius-replace-or-integrate`). No integration with TCU's identity management system for ID verification has been confirmed; IDs are currently checked visually at each site. No payment systems, health records, or FERPA-covered student data were identified as in scope.
+The current toolchain consists of SignUpGenius (volunteer sign-up), Google Forms via QR code (donation and shopping logging), Google Sheets (data aggregation), and the ReFrog website (public-facing event information). The client mentioned SignUpGenius as a potential integration point but did not commit to retaining it; 
 
 ### 3.3 Alternatives and Competition
 
