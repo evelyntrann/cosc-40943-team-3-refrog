@@ -126,13 +126,13 @@ _Examples:_
 
 _ReFrog Business objectives:_
 
-- _`BO-number-of-volunteers`: Increase the number of volunteers by XX%._
-- _`BO-number-of-volunteer-hours`: Increase the number of volunteer hours by XX%._
-- _`BO-organizations-working-with`: Increase the number of organizations ReFrog works with by XX%._
+- _`BO-number-of-volunteers`: Increase the number of volunteers by 10%._
+- _`BO-number-of-volunteer-hours`: Increase the number of volunteer hours by 15%._
+- _`BO-organizations-working-with`: Increase the number of organizations ReFrog works with by 1._
 - _`BO-organizers-time-saved`: Reduce the time ReFrog organizers need to set up by XX%_  
 - _`BO-accurate-data`: Increase the accuracy of the data collected by XX%._
-- _`BO-number-of-items`: Increase the number of items donated by XX%._
-- _`BO-money-saved`: Increase the money saved from paying for dumpsters by XX%._
+- _`BO-number-of-items`: Increase the number of items donated by 20%._
+- _`BO-money-saved`: Increase the money saved from paying for dumpsters by 15%._
 
 _**How to elicit these.** Clients rarely volunteer numbers. Ask: What business problem are you trying to solve? What is the motivation for solving it now? What would a highly successful solution do for you? What is a successful solution worth? If the answer contains no number, ask what the number is today._
 
