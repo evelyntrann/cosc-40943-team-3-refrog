@@ -100,7 +100,7 @@ A designated physical site on or near the TCU campus where student donators drop
 
 ### Donation Partner
 
-An external organization (e.g., a charity or resale shop) that receives items collected by ReFrog that were not shopped during the event.
+An external organization (e.g., a charity or resale shop) that receives items collected by ReFrog that were not shopped during the event. Current partners are the Wellman Project (teacher-related items), TRIO (business-professional wear), and Archway (everything remaining), who pick up in that order starting Thursday of event week.
 
 ### Donator
 
@@ -117,6 +117,12 @@ The fundamental unit tracked by ReFrog: any physical object donated at a donatio
 ### Move-out
 
 The annual period at the end of the academic year when TCU students vacate campus housing and residence halls. ReFrog's donation and shopping activity is concentrated entirely within this window.
+
+### Pod
+
+A shipping-container-like storage unit, donated for use by DFW Capsule, placed at a donation location to hold items between drop-off and pickup or shopping.
+
+**Synonyms:** capsule.
 
 ### Shopper
 
@@ -139,6 +145,12 @@ A pattern in which a Shopper acquires a disproportionate number of items, preven
 ### TCU ID
 
 A Texas Christian University–issued identification card used to verify that a Shopper is an eligible member of the TCU community (student, faculty, staff, or volunteer). IDs are checked at point of entry to a shopping session.
+
+### TCU Sustainability Committee
+
+The small planning group behind ReFrog: founders Wendy Macias, Courtney Hendrix, and Erik Trevino, plus a few other members and students. Meets periodically through the year to plan locations and logistics, opens volunteer sign-up about a month before finals week, and its founders personally cover a volunteer shift when someone cancels last-minute.
+
+**Not to be confused with:** ReFrog itself, the program this committee runs.
 
 ### Volunteer
 
