@@ -169,6 +169,57 @@ _[Draw the improved process, with your software in it, as a second mermaid flowc
 
 _The point of drawing both is the comparison. If the two diagrams look alike, either you have not understood the current process or the software is not worth building._
 
+```mermaid
+flowchart TD
+  subgraph Donor
+    A[Choose ReFrog location] --> B[Log planned donation in the ReFrog app]
+    C[Bring items to the physical location]
+  end
+  subgraph Shopper
+    D[View locations and hours in the ReFrog app] --> E[Verify TCU affiliation and record items taken]
+    F[Shop in person at a staffed location]
+  end
+  subgraph Volunteer
+    G[View open shifts] --> H[Sign up or claim a cancelled shift]
+    I[View assigned location and hours]
+    J[Receive, organize, and supervise items and shoppers]
+  end
+  subgraph ReFrog app
+    K[Show locations and event information]
+    L[Record donor and shopper activity by location]
+    M[Track volunteer coverage and open shifts]
+    N[Provide an administrator dashboard]
+  end
+  subgraph Administrator
+    O[Review coverage and activity by location] --> P[Address gaps or possible shopping abuse]
+  end
+  subgraph Donation Partners
+    Q[Pick up remaining usable items]
+  end
+
+  B --> C
+  C --> J
+  D --> F
+  E --> F
+  F --> J
+  H --> I
+  I --> J
+  B --> L
+  E --> L
+  G --> M
+  H --> M
+  K --> A
+  K --> D
+  L --> N
+  M --> N
+  N --> O
+  J --> Q
+```
+
+The ReFrog app would replace separate QR-code Google Forms and SignUpGenius for the parts of the event that participants report themselves. Donors would select a drop-off location and log their donation; shoppers would see location information, verify their TCU affiliation, and record items taken. Volunteers would sign up for shifts, see their assigned locations, and be able to claim newly open shifts after cancellations. Administrators would use the dashboard to review volunteer coverage, donation and shopping activity by location, and potential abuse so they can respond before the next day.
+
+The physical event remains in person. Volunteers still receive items, keep the capsules safe and organized, check shoppers, manage crowd flow, and encourage usable items to be donated rather than discarded; these tasks require a staffed presence at each location. Donation partners still collect items remaining after shopping. The proposed changes address the manual effort of covering cancelled shifts, the scattered location information, and the error-prone data collected through short QR-code forms.
+
 ### 2.6 Risks
 
 _[Summarize the major business risks of building this product, and of not building it. Categories include competition, timing, user acceptance, implementation, and negative impact on the business. Business risks are not project risks: "a teammate might drop the course" is a project risk and does not belong here. Give probability and impact for each, and a mitigation where you have one.]_
@@ -226,6 +277,8 @@ _[Identify the alternatives your stakeholders see as available: buying a competi
 | Alternative | Strengths | Weaknesses for this client |
 |---|---|---|
 | _[Tool, or "the current manual process"]_ | | |
+| The current manual process: SignUpGenius, QR-code Google Forms, the ReFrog website and Google Map, email, and organizer coordination | This is familiar to the organizers, keeps donor and shopper forms short, and has worked reasonably well for volunteer recruitment and sharing location information. | Courtney, Eric, and Wendy must manually cover cancelled shifts; they see an unknown amount of error in the counts; and they do not have one place to review location activity or possible shopping abuse. |
+| Build a mobile-friendly ReFrog application in-house | Wendy sees an app as a way to make ReFrog easier for people to use from their phones and to put volunteer sign-up, locations, participation, and event data in one place. | Volunteers, shoppers, and donors would need to know about the application and be able to easily use the app during the event. |
 
 _Always include the status quo as a row. It is the alternative that wins most often, and the one your product actually has to beat._
 
