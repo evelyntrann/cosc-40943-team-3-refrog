@@ -373,6 +373,15 @@ _A stakeholder is not always a user. The person paying for the software, the per
 | Stakeholder | Major value or benefit from this product | Attitude | Major features of interest | Constraints | End user? |
 |---|---|---|---|---|---|
 | _[Role]_ | _[What they get out of it]_ | _[Supportive, skeptical, unaware, opposed]_ | _[What they care about]_ | _[What limits them]_ | _[Yes or no]_ |
+| TCU Sustainability | Better management of ReFrog event, Brand loyalty |  | Volunteer management, Datatracking, ID verification | Honesty Data system, understaffed, Volunteer cancels | Yes |
+| Volunteers | Easier coordination and time management | | Signup, Management schedule of own volunteer hours | Finals Week | Yes |
+| Donators | Easy way to donate |  | Donation items submission tracking | Easier to just throw in dumpster | Yes |
+| Shoppers | Easy way to claim items | | Item shopping submission tracking |  | Yes |
+| TCU Community | Streamlined way to participate, staying informed | | Event Info/guide/maps | Downloading the app | Yes |
+| TCU Administration | Helping prevent waste, organization and audit trails |  | Data Tracking | Requires event to appear tidy, decision to fund ReFrog | No |
+| Wellman Project | Better coordination | | Schedule management, Information guide | Getting to right locations (on time), and past moveouts | Maybe |
+| Archway/Berry Good Buys | Better coordination | | Schedule management, Information guide | Getting to right locations (on time), and past moveouts | Maybe |
+| Trio | Better coordination | | Schedule management, Information guide | Getting to right locations (on time), and past moveouts | Maybe |
 
 _**Attitude is the column students leave blank, and the one that predicts trouble.** A stakeholder whose workload increases because of your software is not automatically supportive, and finding that out in December is too late._
 
@@ -385,6 +394,33 @@ _[Describe the working environment of the target users:_
 - _Any environmental constraints: mobile, outdoors, noisy, gloved hands, poor connectivity?_
 - _Which platforms are in use today, and which are planned?_
 - _What other applications are in use, and does yours have to integrate with them?]_
+
+**How many people are involved, and is that changing?**
+
+ReFrog involves four distinct user groups whose sizes differ sharply. 
+The TCU Sustainability Committee: Wendy Macias, Courtney Hendrix, Erik Trevino, and a small number of student helpers acts as the permanent organizing body and primary administrator of any system. 
+Volunteers numbered 193 in Year 4 across 7 locations, with 2–3 per site, contributing 520 hours total; an eighth location is planned for the coming year, which will require additional volunteers the organizers already describe as hard to recruit. 
+Shoppers reached an estimated 2,573 in the most recent event, of whom approximately 72% were students and 22% were staff. 
+Donators are not tracked separately by headcount today. 
+Three external Donation Recipient Partners (Wellman Project, Trio, and Archway/Berry Good Buys) attend near the end of each event to collect remaining items by truck. All groups are growing year-over-year.
+
+**How long is a task cycle, and how much time goes into each activity?**
+
+The annual event cycle has two phases. The **planning phase** begins roughly one month before finals week: the committee sets dates, recruits volunteers via SignUpGenius and word of mouth, and confirms donation partner pickup schedules. The **event phase** runs Monday through Saturday of finals week, with donation and shopping activity opening around 2:00 p.m. each day; Wednesday, Thursday, and Friday are the heaviest days. Individual task times during the event are short and high-volume: a donator scans a QR code and enters an item count into a Google Form; a shopper shows a TCU ID and browses available items; a volunteer checks IDs and keeps a site tidy. Last-minute volunteer cancellations compress the remaining volunteers' workload unpredictably. The committee's post-event task — aggregating data from multiple Google Sheets — has no documented time estimate but is described by the client as error-prone.
+
+**Environmental constraints?**
+
+All event activity takes place outdoors or in open campus spaces during finals week. Volunteers work on their feet across physically spread-out sites managing a fast-moving, often chaotic crowd. Donators and shoppers interact at the point of drop-off or browsing, typically on a personal smartphone. Noise and pace during peak hours make any multi-step or slow-loading interface a friction point — the client stated explicitly that convenience must beat the ease of throwing an item in a dumpster. Accordingly, friction for donators and volunteers must be minimized; some friction for shoppers is acceptable.
+
+**Which platforms are in use today, and which are planned?**
+
+Today ReFrog operates entirely on consumer Google tools: SignUpGenius for volunteer scheduling, Google Forms accessed via QR code at each site for donation and shopping logging, and Google Sheets for post-event data aggregation. The client expressed interest in a mobile app. 
+The exact deliverable has not been decided.
+The committee members who will serve as administrators are non-technical, so the administrative interface must require no engineering knowledge to operate.
+
+**What other applications are in use, and does the new system have to integrate with them?**
+
+The current toolchain consists of SignUpGenius (volunteer sign-up), Google Forms via QR code (donation and shopping logging), Google Sheets (data aggregation), and the ReFrog website (public-facing event information). The client mentioned SignUpGenius as a potential integration point but did not commit to retaining it; 
 
 ### 3.3 Alternatives and Competition
 
