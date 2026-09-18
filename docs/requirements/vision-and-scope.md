@@ -123,6 +123,7 @@ _Examples:_
 - _`BO-grading-time`: Reduce the instructor's time to grade peer evaluations by 50%._
 - _`BO-submission-rate`: Increase the weekly activity report and peer evaluation submission rate by 20%._
 - _`BO-student-effort`: Reduce the time a student spends completing a weekly activity report and peer evaluation by 25%._
+_ReFrog Business objectives:_
 
 - _`BO-number-of-volunteers`: Increase the number of volunteers by XX%._
 - _`BO-number-of-volunteer-hours`: Increase the number of volunteer hours by XX%._
