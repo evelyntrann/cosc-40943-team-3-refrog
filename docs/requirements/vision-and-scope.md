@@ -53,11 +53,11 @@ _**Checklist:** Would a reader who has never heard of this organization understa
 
 ReFrog™ is an entirely volunteer initiative at Texas Christian University (TCU), founded by Courtney Hendrix, Erik Trevino, and Wendy Macias to help TCU reduce move-out waste. It collects usable items that students do not want to keep or cannot take home, including furniture, appliances, clothing, linens, and household goods. These items were historically discarded during move-out; ReFrog redirects them to people who can use them, reducing landfill waste and supporting the community.
 
-Beginning with two donation locations in 2023, ReFrog grew to seven locations in 2025 and 2026. According to the client brief, it collected an estimated 48,000-plus items over its first four years, with 190 volunteers contributing 520 hours in 2026. Its participants include student donors, volunteers, donation and infrastructure partners, university administrative stakeholders, and shoppers. “Shopping” means taking donated items that shoppers can use without charge and is open to TCU students, faculty, staff, and volunteers. This practice evolved as organizers recognized that it helped keep more usable items out of landfills and benefit more people.
+Beginning with two donation locations in 2023, ReFrog grew to seven locations by 2025, with an eighth planned for the coming year. According to the client brief, it collected an estimated 48,000-plus items over its first four years; founder Wendy Macias confirmed in the team's first meeting that its most recent event ran on 193 volunteers contributing 520 hours. Its participants include student donors, volunteers, donation and infrastructure partners, university administrative stakeholders, and shoppers. “Shopping” means taking donated items that shoppers can use without charge and is open to TCU students, faculty, staff, and volunteers. This practice evolved as organizers recognized that it helped keep more usable items out of landfills and benefit more people.
 
-As ReFrog has grown, organizers have identified a need to keep shopping professional and organized while supporting the initiative's mission. The client has requested an app that they hope will help track volunteer, donation, and shopping data; verify TCU IDs; support volunteer signup; and monitor potential shopping abuse, such as hoarding items. These are the client's stated hopes for the project.
+As ReFrog has grown, its three founders have managed volunteer scheduling, donation and shopping logs, and TCU-affiliation checks largely by hand, which Wendy Macias says produces an "unknown amount of error" in the numbers the program uses to report its impact. In the team's first meeting with her, she confirmed the project should focus on volunteer sign-up and scheduling first, with TCU ID verification, donation and shopping tracking, and shopping-abuse monitoring to follow — an idea she says was inspired by seeing a donation partner use a similar app to reliably track what it distributes.
 
-Source: *ReFrog™: Helping TCU Reduce Move-out Waste*, client brief for the computer science capstone team, provided before the first meeting.
+Source: *ReFrog™: Helping TCU Reduce Move-out Waste*, client brief for the computer science capstone team; first client meeting with Wendy Macias, September 11, 2026.
 
 ### 1.2 Current Process Flows (As-Is Process Flows)
 
@@ -110,9 +110,9 @@ _[Projects are launched in the belief that creating or changing a product will p
 
 _[State the problem being solved or the opportunity being exploited, in the client's own terms. One or two paragraphs. This is the answer to "why is anyone paying for this?"]_
 
-ReFrog is a 100% volunteer-run program that collects usable items TCU students discard during move-out — furniture, appliances, clothing, linens, and household goods — and gets them into the hands of people who can use them, instead of the dumpster. Since launching with two donation sites in 2023, it has grown to seven sites and now handles close to 20,000 donated items and 9,600 shopped items a year, run by around 190 volunteers.
+ReFrog is a volunteer-run program, founded and led by Wendy Macias along with Courtney Hendrix and Erik Trevino, that collects usable items TCU students discard during move-out and gets them into the hands of people who can use them, instead of the landfill. It has grown to 7 donation sites (8 planned for the coming year), and in its most recent event ran on roughly 193 volunteers and 520 volunteer hours while handling thousands of donated items and around 9,600 shopped items.
 
-That growth has outpaced the manual, paper- and memory-based way the program currently tracks itself. There is no system today for logging what is donated, verifying that a shopper is a TCU student, staff, or faculty member entitled to shop, signing volunteers up for shifts, or noticing when the same shopper may be taking far more than their share. As the program scales toward more locations and more volunteers each year, that manual tracking is the bottleneck — not donor or volunteer interest, which the year-over-year numbers show is still growing.
+The donation and shopping process already runs on lightweight tools — a QR-code-linked Google Form for logging drop-offs and pickups, Sign Up Genius for volunteer scheduling — but these tools are disconnected and, in Wendy's own words, produce an "unknown amount of error" in the counts the program depends on to report its impact. TCU affiliation is checked by eye rather than verified, there is no way to notice when a shopper is taking far more than a fair share, and volunteer scheduling is managed by hand by the three founders whenever someone cancels last-minute. Wendy's own inspiration came from seeing a donation partner use an app to reliably track and value what it distributes — she wants something similar for ReFrog, without changing the structure of the event itself.
 
 ### 2.2 Business Objectives
 
@@ -126,7 +126,7 @@ _Examples:_
 
 _**How to elicit these.** Clients rarely volunteer numbers. Ask: What business problem are you trying to solve? What is the motivation for solving it now? What would a highly successful solution do for you? What is a successful solution worth? If the answer contains no number, ask what the number is today._
 
-_**Checklist:**_[A year from now, could someone tell whether each objective was met? Does each one contain a quantity?]_
+_**Checklist:** A year from now, could someone tell whether each objective was met? Does each one contain a quantity?]_
 
 ### 2.3 Success Metrics
 
@@ -147,7 +147,7 @@ _**How to elicit these.** Ask "how will you know this worked?", then ask what th
 
 _**Choose your success metrics wisely. Make sure they measure what is important to the business, not just what is easy to measure.** "Reduce product development costs by 20 percent" is easy to measure, and also easy to achieve by laying off employees or investing less in innovation, neither of which is the intended outcome. Prefer a metric that gets worse if you build the wrong thing._
 
-_**Checklist:** -[ Does each metric name its source, its baseline, and its deadline? Can this software actually move it? Can it be measured during testing or shortly after release, rather than a year later? Does every business objective have at least one metric behind it, and does every metric trace back to an objective?]_
+_**Checklist:** Does each metric name its source, its baseline, and its deadline? Can this software actually move it? Can it be measured during testing or shortly after release, rather than a year later? Does every business objective have at least one metric behind it, and does every metric trace back to an objective?]_
 
 ### 2.4 Vision Statement
 
@@ -155,12 +155,12 @@ _[One statement summarizing, at the highest level, the position this product int
 
 | | |
 |---|---|
-| **For** | _[ volunteers, student donors and reFrog administration]_ |
-| **Who** | _[ need an easiser way to track items donated, volunteer sign up and verify student identity]_ |
-| **The** _[Refrog app]_ | _[is a..]_ |
-| **That** | _[lets volunteers sign up to help, lets students verify their student status, keeps track of inventory in locations]_ |
-| **Unlike** | _[the current process of having volunteers sign up on the TCU sustainability website and manually tracking all assets]_ |
-| **Our product** | _[ takes away manual labor of having different sheets and forms]_ |
+| **For** | _[student donors, shoppers, volunteers, and ReFrog's organizers]_ |
+| **Who** | _[need an easier way to sign up for volunteer shifts and cover last-minute cancellations, verify TCU affiliation, and see reliable numbers on donations and shopping instead of piecing them together by hand]_ |
+| **The** _[ReFrog app]_ | _[is a mobile-first application (exact platform not yet finalized, see `OI-1`)]_ |
+| **That** | _[lets volunteers sign up and get notified when a shift opens, lets organizers verify TCU affiliation and flag unusual shopping activity, and brings donation, shopping, and volunteer data into one dashboard]_ |
+| **Unlike** | _[the current process of signing volunteers up through Sign Up Genius and logging donations and shopping through separate, disconnected Google Forms, reconciled by hand]_ |
+| **Our product** | _[consolidates volunteer sign-up, donation logging, and shopping activity into one system, cutting down the "unknown amount of error" in the numbers ReFrog reports]_ |
 
 _Worked example:_
 
