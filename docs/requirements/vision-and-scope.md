@@ -155,18 +155,12 @@ _[One statement summarizing, at the highest level, the position this product int
 
 | | |
 |---|---|
-| **For** | _[ volunteers, student donors and reFrog administration]_ |
-| **Who** | _[ need an easiser way to track items donated, volunteer sign up and verify student identity]_ |
-| **The** _[Refrog app]_ | _[is a..]_ |
-| **That** | _[lets volunteers sign up to help, lets students verify their student status, keeps track of inventory in locations]_ |
-| **Unlike** | _[the current process of having volunteers sign up on the TCU sustainability website and manually tracking all assets]_ |
-| **Our product** | _[ takes away manual labor of having different sheets and forms]_ |
-| **For** | _[student donors, shoppers, volunteers, and ReFrog's organizers]_ |
-| **Who** | _[need an easier way to sign up for volunteer shifts and cover last-minute cancellations, verify TCU affiliation, and see reliable numbers on donations and shopping instead of piecing them together by hand]_ |
-| **The** _[ReFrog app]_ | _[is a mobile-first application (exact platform not yet finalized, see `OI-1`)]_ |
-| **That** | _[lets volunteers sign up and get notified when a shift opens, lets organizers verify TCU affiliation and flag unusual shopping activity, and brings donation, shopping, and volunteer data into one dashboard]_ |
-| **Unlike** | _[the current process of signing volunteers up through Sign Up Genius and logging donations and shopping through separate, disconnected Google Forms, reconciled by hand]_ |
-| **Our product** | _[consolidates volunteer sign-up, donation logging, and shopping activity into one system, cutting down the "unknown amount of error" in the numbers ReFrog reports]_ |
+| **For** | _[TCU students, faculty, and staff who donate or shop; ReFrog volunteers; and ReFrog administrators]_ |
+| **Who** | _[need an easy way to participate in, staff, and manage the ReFrog move-out reuse event]_ |
+| **The** _[ReFrog app]_ | _[is a mobile-friendly event-management application]_ |
+| **That** | _[lets donors and shoppers record items, lets volunteers sign up for and fill open shifts, verifies TCU eligibility for shoppers, and gives administrators event data by location]_ |
+| **Unlike** | _[the current mix of SignUpGenius, QR-code Google Forms, website information, and manually maintained spreadsheets]_ |
+| **Our product** | _[brings ReFrog participation, volunteer scheduling, eligibility checks, and event data into one place to reduce manual work and improve data accuracy]_ |
 
 _Worked example:_
 
@@ -338,6 +332,18 @@ _Examples:_
 - _`FEAT-administration`: Manage senior design sections, teams, and student rosters._
 - _`FEAT-performance-tracking`: Submit and review weekly activity reports and peer evaluations._
 - _`FEAT-grade-generation`: Generate weekly activity report and peer evaluation grades for an entire section._
+
+- _`FEAT-volunteer-scheduling`: Manage volunteer sign up, cancellations, view hours_
+- _`FEAT-identity-verification`: verify tcu affiliation for shoppers that are students/faculty/staff_
+- _`FEAT-location-info`: view donation location,hours, and general information_
+- _`FEAT-adminstration`: Admin can view dashboards about event data._
+- _`FEAT-shopping-monitoring`: Admins receive alerts about potential shopping abuse_
+**- _`FEAT-shopping`: volunteers/shoppers add items that were shopped._
+- _`FEAT-donation`: Donators add items that were donated at each location._
+- _`FEAT-volunteer-notification`: Volunteers receive notifications about shifts and sign up._
+**- _`FEAT-donation-partners`: Donation partners can view general information and items at locations._
+
+
 
 ### 4.3 MVP Scope
 

@@ -1,8 +1,8 @@
 # Business Rules
 
-**Project:** _[Your project name]_
-**Team:** _[Team NN]_
-**Client:** _[Client name and organization]_
+**Project:** _[Refrog]_
+**Team:** _[Team 3]_
+**Client:** _[Wendy Macias, Texas Christian University]_
 **Version:** 0.1
 
 ---
