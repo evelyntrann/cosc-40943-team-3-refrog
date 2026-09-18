@@ -128,7 +128,7 @@ _ReFrog Business objectives:_
 
 - _`BO-number-of-volunteers`: Increase the number of volunteers by XX%._
 - _`BO-number-of-volunteer-hours`: Increase the number of volunteer hours by XX%._
-- _`BO-organizations-working-with`: Increase the number of organizations working with by XX%._
+- _`BO-organizations-working-with`: Increase the number of organizations ReFrog works with by XX%._
 - _`BO-organizers-time-saved`: Reduce the time ReFrog organizers need to set up by XX%_  
 - _`BO-accurate-data`: Increase the accuracy of the data collected by XX%._
 - _`BO-number-of-items`: Increase the number of items donated by XX%._
