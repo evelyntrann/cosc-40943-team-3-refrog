@@ -181,25 +181,40 @@ _The point of drawing both is the comparison. If the two diagrams look alike, ei
 
 _[Summarize the major business risks of building this product, and of not building it. Categories include competition, timing, user acceptance, implementation, and negative impact on the business. Business risks are not project risks: "a teammate might drop the course" is a project risk and does not belong here. Give probability and impact for each, and a mitigation where you have one.]_
 
-_Examples:_
-
-- _`RI-union-contract`: The Cafeteria Employees Union might require its contract be renegotiated to reflect the new employee roles and operating hours. (Probability 0.6, Impact 3)_
-- _`RI-low-adoption`: Too few employees might use the system, reducing the return on the development investment and on the changes to cafeteria operating procedures. (Probability 0.3, Impact 9)_
-- _`RI-no-delivery-partners`: Local restaurants might not agree to offer delivery, reducing employee satisfaction with the system and their use of it. (Probability 0.3, Impact 3)_
-
 _**State risks as mechanisms, not categories.** "Security risk" names a category and tells nobody anything. "The peer evaluation database holds student grades, is reachable from the public internet, and has no rate limiting" names a mechanism someone can act on._
+
+Probability is rated from 0.0 to 1.0. Impact is rated from 0 (no consequence) to 10 (severe disruption) and describes the consequence for ReFrog's participation, operations, or continuity. These ratings are preliminary estimates for client review, not measured values.
+
+| Identifier | Business risk | Probability | Impact | Proposed mitigation |
+|---|---|---:|---:|---|
+| `RI-participation-friction` | Requiring downloads, account creation, or detailed item entry could discourage participation. If donating becomes more difficult, students may discard usable items instead. | 0.5 | 9 | Keep participation steps short, test them with representative users, and evaluate browser/QR access before requiring installation. Introduce additional donation fields only if they remain quick to complete. |
+| `RI-volunteer-shortfalls` | Open shifts and last-minute cancellations may continue despite improved scheduling, leaving locations understaffed and requiring organizers to cover gaps. Software alone cannot ensure sufficient volunteer recruitment. | 0.8 | 9 | Make staffing gaps visible, simplify cancellation and replacement signup, and support reminders and recruitment outreach. Retain an organizer-led process for urgent coverage. |
+| `RI-unreliable-impact-data` | Self-reported counts, incomplete submissions, and estimated partner pickups may produce misleading totals, weakening planning and the evidence used to communicate ReFrog's impact or seek funding. | 0.8 | 8 | Agree on metric definitions, distinguish reported counts from estimates, and document calculation methods. Verify historical figures before using them as baselines. |
+| `RI-event-disruption` | If the system becomes unavailable or difficult to use during finals-week activity, volunteers may lose access to schedules or instructions, disrupting already busy locations. | 0.4 | 9 | Validate essential workflows before the event and provide an accessible backup of schedules, location information, and attendance procedures. |
+| `RI-undetected-shopping-abuse` | If future shopping monitoring fails to identify excessive or otherwise prohibited shopping, abuse may continue and reduce the items available to other participants. | 0.6 | 8 | Define shopping abuse with the client and provide administrators with enough information to review concerning activity. Review missed cases to improve detection while keeping enforcement decisions with administrators. |
+| `RI-incorrect-shopping-penalties` | If future shopping monitoring misclassifies legitimate volunteer activity as shopping abuse, innocent volunteers may be flagged or penalized, damaging trust and discouraging participation. | 0.5 | 8 | Distinguish volunteer actions from personal shopping, require administrator review before penalties, and provide a process to correct misclassified activity and reverse incorrect penalties. |
+| `RI-operational-transition` | If volunteers and organizers continue using different combinations of the new system, SignUpGenius, forms, and email, conflicting schedules and duplicate records could increase administrative work. | 0.5 | 6 | Agree on the authoritative source for each workflow, pilot the transition, and provide clear training and fallback procedures. |
+| `RI-service-continuity` | If maintenance and support lapse after handoff, ReFrog may lose access to essential scheduling, communications, or historical records, disrupting future events and increasing organizers' manual workload. | 0.5 | 9 | Validate the ownership and onboarding arrangements described in `AS-operational-ownership` before operational reliance on the system. |
+| `RI-status-quo-growth` | If ReFrog continues without improvements to its current tools or processes, manual coordination and fragmented reporting may become harder to sustain as locations and participation grow. | 0.8 | 8 | Prioritize volunteer coordination and centralized information, whether delivered through the new system or improvements to existing tools. |
 
 ### 2.7 Business Assumptions and Dependencies
 
 _[An assumption is something you believe without proof, which would force this document to change if it turned out false. A dependency is something outside your control that the project relies on. Both live here under `AS-*`.]_
 
-_Examples:_
-
-- _`AS-ui-capacity`: Systems with appropriate user interfaces will be available for cafeteria employees to process the expected volume of meals ordered._
-- _`AS-delivery-staffing`: Cafeteria staff and vehicles will be available to deliver all meals within 15 minutes of the requested delivery time._
-- _`AS-restaurant-integration`: If a restaurant has its own online ordering system, the Cafeteria Ordering System must be able to communicate with it bi-directionally._
-
 _**Checklist:** For each assumption, what happens to this project if it is false? If the answer is "nothing", it is not worth recording. If the answer is "we start over", raise it with your client this week._
+
+| Identifier | Type | Statement | Consequence if false or unavailable |
+|---|---|---|---|
+| `AS-volunteer-first` | Assumption | The initial release will prioritize volunteer signup, attendance, scheduling information, and administrator coordination, consistent with the September 17 notes. Broader donation and shopping capabilities require separate prioritization. | The release scope, acceptance criteria, and delivery plan must be revised. |
+| `AS-existing-program` | Assumption | ReFrog will retain its existing in-person donation and shopping model. The system will support that process while keeping participation simple and preserving ReFrog branding. | A substantial change to the operating model would require new workflows and requirements. |
+| `AS-client-materials` | Dependency | The client will provide available historical reports from past ReFrog events, approved branding materials, and current volunteer instructions. Existing signup schedules and donation/shopping forms may also be shared as references, but their availability is not a prerequisite for designing improved workflows. | Historical comparisons, branding approval, and validation of volunteer guidance may be delayed or limited. |
+| `AS-event-configuration` | Dependency | Organizers will confirm event dates, operating hours, locations, shift lengths, and staffing needs before volunteer registration opens. | The system cannot publish a reliable schedule or location guide. |
+| `AS-participant-access` | Assumption | Most intended users will have access to a suitable device and sufficient connectivity to use the selected delivery channel at event locations. This has not yet been validated. | Assisted access, browser access, or offline/manual fallback procedures may be necessary. |
+| `AS-authentication-approach` | Dependency | The current identification and verification process uses in-person TCU ID checks and the relevant Google Forms. The client and team will determine whether the new system retains these methods, supplements them, or uses another electronic approach. No specific electronic login provider has been selected. | Account access, participant onboarding, and verification workflows cannot be finalized until the approach is agreed upon. |
+| `AS-affiliation-verification` | Dependency | Any new electronic approach must provide evidence of TCU affiliation that the client accepts. Its feasibility depends on the availability of any required university resources or approvals. Existing in-person TCU ID checks and relevant Google Forms remain the baseline process unless an alternative is agreed upon. | If an acceptable electronic method is unavailable, the system must accommodate the existing verification process. |
+| `AS-client-policy-decisions` | Dependency | The committee will define relevant rules, including volunteer cancellation and attendance procedures and, if shopping features enter scope, participant eligibility and acceptable shopping behavior. | Affected workflows and restrictions cannot be finalized reliably. |
+| `AS-operational-ownership` | Dependency | Before handoff, ReFrog or a designated university group will identify a maintenance owner who can participate in onboarding and assume responsibility for service accounts, recurring costs, and ongoing support. | The proposed deployment and long-term handoff may not be sustainable. |
+| `AS-seasonal-readiness` | Dependency | Organizers will confirm when the system must be ready for recruitment, which the transcript places approximately one to one-and-a-half months before the finals-week event, and participate in validation before that date. | ReFrog may need to retain its existing signup process for the next event. |
 
 ---
 
