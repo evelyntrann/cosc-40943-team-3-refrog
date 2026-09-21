@@ -90,11 +90,17 @@ _The Source column is the defense. Every rule traces to a document or a person, 
 
 ### 1.1 Purpose
 
-_[One paragraph: this document collects the policies, regulations, standards, and formulas that govern the business your software operates in, so the specification can cite them rather than restate them.]_
+[One paragraph: this document collects the policies, regulations, standards, and formulas that govern the business your software operates in, so the specification can cite them rather than restate them.]
+
+This document records the policies and operating practices that govern ReFrog's volunteer coordination, in-person donation and shopping event, TCU-affiliation checks, item tracking, and donation-partner pickups. The software requirements will cite these rules rather than restating them, while the ReFrog administrators remain the authority for confirming or changing the rules.
 
 ### 1.2 Scope
 
-_[Which parts of the client's business these rules cover, and which are out of scope. If your client's organization has rules that your system does not touch, say so here rather than silently omitting them.]_
+[Which parts of the client's business these rules cover, and which are out of scope. If your client's organization has rules that your system does not touch, say so here rather than silently omitting them.]
+
+These rules cover the parts of ReFrog's operations that the proposed system may support: recruiting and assigning volunteers, managing shifts and cancellations, staffing physical donation locations, recording donation and shopping activity by location, checking whether shoppers are affiliated with TCU, reviewing possible shopping abuse, and coordinating the distribution of remaining usable items to donation partners. They also cover the event's documented operating context, including its finals-week schedule, physical locations, and partner pickup process.
+
+These rules do not cover the physical handling, sorting, storage, or transportation of items; the internal policies of TCU or the donation partners; the technical choice of application platform or authentication provider; or exact definitions and penalties for shopping abuse that the ReFrog committee has not yet approved. Those matters may create requirements or dependencies, but they are not treated as business rules here until an authoritative source is provided.
 
 ---
 
@@ -112,6 +118,38 @@ _Format each rule as a bold identifier, the rule in one sentence, then its sourc
   **Source:** department policy on grade-bearing records.
 - **`BR-artifact-key-unique`:** Every artifact key is unique within a team and remains stable across edits to the artifact's content.
   **Source:** team decision, 2026-09-10. **Candidate for the specification instead of this file**, since the team, not the client, would approve a change.
+
+**Eligibility and Shopping:**
+- **`BR-shopper-verification`:** A person must demonstrate TCU affiliation before shopping at ReFrog locations. **Source:** Current-process description in vision-and-scope.md §1.2; current method is visual inspection of a physical or phone ID. Electronic verification is unresolved.
+- **`BR-free-shopping`:** ReFrog shoppers receive usable donated items without charge. 
+  **Source:** Client brief and client meeting, recorded in vision-and-scope.md §1.1.
+- **`BR-shopping-activity-recorded`:** Each shopping visit records the event date, location, and number of items taken. 
+  **Source:** Existing ReFrog Shopping Form, obtained from Wendy Macias, September 11, 2026.
+- **`BR-shopping-abuse-review`:** Suspected excessive or otherwise prohibited shopping must be reviewed by a ReFrog administrator before any action is taken.
+  **Source:** vision-and-scope.md §2.6 and AS-client-policy-decisions. The definition of “excessive” or “prohibited” behavior remains unresolved.
+- **`BR-shopper-tcu-affiliation`:** ReFrog shopping is available to TCU students, faculty, staff, and volunteers.     
+  **Source:** Client meeting with Wendy Macias, September 11, 2026, recorded in vision-and-scope.md §1.1.
+
+**Event Operations:**
+- **`BR-event-in-person`:** Donations and shopping take place at staffed physical ReFrog locations.
+  **Source:** Client meeting and vision-and-scope.md §2.5.
+- **`BR-location-staffing`:** Each operating donation location must have a volunteer presence while the location is open.
+  **Source:** vision-and-scope.md §2.5 and §3.2. The required number of volunteers per location still needs confirmation.
+- **`BR-event-schedule`:** The ReFrog event operates during finals week, generally from Monday through Saturday and beginning around 2:00 p.m.
+  **Source:** Current-process description in vision-and-scope.md §1.2 and §3.2. Exact dates and hours must be confirmed for each event.
+- **`BR-volunteer-assignment`:** A volunteer may work only the location and shift to which they are assigned or have claimed.
+  **Source:** Proposed process flow and AS-event-configuration. Cancellation and reassignment procedures still need client confirmation.
+
+**Donations and Item Handoffs:**
+- **`BR-donation-location-recorded`:** Each donation must be associated with the ReFrog location where it was received.
+  **Source:** Existing ReFrog Donation Form, obtained from Wendy Macias, September 11, 2026.
+- **`BR-donation-count-recorded`:** Each donation submission records the number of items donated.
+  **Source:** Existing ReFrog Donation Form, obtained from Wendy Macias, September 11, 2026.
+- **`BR-partner-pickup-priority`:** Donation partners receive eligible remaining items according to the event’s agreed pickup order and item priorities.
+  **Source:** Current-process description in vision-and-scope.md §1.2. The exact priority order should be confirmed with Wellman Project, Trio, Archway, and ReFrog organizers.
+- **`BR-remaining-items-distributed`:** Usable items remaining after shopping are made available to ReFrog’s donation partners for pickup.
+  **Source:** vision-and-scope.md §1.2 and §2.5.
+
 
 _[That third entry is deliberate. Flag rules you are not sure about rather than dropping them; deciding whether something is a rule or a requirement is a conversation to have with your client, and it is worth having.]_
 
