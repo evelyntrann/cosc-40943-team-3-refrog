@@ -128,7 +128,7 @@ _[Link only. Business requirements, objectives, metrics, and scope live in [visi
 
 ### 5.1 Use cases
 
-_[Link to [use-cases.md](use-cases.md). Most of your system's behavior is specified there, as use cases, and it does not get restated here.]_
+Most of the system's user-facing behavior is specified in [use-cases.md](use-cases.md): ten use cases across volunteer scheduling, identity verification, location info, administration, shopping-abuse monitoring, shopping, and donation. This section does not restate that behavior. It covers only what does not belong to any single use case: behavior repeated across several of them, and background behavior with no actor-driven trigger.
 
 ### 5.2 Non-use-case functional requirements
 
@@ -145,6 +145,100 @@ _Group them under sub-headings by concern, and write each one using an [EARS](ht
 _Example: `FR-SAVE-autosave-active`: While a student is editing a weekly activity report during an active week, the system shall persist the draft every 30 seconds._
 
 _**Every requirement here needs an oracle.** If you cannot say how a tester would tell whether it holds, it is not a requirement yet.]_
+
+Scoped deliberately below MVP scale: ReFrog is run by three non-technical founders coordinating a seasonal, campus-based event, not a high-concurrency system. A full audit-log subsystem, optimistic-concurrency conflict resolution, a multi-status notification-delivery pipeline, and multi-timezone display were all considered and cut — none are evidenced by anything the client has said, and each would add real build cost against `AS-volunteer-first`'s narrow initial scope. If a future client conversation surfaces a real need for any of them, they belong here later, backed by that evidence.
+
+#### 5.2.1 Authorization and access
+
+**`FR-AUTH-enforce-permissions`**
+
+When a user requests volunteer scheduling data, shopping activity, or an administrator function, the system shall verify the user is signed in and, for administrator functions, is recognized as one of the three ReFrog administrators, before returning or changing any protected data. Donation logging is excluded from this requirement until `OI-4` (whether it requires sign-in at all) is resolved.
+
+**Verification:** Request the administrator dashboard while signed in as a volunteer. The request is denied and no administrator data is returned. Request a volunteer's own shift assignments while signed out. The request is denied.
+
+**`FR-AUTH-affiliation-from-signin`**
+
+The system shall derive a shopper's TCU-affiliation status directly from their sign-in credential rather than tracking it as a separate status, consistent with `UC-IDV-verify-affiliation`.
+
+**Verification:** Sign in with a TCU credential and confirm affiliation shows verified immediately, with no separate verification step, pending state, or possibility of being signed in but unverified.
+
+#### 5.2.2 Shared validation
+
+**`FR-VAL-server-validation`**
+
+When a user submits data for storage, the system shall validate required fields, data types, and referenced records (for example, that a submitted location is an active ReFrog location) against the applicable use case's data fields and business rules before accepting the submission.
+
+**Verification:** Submit a donation or shopping log with a missing location or a negative item count directly to the system, bypassing the app interface. The submission is rejected and nothing is recorded.
+
+**`FR-VAL-field-feedback`**
+
+If a submission fails validation, then the system shall identify which field failed and what correction is needed, rather than a generic error.
+
+**Verification:** Submit an invalid item count. The response names the item-count field and states the requirement (a positive whole number).
+
+**`FR-VAL-preserve-input`**
+
+If a submission fails validation, then the system shall preserve the user's other entered values so they do not have to re-enter them.
+
+**Verification:** Submit a donation log with a valid location and an invalid item count. After the error, the location remains filled in.
+
+#### 5.2.3 Saving and recovery
+
+**`FR-SAVE-confirmed-success`**
+
+When the system displays a confirmation that a submission succeeded, it shall have already confirmed the data was saved.
+
+**Verification:** Simulate a failed write to storage. The system does not display a success confirmation.
+
+**`FR-SAVE-unknown-outcome`**
+
+If a submission's outcome cannot be determined because the connection was lost before a response arrived, then the system shall check the stored result rather than assume failure, and report the actual outcome once known. This addresses the outdoor, variable-connectivity locations described in `vision-and-scope.md` §3.2.
+
+**Verification:** Interrupt the connection after a submission reaches the server but before the response returns. If the save actually succeeded, the system does not tell the user it did not.
+
+**`FR-SAVE-duplicate-submission`**
+
+If the same volunteer sign-up, shift cancellation, donation log, or shopping log is submitted more than once after the first attempt already succeeded, then the system shall record the action only once.
+
+**Verification:** Submit the same shift sign-up twice in quick succession. The volunteer is assigned once, and the shift's open-slot count decreases only once.
+
+#### 5.2.4 Notification hygiene
+
+**`FR-NOTIFY-shift-reminder`**
+
+When a volunteer's shift is approaching, the system shall notify the assigned volunteer. The exact timing is not yet defined; see `OI-7`.
+
+**Verification:** Cannot be fully specified until `OI-7` sets the timing. Once set, confirm a volunteer receives a reminder at that interval before their shift, and not before.
+
+**`FR-NOTIFY-current-state`**
+
+When a queued notification is about to be sent, the system shall recheck whether it is still accurate — for example, that the shift it concerns was not cancelled since the notification was queued — before sending it.
+
+**Verification:** Queue a shift reminder, then cancel the shift before the reminder is due. The reminder is not sent.
+
+**`FR-NOTIFY-preserve-business-state`**
+
+If a notification fails to send after a shift sign-up, cancellation, or schedule change has already been saved, then the system shall keep the saved change and make the notification failure visible to an administrator.
+
+**Verification:** Save a shift cancellation and simulate a notification failure. The cancellation remains in effect, and an administrator can see that the notification failed.
+
+#### 5.2.5 Consistent information display
+
+**`FR-DISPLAY-unavailable-data`**
+
+If requested data cannot be retrieved, then the system shall show that the data is unavailable rather than showing zero or an empty result.
+
+**Verification:** Simulate a failed data request for the dashboard. The dashboard shows the data as unavailable, not as zero donations or zero volunteers.
+
+#### 5.2.6 Staffing alerts (optional, pending `OI-7`)
+
+This entire subsection is a candidate, not an approved requirement. `OI-7` has not settled whether an administrator alert is even the right primary response to an understaffed shift, as opposed to broadcasting the opening to other volunteers — see the discussion already filed there.
+
+**`FR-ALERT-understaffed-shift`**
+
+Where automatic staffing alerts are included, when a shift remains understaffed as it approaches the event, the system shall alert an administrator.
+
+**Verification:** Cannot be fully specified until `OI-7` resolves whether this feature is included, who is alerted, and how soon.
 
 ---
 
