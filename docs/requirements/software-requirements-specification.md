@@ -156,32 +156,253 @@ _[Link only, to [business-rules.md](business-rules.md). Business rules are a ric
 
 ## 7. Data Requirements
 
-### 7.1 Business domain model
+### 7.1 Business domain mode
 
-_[The entities in the problem domain and how they relate, as a mermaid class diagram. Model the **business**, not your database schema: this is what the client would recognize, before any decision about tables or persistence.]_
+The ReFrog domain centers on a seasonal move-out event, staffed physical donation locations, donations that are counted and later sorted, shoppers who are checked for TCU affiliation, and donation partners who receive remaining usable items. The following model reflects the business concepts.
 
-    ```mermaid
-    classDiagram
-      class Team {
-        +String name
-      }
-      class Student {
-        +String email
-      }
-      Team "1" --> "*" Student : has
-    ```
+```mermaid
+classDiagram
+  class ReFrogEvent {
+    +eventYear
+    +scheduleWindow
+    +status
+  }
+
+  class DonationLocation {
+    +name
+    +status
+  }
+
+  class Volunteer {
+    +name
+    +email
+    +role
+  }
+
+  class VolunteerShift {
+    +date
+    +startTime
+    +endTime
+    +assignmentStatus
+  }
+
+  class Donator {
+    +name
+    +tcuAffiliation
+  }
+
+  class Item {
+    +category
+    +itemCount
+    +condition
+  }
+
+  class DonationRecord {
+    +recordedDateTime
+    +dropoffLocation
+    +itemCount
+    +source
+  }
+
+  class Shopper {
+    +name
+    +affiliationType
+    +verificationStatus
+  }
+
+  class ShoppingRecord {
+    +shoppingDateTime
+    +location
+    +quantityTaken
+    +verificationMethod
+  }
+
+  class TCUAffiliationCheck {
+    +checkedBy
+    +method
+    +result
+    +timestamp
+  }
+
+  class DonationPartner {
+    +name
+    +pickupPriority
+    +pickupWindow
+  }
+
+  class PickupRecord {
+    +pickupDate
+    +partnerName
+    +itemCategory
+    +quantity
+  }
+
+  ReFrogEvent "1" --> "*" DonationLocation : hosts
+  DonationLocation "1" --> "*" VolunteerShift : staffed by
+  Volunteer "1" --> "*" VolunteerShift : assigned to
+  Donator "1" --> "*" DonationRecord : creates
+  DonationLocation "1" --> "*" DonationRecord : receives
+  DonationRecord "1" --> "*" Item : includes
+  Shopper "1" --> "*" ShoppingRecord : completes
+  DonationLocation "1" --> "*" ShoppingRecord : records
+  Shopper --> TCUAffiliationCheck : verified by
+  DonationPartner "1" --> "*" PickupRecord : receives
+  ReFrogEvent "1" --> "*" PickupRecord : schedules
+```
 
 ### 7.2 Data dictionary
 
-_[Each entity's fields, with data type, allowed values, defaults, and validation rules. Where a use case already specifies a field's validation in its Associated Information, cite the use case instead of repeating it.]_
+The following dictionary identifies the core business data the system must manage. It is organized around the ReFrog domain terms used in the project brief, glossary, and business rules, and it excludes implementation-only database identifiers unless they are required for business traceability.
+
+| Entity | Field | Data type | Allowed values / default | Validation / business rule |
+|---|---|---|---|---|
+| ReFrogEvent | eventId | String / UUID | Unique per event | Required; each record must map to one event season or event window. |
+|  | eventYear | Integer | Current academic year or move-out cycle | Required; should match the event's move-out period. |
+|  | scheduleWindow | Date range | Monday-Saturday during finals week, approx. 2:00 p.m. start | Must align with the operational schedule defined by the committee. |
+|  | status | Enum | planned, active, closed, archived | Required; only active records may accept live submissions. |
+| DonationLocation | locationId | String | Unique site identifier | Required; one location per operational site. |
+|  | name | String | Site name or code | Required; human readable and unique within the event. |
+|  | status | Enum | open, closed, maintenance, capacity | Required; a closed location must not accept new activity. |
+| Volunteer | volunteerId | String | Unique volunteer identifier | Required; may be internal or a user account identifier. |
+|  | name | String | Free text | Required; non-empty. |
+|  | email | String | Valid email format | Optional if not used for assignments, but required for notifications. |
+|  | role | Enum | organizer, staff, site volunteer, community volunteer | Required; used to distinguish operational assignments. |
+| VolunteerShift | shiftId | String | Unique shift identifier | Required. |
+|  | date | Date | Event date | Required; must fall within the active event window. |
+|  | startTime / endTime | Time | HH:MM local time | Required for a scheduled shift; end time must be after start time. |
+|  | assignmentStatus | Enum | assigned, claimed, cancelled, filled | Required to support last-minute replacement workflows. |
+| Donator | donatorId | String | Unique donor identifier if personal data is retained | Optional; keep only if needed for follow-up and not as a raw ID unless approved. |
+|  | name | String | Free text | Optional for anonymous or low-friction drop-off records. |
+|  | affiliation | Enum | TCU student, faculty, staff, community, unknown | Optional; used only where it affects the donation process. |
+| DonationRecord | donationRecordId | String | Unique record identifier | Required. |
+|  | recordedDateTime | DateTime | Local time | Required; recorded at the time of drop-off. |
+|  | dropoffLocation / locationId | String | Existing DonationLocation.locationId | Required; each donation must be associated with the site of receipt. |
+|  | itemCount | Integer | 0 or greater | Required; must represent the number of items donated in the submission. |
+|  | source | Enum | QR scan, manual entry, admin entry | Required; distinguishes how the donation was logged. |
+| Item | category / itemGroup | String | Furniture, appliance, clothing, linens, household goods, other | Required for category-level tracking; may be used for partner pickup prioritization. |
+|  | itemCount | Integer | 1 or greater | Required when item-level quantities are tracked. |
+|  | condition | Enum | usable, damaged, uncertain | Required when item quality is recorded; otherwise may default to usable if not assessed. |
+| Shopper | name / shopperId | String | Unique shopper identifier | Required if the system tracks repeat visits or abuse patterns. |
+|  | affiliationType | Enum | student, faculty, staff, volunteer, not-eligible | Required; used to determine shopping eligibility. |
+|  | verificationStatus | Enum | verified, unverified, rejected, review-needed | Required; ties to the TCU affiliation check process. |
+| ShoppingRecord | shoppingRecordId | String | Unique record identifier | Required. |
+|  | shoppingDateTime | DateTime | Local time | Required. |
+|  | locationId | String | Existing DonationLocation.locationId | Required. |
+|  | quantityTaken | Integer | 0 or greater | Required; must record number of items removed in the visit. |
+|  | verificationMethod | Enum | visual ID check, digital check, admin override | Required; supports audit and abuse review. |
+| TCUAffiliationCheck | checkId | String | Unique verification record | Required. |
+|  | checkedBy | String | Volunteer or staff member name or ID | Required when performed by a person. |
+|  | method | Enum | physical ID, phone ID, staff confirmation, other | Required; source of the verification result. |
+|  | result | Enum | eligible, ineligible, needs review | Required; system must reject or flag ineligible shoppers. |
+|  | timestamp | DateTime | Local time | Required. |
+| DonationPartner | partnerId | String | Unique partner identifier | Required. |
+|  | name | String | Partner organization name | Required; examples include Wellman Project, TRIO, Archway. |
+|  | pickupPriority | Integer | 1, 2, 3, ... | Required to reflect pickup order. |
+|  | pickupWindow | Date range | Pickup dates during event week | Required; should match the event's operational schedule. |
+| PickupRecord | pickupRecordId | String | Unique record identifier | Required. |
+|  | pickupDate | Date | Event week date | Required. |
+|  | partnerId | String | Existing DonationPartner.partnerId | Required. |
+|  | itemCategory | String | Category or item class received | Required if the report documents what each partner took. |
+|  | quantity | Integer | 0 or greater | Required; must match count available at handoff. |
+
+Notes:
+
+- The current process logs donor and shopper activity through QR-code forms, so the system should preserve source metadata and use a consistent event-location combination for all submissions.
+- A raw TCU ID number is not required to satisfy the system's business needs and should be kept only if the client specifically approves it; the system should prioritize a verification result and audit trail over storing a full ID value.
+- Where a field is already defined in a use case or business rule, that use case or rule remains the authoritative validation source rather than a second, conflicting definition in this document.
 
 ### 7.3 Reports
 
-_[Any report the system generates: who reads it, what it contains, how often, and in what format. Reports are where clients discover late that a field they need was never captured, so specify them early.]_
+The system shall generate operational and reporting data in a format that can be used by ReFrog organizers, volunteer managers, and partner coordinators without manually reconciling multiple disconnected spreadsheets. The reports below represent the minimum core reporting set needed to support the current process and address the known pain points described in the client brief and the vision and scope.
+
+#### 7.3.1 Daily site activity report
+
+- Who reads it: ReFrog organizers and the volunteer staff at each donation location.
+- What it contains: donated item counts by location, shopping counts by location, date/time of activity, site status, and any verification or review events.
+- Frequency: generated daily during the event and available after each operational day.
+- Format: dashboard view and downloadable CSV or spreadsheet export.
+- Purpose: gives organizers a single source of truth for site activity while the event is still running.
+
+#### 7.3.2 Volunteer staffing and coverage report
+
+- Who reads it: ReFrog organizers and volunteer coordinators.
+- What it contains: assigned volunteers, claimed and unfilled shifts, cancellation status, location coverage, and open staffing gaps by time block.
+- Frequency: updated in near real time for the event window and summarized after the event.
+- Format: schedule dashboard and printable staffing summary.
+- Purpose: reduces the risk that a single founder must personally absorb late cancellations and helps the committee plan replacement coverage.
+
+#### 7.3.3 Donor and shopper activity summary
+
+- Who reads it: ReFrog organizers and the TCU Sustainability Committee.
+- What it contains: total donations by site, total shopping visits by site, number of items donated, number of items taken, and totals by day or time range.
+- Frequency: generated daily and at the end of the event.
+- Format: summary table and chart view with export to spreadsheet.
+- Purpose: supports the impact metrics the program reports to the university and external partners.
+
+#### 7.3.4 Shopping abuse review report
+
+- Who reads it: ReFrog organizers or designated administrators.
+- What it contains: repeated shopping visits by the same shopper, counts by location over time, verification status, and any review flags that require staff intervention.
+- Frequency: generated during the event or on-demand when a potential abuse pattern is detected.
+- Format: table-based review list with flags and supporting event history.
+- Purpose: supports the current business rule that suspected excessive or prohibited shopping must be reviewed before action is taken.
+
+#### 7.3.5 Donation partner handoff and reconciliation report
+
+- Who reads it: ReFrog organizers and each donation partner.
+- What it contains: partner name, pickup date, pickup order, category mix, total items handed off, and any variance between expected and actual pickup volume.
+- Frequency: generated at each pickup window and summarized after the event.
+- Format: reconciliation table and downloadable report.
+- Purpose: allows ReFrog and partner organizations to compare planned and actual handoff volumes and resolve discrepancies like the Archway shortfall described in the client brief.
+
+#### 7.3.6 Year-end impact report
+
+- Who reads it: the TCU Sustainability Committee, client stakeholders, and event supporters.
+- What it contains: annual totals for volunteers, volunteer hours, donation sites, donation counts, shopping counts, diverted items, and partner handoff totals, as approved by the committee for public reporting.
+- Frequency: generated once per event cycle, usually at the end of the move-out season.
+- Format: spreadsheet-ready summary or presentation-friendly dashboard.
+- Purpose: replaces the current hand-reconciled Google Sheets process and reduces the "unknown amount of error" described by the client.
 
 ### 7.4 Data acquisition, integrity, retention, and disposal
 
-_[Where the data comes from, how it is kept correct, how long it is kept, and how it is destroyed. If your system holds anything about students or other identifiable people, this section is not optional, and its content is usually a business rule you should cite rather than invent.]_
+ReFrog's data is acquired from operational events, volunteers, shoppers, donation partners, and administrative staff. The system must preserve a defensible record of event activity without storing unnecessary personal data or duplicating information across disconnected tools. The following requirements are therefore based on the current process and existing business rules, while leaving the exact retention period and secure disposal practices to be confirmed by the client.
+
+#### 7.4.1 Data acquisition
+
+- Donation data shall be acquired at the point of drop-off, using the donation site and the recorded item count as the minimum source data for each donation submission.
+- Shopping data shall be acquired at the point of exit, with date, location, and item count tied to the individual shopper record or verification record when the system supports that pattern.
+- Volunteer assignment and staffing data shall be acquired from the committee's scheduling workflow and shall support assignment, claims, and cancellations.
+- TCU affiliation status shall be acquired through a verification process before shopping is approved; the chosen method may be visual, digital, or another approved process, but the system shall record the result and method of verification.
+- Donation partner pickup data shall be acquired at the time of the handoff, with enough detail to reconcile expected and actual volumes.
+
+#### 7.4.2 Data integrity
+
+- Each operational record shall have a unique identifier and a clear association to the correct event and location.
+- Required data fields shall be validated before a record is accepted, and incomplete records shall be rejected or flagged for review rather than silently stored.
+- Donation and shopping totals shall be reconciled at the site and event level to ensure that counts are not duplicated, omitted, or mismatched across source systems.
+- A shopper's verification status shall be checked before a shopping record is accepted; unverified or ineligible shoppers shall not be treated as approved shoppers.
+- If a volunteer is assigned to a shift, the system shall prevent conflicting assignments or duplicate coverage unless explicitly overridden by an administrator.
+- Any suspected shopping abuse or exceptional event outcome shall be recorded with the supporting evidence needed for later review by an administrator.
+
+#### 7.4.3 Retention
+
+- The system shall retain operational records needed to support event reporting, auditability, and partner reconciliation for the period required by the client and TCU sustainability operations.
+- Raw personal information, especially any TCU ID value, shall not be retained longer than necessary for verification and review; the preferred record is the verification result and the time of check, not the full identifier itself.
+- Event-level records shall remain available for the current season and the reporting cycle in which the client documents impact metrics.
+- The final retention period and archival policy shall be approved by the ReFrog committee before production use; until then, the system shall operate under a minimum necessary retention policy and shall not keep data beyond the active reporting cycle without a documented justification.
+
+#### 7.4.4 Disposal and secure removal
+
+- When a record exceeds the approved retention period, it shall be removed from active storage and deleted from system logs where practical.
+- Backups and archived copies shall be managed so that expired records are eventually purged according to the approved retention policy.
+- Any data exports created for reporting shall be retained only as long as needed for the reporting purpose and then removed or archived under the same retention rules.
+- Access to retired records shall be limited to authorized administrators, and any physical or digital disposal method shall be consistent with the committee's privacy and security expectations.
+
+#### 7.4.5 Privacy and data minimization
+
+- The system shall collect only the minimum data needed to support volunteer staffing, site activity reporting, shopper verification, and donation-partner reconciliation.
+- The system shall not treat a donor or shopper record as a substitute for a full identity record when a verification result and event history are sufficient for the business task.
+- Where a specific data element is not required by current business rules or use cases, it shall be excluded from storage until the client confirms the need for it.
 
 ---
 
