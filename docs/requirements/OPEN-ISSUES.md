@@ -33,6 +33,7 @@ _[Send the shortlist to your client the day before. A client who has seen the qu
 | OI-1 | _[ is refrog a web application or mobile application?]_ | _[ Blocks deciding what tech stack to use.]_ | _[Client]_ | _[2026-09-11]_
 | OI-2 | _[ Do you want the volunteers or shoppers to track the items tracked?]_ | _[ Blocks deciding feature for shopping.]_ | _[Client]_ | _[2026-09-18]_
 | OI-3 | _[ What capabilities should donation partners have within the app?]_ | _[ Blocks deciding feature for donation partners.]_ | _[Client]_ | _[2026-09-18]_
+| OI-4 | Who will maintain the application after the current senior design team completes the project: ReFrog administrators, another senior design group, or another designated owner? | The maintenance owner determines the required handoff, documentation, account ownership, hosting responsibility, and technology choices. | Client: Wendy Macias | 2026-09-24 |
 |
 
 ## Resolved
