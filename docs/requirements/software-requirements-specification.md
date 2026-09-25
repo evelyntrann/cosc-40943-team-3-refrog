@@ -221,7 +221,7 @@ _Write one subsection per attribute your project actually has, and say "not appl
 
 _Example: `USE-wcag-aa`: All user-facing views shall conform to WCAG 2.1 level AA._
 
-ReFrog participants commonly interact with the system on personal smartphones at outdoor, physically distributed event locations. Donator and volunteer interactions must remain brief because users may be working in noisy, fast-moving conditions. The thresholds below are proposed for team and client review and are tracked in [srs-quality-localization-decisions.md](srs-quality-localization-decisions.md).
+ReFrog participants commonly interact with the system on personal smartphones at outdoor, physically distributed event locations. Donator and volunteer interactions must remain brief because users may be working in noisy, fast-moving conditions. The thresholds below are proposed for team and client review.
 
 - `USE-mobile-responsive`: The system shall make all participant workflows usable without horizontal scrolling at a viewport width of 320 CSS pixels.
 - `USE-donation-completion`: At least 90 percent of representative first-time users shall complete a donation submission without assistance within 60 seconds.
