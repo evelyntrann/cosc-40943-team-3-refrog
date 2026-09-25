@@ -240,7 +240,7 @@ classDiagram
   ReFrogEvent "1" --> "*" DonationLocation : hosts
   DonationLocation "1" --> "*" VolunteerShift : staffed by
   Volunteer "*" --> "*" VolunteerShift : assigned to
-  Donator "1" --> "*" DonationRecord : creates
+  Donator "0..1" --> "*" DonationRecord : creates
   DonationLocation "1" --> "*" DonationRecord : receives
   DonationRecord "0..1" --> "*" Item : includes
   Shopper "0..1" --> "*" ShoppingRecord : completes
