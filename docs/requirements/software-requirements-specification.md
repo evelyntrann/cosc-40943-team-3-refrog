@@ -597,35 +597,109 @@ _Write one subsection per attribute your project actually has, and say "not appl
 
 _Example: `USE-wcag-aa`: All user-facing views shall conform to WCAG 2.1 level AA._
 
+ReFrog participants commonly interact with the system on personal smartphones at outdoor, physically distributed event locations. Donator and volunteer interactions must remain brief because users may be working in noisy, fast-moving conditions. The thresholds below are proposed for team and client review.
+
+- `USE-mobile-responsive`: The system shall make all participant workflows usable without horizontal scrolling at a viewport width of 320 CSS pixels.
+- `USE-donation-completion`: At least 90 percent of representative first-time users shall complete a donation submission without assistance within 60 seconds.
+- `USE-volunteer-signup-completion`: At least 90 percent of representative first-time volunteers shall find and claim an available shift without assistance within two minutes.
+- `USE-admin-no-code`: A ReFrog administrator shall be able to configure event dates, locations, shifts, and staffing requirements without changing application code.
+- `USE-validation-feedback`: When a user provides invalid or incomplete input, the system shall identify each affected field, explain how to correct it, and preserve all valid input already entered.
+- `USE-accessibility`: All user-facing views shall conform to WCAG 2.1 Level AA.
+
 ### 9.2 Performance
 
 _Example: `PER-report-load`: A peer evaluation report for a section of 80 students shall render within 2 seconds at the 95th percentile._
+
+The most recent documented event involved 193 volunteers, approximately 2,573 shoppers, and approximately 9,600 items taken across seven locations; eight locations are planned for the next event. Concurrent-user counts and representative network conditions still require confirmation.
+
+- `PER-page-load`: Under the approved peak load and test-network conditions, 95 percent of participant-facing pages shall become usable within three seconds.
+- `PER-form-submission`: Under the approved peak load, 95 percent of donation, shopping, and volunteer submissions shall receive a success or failure response within two seconds.
+- `PER-dashboard-load`: The administrator dashboard shall display current event information within five seconds for an event containing the approved maximum number of records.
+- `PER-measurement`: Performance verification shall use a documented workload representing peak finals-week activity rather than average annual activity.
 
 ### 9.3 Security
 
 _Example: `SEC-authentication`: The system shall authenticate every request to a non-public endpoint, and shall reject unauthenticated requests without disclosing whether the requested resource exists._
 
+- `SEC-authenticated-administration`: The system shall authenticate every request that creates, modifies, deletes, exports, or displays nonpublic administrative information.
+- `SEC-role-based-access`: The system shall authorize protected operations according to the authenticated user's assigned role.
+- `SEC-least-privilege`: The system shall prevent donators, shoppers, and volunteers from accessing administrative dashboards or other participants' records.
+- `SEC-affiliation-data`: The system shall disclose TCU-affiliation information only to authorized users and only when required to perform an approved ReFrog workflow.
+- `SEC-administrator-review`: The system shall restrict access to suspected shopping-abuse information to authorized ReFrog administrators, consistent with `BR-shopping-abuse-review`.
+- `SEC-transport-encryption`: The system shall encrypt network communication containing authentication credentials, affiliation information, or participant records by using HTTPS.
+- `SEC-audit-log`: The system shall record successful and unsuccessful administrator authentication attempts and administrator changes to event, schedule, and participant records.
+- `SEC-authentication-provider`: The system shall use the authentication and TCU-affiliation method approved by ReFrog and TCU. The choice among TCU single sign-on, TCU email verification, another electronic method, or continued in-person ID verification remains unresolved under `AS-authentication-approach` and `AS-affiliation-verification`.
+- `SEC-session-expiration`: The system shall expire an administrator session after the team-approved period of inactivity.
+
 ### 9.4 Safety
 
 _[Conditions under which the system could contribute to harm, and what prevents it. For most projects in this course the honest answer is `SAF-not-applicable`, with a sentence saying why.]_
+
+- `SAF-not-applicable`: The system does not control the physical receipt, sorting, storage, transportation, or disposal of donated items and is not intended to make safety-critical decisions. Physical event-safety procedures remain outside the software's scope. This determination must be reconsidered if the system is later expected to provide emergency instructions or control safety-critical staffing decisions.
 
 ### 9.5 Availability
 
 _Example: `AVL-uptime`: The system shall be available 99% of the time during the academic term, excluding announced maintenance windows._
 
+- `AVL-event-hours`: The system shall be available during the recruitment period and all published ReFrog event operating hours, subject to the approved availability target.
+- `AVL-uptime`: The system shall maintain at least 99 percent availability during the volunteer-recruitment period and finals-week event period, excluding approved maintenance windows.
+- `AVL-maintenance-window`: The system shall not schedule routine maintenance during published event operating hours.
+- `AVL-fallback-information`: Before each event, the system shall allow administrators to obtain an accessible backup of schedules, location information, and attendance procedures for use during an outage.
+- `AVL-outage-recovery`: The system shall restore essential scheduling and event-information functions within 30 minutes of a service interruption.
+
 ### 9.6 Robustness
 
 _Example: `ROB-edit-loss-bound`: On an unexpected client disconnect, the system shall lose no more than 30 seconds of a student's in-progress edits._
 
-### 9.7 Scalability, interoperability, maintainability
+- `ROB-submission-status`: If a submission cannot be completed, the system shall clearly indicate that it was not recorded and preserve the user's entered information for another attempt.
+- `ROB-duplicate-submission`: When a user retries a donation, shopping, or volunteer submission after an interrupted response, the system shall prevent the retry from creating an unintended duplicate record.
+- `ROB-invalid-input`: If submitted data violates a validation rule, the system shall reject the invalid values without altering previously stored valid records.
+- `ROB-connectivity-loss`: If network connectivity is lost during data entry, the system shall preserve entered values until the user restores connectivity, cancels the operation, or closes the interface. Whether the values must survive closing and reopening the interface remains a team decision.
+- `ROB-external-service-failure`: If an external authentication, notification, or mapping service is unavailable, the system shall identify the affected function and shall not present the operation as successful.
+- `ROB-backup-recovery`: The system shall back up persistent records and support restoration within team-approved recovery-point, recovery-time, and retention limits.
+
+### 9.7 Scalability
 
 _[Add the ones that apply, with `SCA-`, `INT-`, and `MNT-` identifiers. Maintainability is the one this course cares about most, because someone inherits your code in January.]_
+
+- `SCA-event-capacity`: The system shall support at least eight active locations, 200 volunteers, 3,000 shoppers, and 10,000 item-activity records in one event without violating the performance requirements in section 9.2.
+- `SCA-growth-capacity`: The system shall support the team-approved growth margin above the event capacity without requiring redesign of its data model or deployment architecture.
+
+### 9.8 Interoperability
+
+- `INT-data-export`: The system shall allow an authorized administrator to export volunteer, donation, shopping, and summary data in CSV format for use in spreadsheet software.
+- `INT-export-documentation`: Each export shall contain documented column names, date formats, units, and record identifiers.
+- `INT-existing-tools`: For each approved integration with SignUpGenius, Google Forms, Google Sheets, the ReFrog website, a mapping service, email, or a TCU identity service, the interface specification shall identify the exchanged data, direction, format, and failure behavior.
+- `INT-integration-scope`: Each existing service that is not selected for integration shall be documented as replaced, retained as a manual process, or outside the release scope rather than assumed to be connected.
+
+### 9.9 Maintainability
+
+- `MNT-event-configuration`: The system shall allow authorized administrators to change event dates, operating hours, locations, shifts, and staffing requirements without modifying or redeploying application code.
+- `MNT-automated-tests`: The project shall include automated tests for authentication, authorization, volunteer scheduling, validation, and data-calculation rules.
+- `MNT-deployment-documentation`: The project shall provide instructions for installing, configuring, deploying, backing up, restoring, and updating the application.
+- `MNT-administrator-documentation`: The project shall provide instructions for routine administrator tasks and event preparation.
+- `MNT-diagnostics`: The system shall record sufficient diagnostic information to identify failed requests and external-service failures without recording authentication secrets or unnecessary sensitive information.
+- `MNT-dependency-record`: The project shall document its runtime, external services, required service accounts, and third-party dependencies.
+- `MNT-operational-handoff`: Before production handoff, the project shall provide the designated maintenance owner with the source code, deployment instructions, administrator instructions, service-account ownership information, and recurring-cost information. The maintenance owner, hosting payer, service-account owner, and supported technology stack remain unresolved under `AS-operational-ownership`.
 
 ---
 
 ## 10. Internationalization and Localization
 
 _[Languages, character sets, time zones, date and currency formats. If the answer is a single locale, say so and say why, because that is a real constraint on who can use the system.]_
+
+The initial release is intended for ReFrog's TCU-based operation in Fort Worth, Texas. The following requirements define a single-locale release while preventing avoidable loss or ambiguity in stored data. Additional language support remains outside the initial scope unless the team and client decide otherwise.
+
+- `LOC-release-locale`: The system shall provide the initial-release interface and documentation in United States English (`en-US`).
+- `LOC-unicode`: The system shall store, process, export, and display user-entered text using Unicode without removing valid characters from names or other text fields.
+- `LOC-event-time-zone`: The system shall associate ReFrog event dates and times with the `America/Chicago` time zone and shall account for daylight-saving-time changes.
+- `LOC-time-storage`: The system shall store timestamps in a consistent machine-readable form and convert them to the event's configured time zone for display.
+- `LOC-date-display`: The system shall display human-readable dates with the month written or abbreviated, such as `May 8, 2027`, when a numeric date could be ambiguous.
+- `LOC-time-display`: The system shall display user-facing event times using a 12-hour clock with `a.m.` or `p.m.` and the event's configured time zone.
+- `LOC-export-format`: Machine-readable exports shall use an unambiguous date and time representation documented with the export.
+- `LOC-measurement-units`: Reports containing weight or volume shall identify their units explicitly and shall use the measurement units approved by ReFrog.
+- `LOC-currency-not-applicable`: Currency localization is not applicable to the initial release because ReFrog does not charge shoppers for donated items, consistent with `BR-free-shopping`.
+- `LOC-future-languages`: Translation and runtime locale switching are outside the initial release unless later added to scope. The system shall not embed interface text in stored business records where doing so would prevent future localization.
 
 ---
 
