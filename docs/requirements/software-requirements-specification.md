@@ -293,7 +293,7 @@ The following dictionary identifies the core business data the system must manag
 | TCUAffiliationCheck | checkId | String | Unique verification record | Required. |
 |  | checkedBy | String | Volunteer or staff member name or ID | Required when performed by a person. |
 |  | method | Enum | physical ID, phone ID, staff confirmation, other | Required; source of the verification result. |
-|  | result | Enum | eligible, ineligible, needs review | Required; system must reject or flag ineligible shoppers. |
+|  | result | Enum | eligible, ineligible, needs review | Required; ineligible or needs-review shoppers must not be approved to shop. |
 |  | timestamp | DateTime | Local time | Required. |
 | DonationPartner | partnerId | String | Unique partner identifier | Required. |
 |  | name | String | Partner organization name | Required; examples include Wellman Project, TRIO, Archway. |
