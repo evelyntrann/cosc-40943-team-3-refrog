@@ -44,19 +44,27 @@ _Requirements cited from elsewhere keep their own identifiers: `UC-*` from [use-
 
 ## 1. Introduction
 
-### 1.1 The purpose of _[project name]_
+### 1.1 The purpose of ReFrog
 
 _[What the system is for: who wants it, why, and who will use it. Even though the vision and scope answers this, restate it in a paragraph here, because people read this document without having read that one.]_
+
+ReFrog is a mobile-first application for the ReFrog™ volunteer initiative at Texas Christian University. ReFrog organizers want it to replace disconnected volunteer sign-up, donation, and shopping-recording tools with one system that reduces errors in the program's impact data and eases the burden of coordinating the event. It will be used by ReFrog organizers and volunteers, with student donors and shoppers using the public-facing event and participation features.
 
 ### 1.2 The purpose of this document
 
 _[What this specification covers and for which release.]_
 
+This Software Requirements Specification defines the functional, nonfunctional, data, interface, and operating requirements for the initial release of the ReFrog application. It is the reference for ReFrog organizers, the development team, and testers when agreeing on, building, and verifying that release.
+
 _Example: "This document describes the functional and nonfunctional requirements for release 1.0 of the Cafeteria Ordering System. It serves as the reference for the project's requirements, defining the scope, functionality, and constraints for stakeholders, developers, and testers."]_
+
+
 
 ### 1.3 Document conventions
 
 _[Any typographical conventions, and the identifier formats above, so that someone adding a requirement later knows how to name it.]_
+
+This specification is written in Markdown. Headings organize the document, and links identify the documents that own related requirements and definitions. Each requirement defined here uses a name-based, kebab-case identifier from the applicable space in the **Identifiers** table (for example, `FR-<AREA>-<slug>` for a non-use-case functional requirement or `USE-<slug>` for a usability requirement). Identifiers are unique and stable: they must not be renumbered, renamed, or reused. Requirements defined in linked documents retain their original identifiers, including `UC-*` for use cases, `BR-*` for business rules, and `BO-*`, `SM-*`, and `FEAT-*` for Vision and Scope items.
 
 ### 1.4 References
 
@@ -77,9 +85,28 @@ _[Every document this specification refers to, with a link. At minimum, the four
 
 _[How this system relates to other systems and to the user's environment. Self-contained, or one component of something larger? Link to the product perspective section of your vision and scope and to your architecture's context diagram rather than redrawing them.]_
 
+ReFrog is an application that supports, but does not change, ReFrog's existing in-person move-out donation and shopping program at Texas Christian University. It consolidates capabilities now distributed across SignUpGenius, QR-code Google Forms, and Google Sheets: volunteer coordination, event participation records, and organizer reporting. The ReFrog website is currently the public source of event information; the application will also provide general event information. The application is intended to be mobile-first, although the final delivery platform is not yet decided.
+
+No external-system integration is committed for the initial release. The system must therefore be designed as a self-contained application that can replace the current tools used for the ReFrog event, subject to future migration and integration decisions.
+
+See the [Vision Statement](vision-and-scope.md#24-vision-statement) and [User Environment](vision-and-scope.md#32-user-environment) for the related product context.
+
 ### 2.2 User classes and characteristics
 
 _[The kinds of user, and what distinguishes them: frequency of use, technical skill, privilege level, whether they are inside or outside the client's organization. Link to the stakeholder profiles in your vision and scope; what belongs here is what affects the software's behavior, especially permissions.]_
+
+The application has six user classes. The account and TCU-affiliation-verification approach has not yet been decided, so the access mechanisms below describe intended roles rather than a final authentication design.
+
+| User class | Characteristics and frequency of use | Intended access |
+|---|---|---|
+| ReFrog administrators | Wendy Macias, Eric Trevino, Courtney Hendrix, and designated committee helpers are internal ReFrog organizers who use the system year-round and during the event. They are non-technical users and require the highest privilege level. | Manage volunteer coverage and event information; view location, item-activity, and volunteer-coverage data; and review potential shopping-abuse indicators. |
+| Volunteers | Volunteers are ReFrog participants, rather than core organizers, who sign up in the month before finals week and work shifts at event locations during finals week. They have varied technical skill, use the system on personal mobile devices in busy outdoor locations, and require limited role-based privileges. | Sign up for shifts; view their assigned shifts, locations, and hours; and record or support event activity as authorized by organizers. |
+| Donors | Donors are external event participants, typically students and sometimes their families. Their technical skill varies, and their use is brief at a ReFrog location when dropping off items; they require only low-privilege participation access. | View basic event and location information and record planned or completed donation information with minimal effort. |
+| Shoppers | Shoppers are TCU-affiliated event participants — students, faculty, staff, and sometimes volunteers — who use the system briefly while shopping in person. Their technical skill varies; they require low-privilege participation access, subject to the selected affiliation-verification method. | View event information, provide evidence of TCU affiliation by the method selected for the project, and record the items they take. |
+| TCU community visitors | TCU students, faculty, staff, and other interested community members are public-information users, not necessarily ReFrog participants. They may access the system occasionally from personal devices and require no privileged access. | View public event information, including locations, hours, and general guidance. |
+| Donation-recipient partners | The Wellman Project, TRIO, and Archway/Berry Good Buys are external organizations that collect remaining usable items near the end of the event. Their representatives would use the system occasionally for pickup coordination; their technical skill and privilege level have not yet been confirmed. | Potentially view pickup schedules, locations, and relevant event information. Direct application access and any partner-specific capabilities have not yet been confirmed. |
+
+
 
 ### 2.3 Operating environment
 
@@ -91,6 +118,12 @@ _Examples:_
 - _`OE-server-platform`: The system shall run on a server running the current corporate-approved version of Linux._
 - _`OE-access-paths`: The system shall permit access from the corporate intranet, from a VPN connection, and from Android and iOS phones and tablets._
 
+**Current ReFrog operating-environment requirements:**
+
+- _`OE-mobile-location-access`: The system shall be accessible from personal mobile devices used at ReFrog donation locations._
+- _`OE-in-person-event-support`: The system shall support use during ReFrog's in-person event at staffed TCU donation locations._
+- _`OE-decentralized-tool-replacement`: The system shall provide the volunteer-scheduling, donation-recording, shopping-recording, and data-aggregation capabilities needed to replace the current decentralized SignUpGenius, QR-code form, and Google Sheets workflows._
+
 ### 2.4 Design and implementation constraints
 
 _[Anything that limits the developers' options: corporate or regulatory policy, hardware limits, required languages or databases, coding standards, interfaces to other applications.]_
@@ -100,6 +133,17 @@ _Examples:_
 - _`CO-database-engine`: The system shall use the corporate standard database engine._
 - _`CO-language-version`: The backend shall be written in Java 21._
 - _`CO-coding-standard`: Design, code, and maintenance documentation shall conform to the client's development standard._
+
+**TCU-related constraints:**
+
+- _`CO-nontechnical-administration`: The administrative interface shall be usable by ReFrog organizers without technical knowledge._
+- _`CO-tcu-it-approval`: The system shall not integrate with TCU identity services or other university systems until TCU IT approves the integration._
+- _`CO-tcu-accessibility`: The system shall conform to the accessibility standards required by TCU for student-facing software._
+- _`CO-tcu-data-governance`: The system shall collect, store, access, retain, and dispose of TCU-affiliation and participant data in accordance with TCU-approved privacy and data-governance requirements._
+- _`CO-approved-branding`: The system shall use only ReFrog and TCU branding materials approved by the applicable owners._
+- _`CO-operational-ownership`: Before the system is used for an operational ReFrog event, a designated owner shall assume responsibility for maintenance, service accounts, recurring costs, and ongoing support._
+- _`CO-azure-database-hosting`: The production database shall be hosted on Microsoft Azure using a TCU-approved account and configuration._
+- _`CO-tcu-application-hosting`: If TCU requires a TCU-managed deployment environment for the student-facing application, the production application shall be hosted on TCU-managed server infrastructure capable of supporting the anticipated scale of ReFrog participants._
 
 _The constraint students forget: **who maintains this after you graduate, and what do they already know how to run?** If the answer is one person who knows Python, a Spring Boot service is a constraint violation nobody wrote down._
 
@@ -111,6 +155,16 @@ _Examples:_
 
 - _`AS-supported-browser`: Users access the system with a browser that supports the ECMAScript version the frontend targets._
 - _`DE-payroll-integration`: Operation depends on changes being made in the Payroll System to accept payment requests for meals ordered through this system._
+
+**Current ReFrog assumptions and dependencies:**
+
+- _`AS-existing-program`: ReFrog will retain its existing in-person donation and shopping model, and the system will support that model without changing the physical event._
+- _`AS-participant-access`: Intended users will have access to a suitable personal device and sufficient connectivity to use the selected delivery channel at event locations._
+- _`DE-event-configuration`: Operation depends on ReFrog organizers confirming each event's dates, operating hours, locations, shift lengths, and staffing needs before volunteer registration opens._
+- _`DE-delivery-platform-decision`: Implementation depends on ReFrog confirming the selected delivery platform, because the current requirements do not finalize whether the application is a mobile app, website, or another solution._
+- _`DE-affiliation-verification`: Electronic TCU-affiliation verification depends on the client and TCU accepting a verification method and, if needed, granting approval for university resources or integrations._
+- _`DE-tcu-azure-hosting`: Production deployment depends on access to a TCU-approved Microsoft Azure account and configuration for the production database._
+- _`DE-operational-ownership`: Continued operation after the senior design team completes the project depends on ReFrog or a designated university group assigning a maintenance owner for service accounts, recurring costs, and support._
 
 ---
 
@@ -252,30 +306,258 @@ _[Link only, to [business-rules.md](business-rules.md). Business rules are a ric
 
 ### 7.1 Business domain model
 
-_[The entities in the problem domain and how they relate, as a mermaid class diagram. Model the **business**, not your database schema: this is what the client would recognize, before any decision about tables or persistence.]_
+The ReFrog domain centers on a seasonal move-out event, staffed physical donation locations, donations that are counted and later sorted, shoppers who are checked for TCU affiliation, and donation partners who receive remaining usable items. The following model reflects the business concepts.
 
-    ```mermaid
-    classDiagram
-      class Team {
-        +String name
-      }
-      class Student {
-        +String email
-      }
-      Team "1" --> "*" Student : has
-    ```
+```mermaid
+classDiagram
+  class ReFrogEvent {
+    +eventYear
+    +scheduleWindow
+    +status
+  }
+
+  class DonationLocation {
+    +name
+    +status
+  }
+
+  class Volunteer {
+    +name
+    +email
+    +role
+  }
+
+  class VolunteerShift {
+    +date
+    +startTime
+    +endTime
+    +assignmentStatus
+  }
+
+  class Donator {
+    +name
+    +tcuAffiliation
+  }
+
+  class Item {
+    +category(optional)
+    +itemCount
+    +condition(optional)
+  }
+
+  class DonationRecord {
+    +recordedDateTime
+    +dropoffLocation
+    +itemCount
+    +source
+  }
+
+  class Shopper {
+    +name
+    +affiliationType
+    +verificationStatus
+  }
+
+  class ShoppingRecord {
+    +shoppingDateTime
+    +location
+    +quantityTaken
+    +verificationMethod
+  }
+
+  class TCUAffiliationCheck {
+    +checkedBy
+    +method
+    +result
+    +timestamp
+  }
+
+  class DonationPartner {
+    +name
+    +pickupPriority
+    +pickupWindow
+  }
+
+  class PickupRecord {
+    +pickupDate
+    +partnerId
+    +itemCategory
+    +quantity
+  }
+
+  ReFrogEvent "1" --> "*" DonationLocation : hosts
+  DonationLocation "1" --> "*" VolunteerShift : staffed by
+  Volunteer "*" --> "*" VolunteerShift : assigned to
+  Donator "0..1" --> "*" DonationRecord : creates
+  DonationLocation "1" --> "*" DonationRecord : receives
+  DonationRecord "0..1" --> "*" Item : includes
+  Shopper "0..1" --> "*" ShoppingRecord : completes
+  DonationLocation "1" --> "*" ShoppingRecord : records
+  Shopper --> TCUAffiliationCheck : verified by
+  DonationPartner "1" --> "*" PickupRecord : receives
+  ReFrogEvent "1" --> "*" PickupRecord : schedules
+```
 
 ### 7.2 Data dictionary
 
-_[Each entity's fields, with data type, allowed values, defaults, and validation rules. Where a use case already specifies a field's validation in its Associated Information, cite the use case instead of repeating it.]_
+The following dictionary identifies the core business data the system must manage. It is organized around the ReFrog domain terms used in the project brief, glossary, and business rules, and it excludes implementation-only database identifiers unless they are required for business traceability.
+
+| Entity | Field | Data type | Allowed values / default | Validation / business rule |
+|---|---|---|---|---|
+| ReFrogEvent | eventId | String / UUID | Unique per event | Required; each record must map to one event season or event window. |
+|  | eventYear | Integer | Current academic year or move-out cycle | Required; should match the event's move-out period. |
+|  | scheduleWindow | Date range | Monday-Saturday during finals week, approx. 2:00 p.m. start | Must align with the operational schedule defined by the committee. |
+|  | status | Enum | planned, active, closed, archived | Required; only active records may accept live submissions. |
+| DonationLocation | locationId | String | Unique site identifier | Required; one location per operational site. |
+|  | name | String | Site name or code | Required; human readable and unique within the event. |
+|  | status | Enum | open, closed, maintenance, capacity | Required; a closed location must not accept new activity. |
+| Volunteer | volunteerId | String | Unique volunteer identifier | Required; may be internal or a user account identifier. |
+|  | name | String | Free text | Required; non-empty. |
+|  | email | String | Valid email format | Optional if not used for assignments, but required for notifications. |
+|  | role | Enum | organizer, staff, site volunteer, community volunteer | Required; used to distinguish operational assignments. |
+| VolunteerShift | shiftId | String | Unique shift identifier | Required. |
+|  | date | Date | Event date | Required; must fall within the active event window. |
+|  | startTime / endTime | Time | HH:MM local time | Required for a scheduled shift; end time must be after start time. |
+|  | assignmentStatus | Enum | assigned, claimed, cancelled, filled | Required to support last-minute replacement workflows. |
+| Donator | donatorId | String | Unique donor identifier if personal data is retained | Optional; keep only if needed for follow-up and not as a raw ID unless approved. |
+|  | name | String | Free text | Optional for anonymous or low-friction drop-off records. |
+|  | affiliation | Enum | TCU student, faculty, staff, community, unknown | Optional; used only where it affects the donation process. |
+| DonationRecord | donationRecordId | String | Unique record identifier | Required. |
+|  | recordedDateTime | DateTime | Local time | Required; recorded at the time of drop-off. |
+|  | dropoffLocation / locationId | String | Existing DonationLocation.locationId | Required; each donation must be associated with the site of receipt. |
+|  | itemCount | Integer | 0 or greater | Required; must represent the number of items donated in the submission. |
+|  | source | Enum | QR scan, manual entry, admin entry | Required; distinguishes how the donation was logged. |
+| Item | category / itemGroup | String | Furniture, appliance, clothing, linens, household goods, other | Required for category-level tracking; may be used for partner pickup prioritization. |
+|  | itemCount | Integer | 1 or greater | Required when item-level quantities are tracked. |
+|  | condition | Enum | usable, damaged, uncertain | Required when item quality is recorded; otherwise may default to usable if not assessed. |
+| Shopper | name / shopperId | String | Unique shopper identifier | Required if the system tracks repeat visits or abuse patterns. |
+|  | affiliationType | Enum | student, faculty, staff, volunteer, not-eligible | Required; used to determine shopping eligibility. |
+|  | verificationStatus | Enum | verified, unverified, rejected, review-needed | Required; ties to the TCU affiliation check process. |
+| ShoppingRecord | shoppingRecordId | String | Unique record identifier | Required. |
+|  | shoppingDateTime | DateTime | Local time | Required. |
+|  | locationId | String | Existing DonationLocation.locationId | Required. |
+|  | quantityTaken | Integer | 0 or greater | Required; must record number of items removed in the visit. |
+|  | verificationMethod | Enum | visual ID check, digital check, admin override | Required; supports audit and abuse review. |
+| TCUAffiliationCheck | checkId | String | Unique verification record | Required. |
+|  | checkedBy | String | Volunteer or staff member name or ID | Required when performed by a person. |
+|  | method | Enum | physical ID, phone ID, staff confirmation, other | Required; source of the verification result. |
+|  | result | Enum | eligible, ineligible, needs review | Required; ineligible or needs-review shoppers must not be approved to shop. |
+|  | timestamp | DateTime | Local time | Required. |
+| DonationPartner | partnerId | String | Unique partner identifier | Required. |
+|  | name | String | Partner organization name | Required; examples include Wellman Project, TRIO, Archway. |
+|  | pickupPriority | Integer | 1, 2, 3, ... | Required to reflect pickup order. |
+|  | pickupWindow | Date range | Pickup dates during or immediately after event week | Required; should match the agreed partner pickup schedule. |
+| PickupRecord | pickupRecordId | String | Unique record identifier | Required. |
+|  | pickupDate | Date | Event week date | Required. |
+|  | partnerId | String | Existing DonationPartner.partnerId | Required. |
+|  | itemCategory | String | Category or item class received | Required if the report documents what each partner took. |
+|  | quantity | Integer | 0 or greater | Required; must match count available at handoff. |
+
+Notes:
+
+- The current process logs donor and shopper activity through QR-code forms, so the system should preserve source metadata and use a consistent event-location combination for all submissions.
+- A raw TCU ID number is not required to satisfy the system's business needs and should be kept only if the client specifically approves it; the system should prioritize a verification result and audit trail over storing a full ID value.
+- Where a field is already defined in a use case or business rule, that use case or rule remains the authoritative validation source rather than a second, conflicting definition in this document.
 
 ### 7.3 Reports
 
-_[Any report the system generates: who reads it, what it contains, how often, and in what format. Reports are where clients discover late that a field they need was never captured, so specify them early.]_
+The system shall generate operational and reporting data in a format that can be used by ReFrog organizers, volunteer managers, and partner coordinators without manually reconciling multiple disconnected spreadsheets. The reports below represent the minimum core reporting set needed to support the current process and address the known pain points described in the client brief and the vision and scope.
+
+#### 7.3.1 Daily site activity report
+
+- Who reads it: ReFrog organizers and the volunteer staff at each donation location.
+- What it contains: donated item counts by location, shopping counts by location, date/time of activity, site status, and any verification or review events.
+- Frequency: generated daily during the event and available after each operational day.
+- Format: dashboard view and downloadable CSV or spreadsheet export.
+- Purpose: gives organizers a single source of truth for site activity while the event is still running.
+
+#### 7.3.2 Volunteer staffing and coverage report
+
+- Who reads it: ReFrog organizers and volunteer coordinators.
+- What it contains: assigned volunteers, claimed and unfilled shifts, cancellation status, location coverage, and open staffing gaps by time block.
+- Frequency: updated in near real time for the event window and summarized after the event.
+- Format: schedule dashboard and printable staffing summary.
+- Purpose: reduces the risk that a single founder must personally absorb late cancellations and helps the committee plan replacement coverage.
+
+#### 7.3.3 Donor and shopper activity summary
+
+- Who reads it: ReFrog organizers and the TCU Sustainability Committee.
+- What it contains: total donations by site, total shopping visits by site, number of items donated, number of items taken, and totals by day or time range.
+- Frequency: generated daily and at the end of the event.
+- Format: summary table and chart view with export to spreadsheet.
+- Purpose: supports the impact metrics the program reports to the university and external partners.
+
+#### 7.3.4 Shopping abuse review report
+
+- Who reads it: ReFrog organizers or designated administrators.
+- What it contains: repeated shopping visits by the same shopper, counts by location over time, verification status, and any review flags that require staff intervention.
+- Frequency: generated during the event or on-demand when a potential abuse pattern is detected.
+- Format: table-based review list with flags and supporting event history.
+- Purpose: supports the current business rule that suspected excessive or prohibited shopping must be reviewed before action is taken.
+
+#### 7.3.5 Donation partner handoff and reconciliation report
+
+- Who reads it: ReFrog organizers and each donation partner.
+- What it contains: partner name, pickup date, pickup order, category mix, total items handed off, and any variance between expected and actual pickup volume.
+- Frequency: generated at each pickup window and summarized after the event.
+- Format: reconciliation table and downloadable report.
+- Purpose: allows ReFrog and partner organizations to compare planned and actual handoff volumes and resolve discrepancies like the Archway shortfall described in the client brief.
+
+#### 7.3.6 Year-end impact report
+
+- Who reads it: the TCU Sustainability Committee, client stakeholders, and event supporters.
+- What it contains: annual totals for volunteers, volunteer hours, donation sites, donation counts, shopping counts, diverted items, and partner handoff totals, as approved by the committee for public reporting.
+- Frequency: generated once per event cycle, usually at the end of the move-out season.
+- Format: spreadsheet-ready summary or presentation-friendly dashboard.
+- Purpose: replaces the current hand-reconciled Google Sheets process and reduces the "unknown amount of error" described by the client.
 
 ### 7.4 Data acquisition, integrity, retention, and disposal
 
-_[Where the data comes from, how it is kept correct, how long it is kept, and how it is destroyed. If your system holds anything about students or other identifiable people, this section is not optional, and its content is usually a business rule you should cite rather than invent.]_
+[Where the data comes from, how it is kept correct, how long it is kept, and how it is destroyed. If your system holds anything about students or other identifiable people, this section is not optional, and its content is usually a business rule you should cite rather than invent.]
+
+This section distinguishes the data-handling behavior required to support the business rules from retention and disposal policies that ReFrog has not yet established. The authoritative business rules are maintained in [business-rules.md](business-rules.md); this section cites those rules rather than restating them as new policy.
+
+#### 7.4.1 Data acquisition
+
+- The system shall record the ReFrog location and item count for each donation submission, as required by `BR-donation-location-recorded` and `BR-donation-count-recorded`.
+- The system shall record the event date, location, and number of items taken for each shopping visit, as required by `BR-shopping-activity-recorded`.
+- The system shall record the result of the TCU-affiliation check before permitting a person to shop, as required by `BR-shopper-verification` and `BR-shopper-tcu-affiliation`. The specific electronic verification method is unresolved by the business rules.
+- The system shall record volunteer assignments against the location and shift the volunteer has claimed or been assigned, as required by `BR-volunteer-assignment`. The business rules do not yet define the complete cancellation and reassignment workflow.
+- The system shall record remaining-item handoffs to donation partners in the agreed pickup order and according to item priorities, as required by `BR-partner-pickup-priority` and `BR-remaining-items-distributed`.
+
+#### 7.4.2 Data integrity
+
+- Each donation record shall remain associated with the physical ReFrog location where it was received, in accordance with `BR-donation-location-recorded`.
+- Each shopping record shall contain the event date, location, and item count required by `BR-shopping-activity-recorded`.
+- The system shall not accept a shopping record as an approved shopping activity unless the shopper has demonstrated TCU affiliation, in accordance with `BR-shopper-verification` and `BR-shopper-tcu-affiliation`.
+- The system shall preserve the pickup order and item priorities used for partner handoffs, in accordance with `BR-partner-pickup-priority`.
+- The system shall route suspected excessive or prohibited shopping to ReFrog administrator review before applying any action, in accordance with `BR-shopping-abuse-review`. The threshold and penalty for abuse remain unresolved and shall not be invented by the system.
+- The system shall preserve the distinction between free shopping and any other transaction type; ReFrog shopping is without charge under `BR-free-shopping`.
+
+The business-rules document does not currently define general record identifiers, duplicate-detection rules, correction history, reconciliation formulas, or backup integrity requirements. Those are implementation or policy decisions and require confirmation before they are made mandatory requirements.
+
+#### 7.4.3 Retention
+
+No retention period is currently specified in `business-rules.md`. The rules document defines the operational data that must be recorded, but it does not state how long donation, shopping, volunteer, affiliation-check, or partner-pickup records must be kept.
+
+- **Open decision:** ReFrog and TCU must define retention periods for operational records and any personally identifiable information before production use.
+- **Open decision:** ReFrog and TCU must decide whether the system may retain a shopper's identity or only an affiliation-check result and event history.
+- Until those decisions are made, this document does not impose a numeric retention period or claim that a particular identifier must be stored.
+
+#### 7.4.4 Disposal and secure removal
+
+No disposal, archival, backup-purge, or export-destruction rule is currently stated in `business-rules.md`.
+
+- **Open decision:** ReFrog and TCU must define how expired records, exports, backups, and archived copies are disposed of.
+- **Open decision:** ReFrog and TCU must identify who is authorized to approve or perform disposal.
+- Until those decisions are made, the system shall not silently delete operational records or represent a disposal schedule as an approved business rule.
+
+#### 7.4.5 Privacy and data minimization
+
+- The system shall collect the data needed to enforce `BR-shopper-verification`, `BR-shopper-tcu-affiliation`, `BR-shopping-activity-recorded`, `BR-donation-location-recorded`, `BR-donation-count-recorded`, `BR-volunteer-assignment`, `BR-partner-pickup-priority`, and `BR-remaining-items-distributed`.
+- The system shall not require a raw TCU ID number unless ReFrog and TCU confirm that it is necessary for the affiliation-check process. `BR-shopper-verification` requires demonstration of affiliation but does not require storage of the ID itself.
+- The system shall not infer a definition, threshold, or penalty for shopping abuse beyond `BR-shopping-abuse-review`; those decisions remain with ReFrog administrators.
+- Any additional personal data, retention period, or disposal behavior must be approved by the client and documented as a business rule, requirement, or open issue before implementation.
 
 ---
 
@@ -315,35 +597,109 @@ _Write one subsection per attribute your project actually has, and say "not appl
 
 _Example: `USE-wcag-aa`: All user-facing views shall conform to WCAG 2.1 level AA._
 
+ReFrog participants commonly interact with the system on personal smartphones at outdoor, physically distributed event locations. Donator and volunteer interactions must remain brief because users may be working in noisy, fast-moving conditions. The thresholds below are proposed for team and client review.
+
+- `USE-mobile-responsive`: The system shall make all participant workflows usable without horizontal scrolling at a viewport width of 320 CSS pixels.
+- `USE-donation-completion`: At least 90 percent of representative first-time users shall complete a donation submission without assistance within 60 seconds.
+- `USE-volunteer-signup-completion`: At least 90 percent of representative first-time volunteers shall find and claim an available shift without assistance within two minutes.
+- `USE-admin-no-code`: A ReFrog administrator shall be able to configure event dates, locations, shifts, and staffing requirements without changing application code.
+- `USE-validation-feedback`: When a user provides invalid or incomplete input, the system shall identify each affected field, explain how to correct it, and preserve all valid input already entered.
+- `USE-accessibility`: All user-facing views shall conform to WCAG 2.1 Level AA.
+
 ### 9.2 Performance
 
 _Example: `PER-report-load`: A peer evaluation report for a section of 80 students shall render within 2 seconds at the 95th percentile._
+
+The most recent documented event involved 193 volunteers, approximately 2,573 shoppers, and approximately 9,600 items taken across seven locations; eight locations are planned for the next event. Concurrent-user counts and representative network conditions still require confirmation.
+
+- `PER-page-load`: Under the approved peak load and test-network conditions, 95 percent of participant-facing pages shall become usable within three seconds.
+- `PER-form-submission`: Under the approved peak load, 95 percent of donation, shopping, and volunteer submissions shall receive a success or failure response within two seconds.
+- `PER-dashboard-load`: The administrator dashboard shall display current event information within five seconds for an event containing the approved maximum number of records.
+- `PER-measurement`: Performance verification shall use a documented workload representing peak finals-week activity rather than average annual activity.
 
 ### 9.3 Security
 
 _Example: `SEC-authentication`: The system shall authenticate every request to a non-public endpoint, and shall reject unauthenticated requests without disclosing whether the requested resource exists._
 
+- `SEC-authenticated-administration`: The system shall authenticate every request that creates, modifies, deletes, exports, or displays nonpublic administrative information.
+- `SEC-role-based-access`: The system shall authorize protected operations according to the authenticated user's assigned role.
+- `SEC-least-privilege`: The system shall prevent donators, shoppers, and volunteers from accessing administrative dashboards or other participants' records.
+- `SEC-affiliation-data`: The system shall disclose TCU-affiliation information only to authorized users and only when required to perform an approved ReFrog workflow.
+- `SEC-administrator-review`: The system shall restrict access to suspected shopping-abuse information to authorized ReFrog administrators, consistent with `BR-shopping-abuse-review`.
+- `SEC-transport-encryption`: The system shall encrypt network communication containing authentication credentials, affiliation information, or participant records by using HTTPS.
+- `SEC-audit-log`: The system shall record successful and unsuccessful administrator authentication attempts and administrator changes to event, schedule, and participant records.
+- `SEC-authentication-provider`: The system shall use the authentication and TCU-affiliation method approved by ReFrog and TCU. The choice among TCU single sign-on, TCU email verification, another electronic method, or continued in-person ID verification remains unresolved under `AS-authentication-approach` and `AS-affiliation-verification`.
+- `SEC-session-expiration`: The system shall expire an administrator session after the team-approved period of inactivity.
+
 ### 9.4 Safety
 
 _[Conditions under which the system could contribute to harm, and what prevents it. For most projects in this course the honest answer is `SAF-not-applicable`, with a sentence saying why.]_
+
+- `SAF-not-applicable`: The system does not control the physical receipt, sorting, storage, transportation, or disposal of donated items and is not intended to make safety-critical decisions. Physical event-safety procedures remain outside the software's scope. This determination must be reconsidered if the system is later expected to provide emergency instructions or control safety-critical staffing decisions.
 
 ### 9.5 Availability
 
 _Example: `AVL-uptime`: The system shall be available 99% of the time during the academic term, excluding announced maintenance windows._
 
+- `AVL-event-hours`: The system shall be available during the recruitment period and all published ReFrog event operating hours, subject to the approved availability target.
+- `AVL-uptime`: The system shall maintain at least 99 percent availability during the volunteer-recruitment period and finals-week event period, excluding approved maintenance windows.
+- `AVL-maintenance-window`: The system shall not schedule routine maintenance during published event operating hours.
+- `AVL-fallback-information`: Before each event, the system shall allow administrators to obtain an accessible backup of schedules, location information, and attendance procedures for use during an outage.
+- `AVL-outage-recovery`: The system shall restore essential scheduling and event-information functions within 30 minutes of a service interruption.
+
 ### 9.6 Robustness
 
 _Example: `ROB-edit-loss-bound`: On an unexpected client disconnect, the system shall lose no more than 30 seconds of a student's in-progress edits._
 
-### 9.7 Scalability, interoperability, maintainability
+- `ROB-submission-status`: If a submission cannot be completed, the system shall clearly indicate that it was not recorded and preserve the user's entered information for another attempt.
+- `ROB-duplicate-submission`: When a user retries a donation, shopping, or volunteer submission after an interrupted response, the system shall prevent the retry from creating an unintended duplicate record.
+- `ROB-invalid-input`: If submitted data violates a validation rule, the system shall reject the invalid values without altering previously stored valid records.
+- `ROB-connectivity-loss`: If network connectivity is lost during data entry, the system shall preserve entered values until the user restores connectivity, cancels the operation, or closes the interface. Whether the values must survive closing and reopening the interface remains a team decision.
+- `ROB-external-service-failure`: If an external authentication, notification, or mapping service is unavailable, the system shall identify the affected function and shall not present the operation as successful.
+- `ROB-backup-recovery`: The system shall back up persistent records and support restoration within team-approved recovery-point, recovery-time, and retention limits.
+
+### 9.7 Scalability
 
 _[Add the ones that apply, with `SCA-`, `INT-`, and `MNT-` identifiers. Maintainability is the one this course cares about most, because someone inherits your code in January.]_
+
+- `SCA-event-capacity`: The system shall support at least eight active locations, 200 volunteers, 3,000 shoppers, and 10,000 item-activity records in one event without violating the performance requirements in section 9.2.
+- `SCA-growth-capacity`: The system shall support the team-approved growth margin above the event capacity without requiring redesign of its data model or deployment architecture.
+
+### 9.8 Interoperability
+
+- `INT-data-export`: The system shall allow an authorized administrator to export volunteer, donation, shopping, and summary data in CSV format for use in spreadsheet software.
+- `INT-export-documentation`: Each export shall contain documented column names, date formats, units, and record identifiers.
+- `INT-existing-tools`: For each approved integration with SignUpGenius, Google Forms, Google Sheets, the ReFrog website, a mapping service, email, or a TCU identity service, the interface specification shall identify the exchanged data, direction, format, and failure behavior.
+- `INT-integration-scope`: Each existing service that is not selected for integration shall be documented as replaced, retained as a manual process, or outside the release scope rather than assumed to be connected.
+
+### 9.9 Maintainability
+
+- `MNT-event-configuration`: The system shall allow authorized administrators to change event dates, operating hours, locations, shifts, and staffing requirements without modifying or redeploying application code.
+- `MNT-automated-tests`: The project shall include automated tests for authentication, authorization, volunteer scheduling, validation, and data-calculation rules.
+- `MNT-deployment-documentation`: The project shall provide instructions for installing, configuring, deploying, backing up, restoring, and updating the application.
+- `MNT-administrator-documentation`: The project shall provide instructions for routine administrator tasks and event preparation.
+- `MNT-diagnostics`: The system shall record sufficient diagnostic information to identify failed requests and external-service failures without recording authentication secrets or unnecessary sensitive information.
+- `MNT-dependency-record`: The project shall document its runtime, external services, required service accounts, and third-party dependencies.
+- `MNT-operational-handoff`: Before production handoff, the project shall provide the designated maintenance owner with the source code, deployment instructions, administrator instructions, service-account ownership information, and recurring-cost information. The maintenance owner, hosting payer, service-account owner, and supported technology stack remain unresolved under `AS-operational-ownership`.
 
 ---
 
 ## 10. Internationalization and Localization
 
 _[Languages, character sets, time zones, date and currency formats. If the answer is a single locale, say so and say why, because that is a real constraint on who can use the system.]_
+
+The initial release is intended for ReFrog's TCU-based operation in Fort Worth, Texas. The following requirements define a single-locale release while preventing avoidable loss or ambiguity in stored data. Additional language support remains outside the initial scope unless the team and client decide otherwise.
+
+- `LOC-release-locale`: The system shall provide the initial-release interface and documentation in United States English (`en-US`).
+- `LOC-unicode`: The system shall store, process, export, and display user-entered text using Unicode without removing valid characters from names or other text fields.
+- `LOC-event-time-zone`: The system shall associate ReFrog event dates and times with the `America/Chicago` time zone and shall account for daylight-saving-time changes.
+- `LOC-time-storage`: The system shall store timestamps in a consistent machine-readable form and convert them to the event's configured time zone for display.
+- `LOC-date-display`: The system shall display human-readable dates with the month written or abbreviated, such as `May 8, 2027`, when a numeric date could be ambiguous.
+- `LOC-time-display`: The system shall display user-facing event times using a 12-hour clock with `a.m.` or `p.m.` and the event's configured time zone.
+- `LOC-export-format`: Machine-readable exports shall use an unambiguous date and time representation documented with the export.
+- `LOC-measurement-units`: Reports containing weight or volume shall identify their units explicitly and shall use the measurement units approved by ReFrog.
+- `LOC-currency-not-applicable`: Currency localization is not applicable to the initial release because ReFrog does not charge shoppers for donated items, consistent with `BR-free-shopping`.
+- `LOC-future-languages`: Translation and runtime locale switching are outside the initial release unless later added to scope. The system shall not embed interface text in stored business records where doing so would prevent future localization.
 
 ---
 

@@ -3,7 +3,7 @@
 **Project:** _[Refrog]_
 **Team:** _[Team 03]_
 **Client:** _[Refrog & TCU Sustainability]_
-**Version:** 0
+**Version:** 0.1
 
 ---
 
@@ -84,9 +84,9 @@ _[End of worked examples. Delete them and write your own terms below.]_
 
 ---
 
-### Diversion / Diverted Item
+### Diverted Item
 
-An item that was donated through ReFrog and either shopped or redistributed to a partner, thereby kept out of a landfill. The brief uses dumpsters diverted as its primary impact metric.
+An item that was donated through ReFrog and either shopped or redistributed to a partner, thereby kept out of a landfill.
 
 **Not to be confused with:** a donated item that goes unclaimed and may still end up discarded.
 
@@ -94,9 +94,9 @@ An item that was donated through ReFrog and either shopped or redistributed to a
 
 ### Donation Location
 
-A designated physical site on or near the TCU campus where student donators drop off items during move-out. ReFrog operated 2 locations in Year 1, growing to 7 by Year 3.
+A designated physical site on or near the TCU campus where donations, shopping happens.
 
-**Not to be confused with:** a Donation Partner organization, which receives surplus items after the event.
+**Related:** Pod
 
 ### Donation Partner
 
@@ -111,8 +111,6 @@ A TCU student who is in the process of moving out and contributes items they no 
 ### Item
 
 The fundamental unit tracked by ReFrog: any physical object donated at a donation location, including furniture, appliances, clothing, linens, and household goods. Items are counted at donation and again at shopping, and their aggregate is used to estimate landfill diversion.
-
-**Not to be confused with:** a category of item (e.g., "furniture"); Item refers to a single countable object regardless of category.
 
 ### Move-out
 
@@ -141,6 +139,10 @@ The act of a verified Shopper selecting and taking donated items at no charge fr
 A pattern in which a Shopper acquires a disproportionate number of items, preventing equitable access for other Shoppers. The brief uses the word "hoarding" and identifies monitoring it as a key goal of the app.
 
 **Synonyms:** hoarding — the client's informal term for the same concept.
+
+### TCU Community
+
+Members of TCU, staff, faculty, or students. Who are able to participate in refrog as one of the various roles (Donator, Shopper, Volunteer)
 
 ### TCU ID
 

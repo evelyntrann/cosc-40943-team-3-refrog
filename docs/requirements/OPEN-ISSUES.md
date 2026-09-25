@@ -38,6 +38,7 @@ _[Send the shortlist to your client the day before. A client who has seen the qu
 | OI-9 | Does creating and configuring volunteer shifts happen inside the new app, or does the client intend to keep using an external tool (e.g., SignUpGenius) for that? | Blocks `UC-ADM-manage-shifts`, which every `UC-VOL-*` use case depends on. | Client: Wendy Macias | 2026-09-23 |
 | OI-10 | What TCU affiliation-verification method is permitted and practical without requiring TCU single sign-on? | Blocks `UC-IDV-verify-affiliation`'s core mechanism. Originally raised as `OI-authentication` in `client-interview-2026-09-11.md`'s open questions but never filed here until now. | Client: Wendy Macias / TCU IT | 2026-09-11 |
 | OI-11 | What rules should identify or limit excessive shopping and potential resale activity? | Blocks `UC-ABU-review-alert` entirely — the use case cannot be finalized without this. Originally raised as `OI-shopping-limits` in `client-interview-2026-09-11.md`'s open questions but never filed here until now. | Client: Wendy Macias / ReFrog committee | 2026-09-11 |
+| OI-12 | Who will maintain the application after the current senior design team completes the project: ReFrog administrators, another senior design group, or another designated owner? | The maintenance owner determines the required handoff, documentation, account ownership, hosting responsibility, and technology choices. | Client: Wendy Macias | 2026-09-24 |
 |
 
 ## Resolved
