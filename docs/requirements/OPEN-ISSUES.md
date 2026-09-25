@@ -34,7 +34,9 @@ _[Send the shortlist to your client the day before. A client who has seen the qu
 | OI-2 | _[ Do you want the volunteers or shoppers to track the items tracked?]_ | _[ Blocks deciding feature for shopping.]_ | _[Client]_ | _[2026-09-18]_
 | OI-3 | _[ What capabilities should donation partners have within the app?]_ | _[ Blocks deciding feature for donation partners.]_ | _[Client]_ | _[2026-09-18]_
 | OI-4 | Who will maintain the application after the current senior design team completes the project: ReFrog administrators, another senior design group, or another designated owner? | The maintenance owner determines the required handoff, documentation, account ownership, hosting responsibility, and technology choices. | Client: Wendy Macias | 2026-09-24 |
-|
+| OI-5 | Do you want a report at the end of the event, from every location, or something else? | Gives the client a report to show things are going smoothly. | Client: Wendy Macias | 2026-09-25 |
+| OI-6 | How long must donation, shopping, volunteer, affiliation-check, and partner-pickup records be retained, and which records may contain an identifiable shopper or volunteer? | SRS section 7.4.3 cannot define retention, data minimization, or production storage behavior without approved periods and identity rules. | Client and TCU data-governance owner | 2026-09-25 |
+| OI-7 | What backup frequency, recovery point, and recovery time are required for the operational data used by the reports? | What is the backup integrity; the answer determines whether a lost or corrupted event record can be recovered. | Client and operational owner | 2026-09-25 |
 
 ## Resolved
 
