@@ -33,10 +33,14 @@ _[Send the shortlist to your client the day before. A client who has seen the qu
 | OI-1 | _[ is refrog a web application or mobile application?]_ | _[ Blocks deciding what tech stack to use.]_ | _[Client]_ | _[2026-09-11]_
 | OI-2 | _[ Do you want the volunteers or shoppers to track the items tracked?]_ | _[ Blocks deciding feature for shopping.]_ | _[Client]_ | _[2026-09-18]_
 | OI-3 | _[ What capabilities should donation partners have within the app?]_ | _[ Blocks deciding feature for donation partners.]_ | _[Client]_ | _[2026-09-18]_
+| OI-4 | Does logging a donation require the donor to be signed in, or can it stay anonymous like today's QR-code form? | Blocks `UC-DON-log-donation`'s preconditions and whether donors need accounts at all. | Client: Wendy Macias | 2026-09-23 |
+| OI-7 | When a shift becomes understaffed: is the primary response to broadcast the opening to other volunteers so they can self-serve claim it (closest to what Wendy described — "message out to people... have somebody be able to sign up... to fill that spot"), or to alert an administrator directly? If administrators are alerted (as a fallback or otherwise), who exactly is contacted, how soon before the shift, and what happens if nobody responds in time? | Blocks the design of `UC-VOL-cancel-shift`'s extension 6b — currently written as admin-notification-only, which may not match what the client actually asked for. Also touches who counts as an "administrator" for alerting purposes, which the team has provisionally scoped to the three founders in `UC-ADM-view-dashboard`. | Client: Wendy Macias / ReFrog committee | 2026-09-23 |
+| OI-9 | Does creating and configuring volunteer shifts happen inside the new app, or does the client intend to keep using an external tool (e.g., SignUpGenius) for that? | Blocks `UC-ADM-manage-shifts`, which every `UC-VOL-*` use case depends on. | Client: Wendy Macias | 2026-09-23 |
+| OI-10 | What TCU affiliation-verification method is permitted and practical without requiring TCU single sign-on? | Blocks `UC-IDV-verify-affiliation`'s core mechanism. Originally raised as `OI-authentication` in `client-interview-2026-09-11.md`'s open questions but never filed here until now. | Client: Wendy Macias / TCU IT | 2026-09-11 |
+| OI-11 | What rules should identify or limit excessive shopping and potential resale activity? | Blocks `UC-ABU-review-alert` entirely — the use case cannot be finalized without this. Originally raised as `OI-shopping-limits` in `client-interview-2026-09-11.md`'s open questions but never filed here until now. | Client: Wendy Macias / ReFrog committee | 2026-09-11 |
 |
 
 ## Resolved
 
 | ID | Question | Answer | Answered by | Date | Filed in |
 |---|---|---|---|---|---|
-| OI-0 | _[Example row, delete it]_ | _[What we were told]_ | _[Name]_ | _[YYYY-MM-DD]_ | _[`BO-grading-time`, or the glossary term, or the section]_ |
