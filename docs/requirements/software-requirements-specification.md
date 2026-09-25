@@ -44,19 +44,27 @@ _Requirements cited from elsewhere keep their own identifiers: `UC-*` from [use-
 
 ## 1. Introduction
 
-### 1.1 The purpose of _[project name]_
+### 1.1 The purpose of ReFrog
 
 _[What the system is for: who wants it, why, and who will use it. Even though the vision and scope answers this, restate it in a paragraph here, because people read this document without having read that one.]_
+
+ReFrog is a mobile-first application for the ReFrog™ volunteer initiative at Texas Christian University. ReFrog organizers want it to replace disconnected volunteer sign-up, donation, and shopping-recording tools with one system that reduces errors in the program's impact data and eases the burden of coordinating the event. It will be used by ReFrog organizers and volunteers, with student donors and shoppers using the public-facing event and participation features.
 
 ### 1.2 The purpose of this document
 
 _[What this specification covers and for which release.]_
 
+This Software Requirements Specification defines the functional, nonfunctional, data, interface, and operating requirements for the initial release of the ReFrog application. It is the reference for ReFrog organizers, the development team, and testers when agreeing on, building, and verifying that release.
+
 _Example: "This document describes the functional and nonfunctional requirements for release 1.0 of the Cafeteria Ordering System. It serves as the reference for the project's requirements, defining the scope, functionality, and constraints for stakeholders, developers, and testers."]_
+
+
 
 ### 1.3 Document conventions
 
 _[Any typographical conventions, and the identifier formats above, so that someone adding a requirement later knows how to name it.]_
+
+This specification is written in Markdown. Headings organize the document, and links identify the documents that own related requirements and definitions. Each requirement defined here uses a name-based, kebab-case identifier from the applicable space in the **Identifiers** table (for example, `FR-<AREA>-<slug>` for a non-use-case functional requirement or `USE-<slug>` for a usability requirement). Identifiers are unique and stable: they must not be renumbered, renamed, or reused. Requirements defined in linked documents retain their original identifiers, including `UC-*` for use cases, `BR-*` for business rules, and `BO-*`, `SM-*`, and `FEAT-*` for Vision and Scope items.
 
 ### 1.4 References
 
@@ -77,9 +85,28 @@ _[Every document this specification refers to, with a link. At minimum, the four
 
 _[How this system relates to other systems and to the user's environment. Self-contained, or one component of something larger? Link to the product perspective section of your vision and scope and to your architecture's context diagram rather than redrawing them.]_
 
+ReFrog is an application that supports, but does not change, ReFrog's existing in-person move-out donation and shopping program at Texas Christian University. It consolidates capabilities now distributed across SignUpGenius, QR-code Google Forms, and Google Sheets: volunteer coordination, event participation records, and organizer reporting. The ReFrog website is currently the public source of event information; the application will also provide general event information. The application is intended to be mobile-first, although the final delivery platform is not yet decided.
+
+No external-system integration is committed for the initial release. The system must therefore be designed as a self-contained application that can replace the current tools used for the ReFrog event, subject to future migration and integration decisions.
+
+See the [Vision Statement](vision-and-scope.md#24-vision-statement) and [User Environment](vision-and-scope.md#32-user-environment) for the related product context.
+
 ### 2.2 User classes and characteristics
 
 _[The kinds of user, and what distinguishes them: frequency of use, technical skill, privilege level, whether they are inside or outside the client's organization. Link to the stakeholder profiles in your vision and scope; what belongs here is what affects the software's behavior, especially permissions.]_
+
+The application has six user classes. The account and TCU-affiliation-verification approach has not yet been decided, so the access mechanisms below describe intended roles rather than a final authentication design.
+
+| User class | Characteristics and frequency of use | Intended access |
+|---|---|---|
+| ReFrog administrators | Wendy Macias, Eric Trevino, Courtney Hendrix, and designated committee helpers are internal ReFrog organizers who use the system year-round and during the event. They are non-technical users and require the highest privilege level. | Manage volunteer coverage and event information; view location, item-activity, and volunteer-coverage data; and review potential shopping-abuse indicators. |
+| Volunteers | Volunteers are ReFrog participants, rather than core organizers, who sign up in the month before finals week and work shifts at event locations during finals week. They have varied technical skill, use the system on personal mobile devices in busy outdoor locations, and require limited role-based privileges. | Sign up for shifts; view their assigned shifts, locations, and hours; and record or support event activity as authorized by organizers. |
+| Donors | Donors are external event participants, typically students and sometimes their families. Their technical skill varies, and their use is brief at a ReFrog location when dropping off items; they require only low-privilege participation access. | View basic event and location information and record planned or completed donation information with minimal effort. |
+| Shoppers | Shoppers are TCU-affiliated event participants — students, faculty, staff, and sometimes volunteers — who use the system briefly while shopping in person. Their technical skill varies; they require low-privilege participation access, subject to the selected affiliation-verification method. | View event information, provide evidence of TCU affiliation by the method selected for the project, and record the items they take. |
+| TCU community visitors | TCU students, faculty, staff, and other interested community members are public-information users, not necessarily ReFrog participants. They may access the system occasionally from personal devices and require no privileged access. | View public event information, including locations, hours, and general guidance. |
+| Donation-recipient partners | The Wellman Project, TRIO, and Archway/Berry Good Buys are external organizations that collect remaining usable items near the end of the event. Their representatives would use the system occasionally for pickup coordination; their technical skill and privilege level have not yet been confirmed. | Potentially view pickup schedules, locations, and relevant event information. Direct application access and any partner-specific capabilities have not yet been confirmed. |
+
+
 
 ### 2.3 Operating environment
 
@@ -91,6 +118,12 @@ _Examples:_
 - _`OE-server-platform`: The system shall run on a server running the current corporate-approved version of Linux._
 - _`OE-access-paths`: The system shall permit access from the corporate intranet, from a VPN connection, and from Android and iOS phones and tablets._
 
+**Current ReFrog operating-environment requirements:**
+
+- _`OE-mobile-location-access`: The system shall be accessible from personal mobile devices used at ReFrog donation locations._
+- _`OE-in-person-event-support`: The system shall support use during ReFrog's in-person event at staffed TCU donation locations._
+- _`OE-decentralized-tool-replacement`: The system shall provide the volunteer-scheduling, donation-recording, shopping-recording, and data-aggregation capabilities needed to replace the current decentralized SignUpGenius, QR-code form, and Google Sheets workflows._
+
 ### 2.4 Design and implementation constraints
 
 _[Anything that limits the developers' options: corporate or regulatory policy, hardware limits, required languages or databases, coding standards, interfaces to other applications.]_
@@ -100,6 +133,17 @@ _Examples:_
 - _`CO-database-engine`: The system shall use the corporate standard database engine._
 - _`CO-language-version`: The backend shall be written in Java 21._
 - _`CO-coding-standard`: Design, code, and maintenance documentation shall conform to the client's development standard._
+
+**TCU-related constraints:**
+
+- _`CO-nontechnical-administration`: The administrative interface shall be usable by ReFrog organizers without technical knowledge._
+- _`CO-tcu-it-approval`: The system shall not integrate with TCU identity services or other university systems until TCU IT approves the integration._
+- _`CO-tcu-accessibility`: The system shall conform to the accessibility standards required by TCU for student-facing software._
+- _`CO-tcu-data-governance`: The system shall collect, store, access, retain, and dispose of TCU-affiliation and participant data in accordance with TCU-approved privacy and data-governance requirements._
+- _`CO-approved-branding`: The system shall use only ReFrog and TCU branding materials approved by the applicable owners._
+- _`CO-operational-ownership`: Before the system is used for an operational ReFrog event, a designated owner shall assume responsibility for maintenance, service accounts, recurring costs, and ongoing support._
+- _`CO-azure-database-hosting`: The production database shall be hosted on Microsoft Azure using a TCU-approved account and configuration._
+- _`CO-tcu-application-hosting`: If TCU requires a TCU-managed deployment environment for the student-facing application, the production application shall be hosted on TCU-managed server infrastructure capable of supporting the anticipated scale of ReFrog participants._
 
 _The constraint students forget: **who maintains this after you graduate, and what do they already know how to run?** If the answer is one person who knows Python, a Spring Boot service is a constraint violation nobody wrote down._
 
@@ -111,6 +155,16 @@ _Examples:_
 
 - _`AS-supported-browser`: Users access the system with a browser that supports the ECMAScript version the frontend targets._
 - _`DE-payroll-integration`: Operation depends on changes being made in the Payroll System to accept payment requests for meals ordered through this system._
+
+**Current ReFrog assumptions and dependencies:**
+
+- _`AS-existing-program`: ReFrog will retain its existing in-person donation and shopping model, and the system will support that model without changing the physical event._
+- _`AS-participant-access`: Intended users will have access to a suitable personal device and sufficient connectivity to use the selected delivery channel at event locations._
+- _`DE-event-configuration`: Operation depends on ReFrog organizers confirming each event's dates, operating hours, locations, shift lengths, and staffing needs before volunteer registration opens._
+- _`DE-delivery-platform-decision`: Implementation depends on ReFrog confirming the selected delivery platform, because the current requirements do not finalize whether the application is a mobile app, website, or another solution._
+- _`DE-affiliation-verification`: Electronic TCU-affiliation verification depends on the client and TCU accepting a verification method and, if needed, granting approval for university resources or integrations._
+- _`DE-tcu-azure-hosting`: Production deployment depends on access to a TCU-approved Microsoft Azure account and configuration for the production database._
+- _`DE-operational-ownership`: Continued operation after the senior design team completes the project depends on ReFrog or a designated university group assigning a maintenance owner for service accounts, recurring costs, and support._
 
 ---
 
