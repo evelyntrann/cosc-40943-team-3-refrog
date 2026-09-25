@@ -40,4 +40,3 @@ _[Send the shortlist to your client the day before. A client who has seen the qu
 
 | ID | Question | Answer | Answered by | Date | Filed in |
 |---|---|---|---|---|---|
-| OI-0 | _[Example row, delete it]_ | _[What we were told]_ | _[Name]_ | _[YYYY-MM-DD]_ | _[`BO-grading-time`, or the glossary term, or the section]_ |
