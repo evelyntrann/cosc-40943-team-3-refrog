@@ -156,7 +156,7 @@ _[Link only, to [business-rules.md](business-rules.md). Business rules are a ric
 
 ## 7. Data Requirements
 
-### 7.1 Business domain mode
+### 7.1 Business domain model
 
 The ReFrog domain centers on a seasonal move-out event, staffed physical donation locations, donations that are counted and later sorted, shoppers who are checked for TCU affiliation, and donation partners who receive remaining usable items. The following model reflects the business concepts.
 
@@ -192,9 +192,9 @@ classDiagram
   }
 
   class Item {
-    +category
+    +category(optional)
     +itemCount
-    +condition
+    +condition(optional)
   }
 
   class DonationRecord {
@@ -232,17 +232,17 @@ classDiagram
 
   class PickupRecord {
     +pickupDate
-    +partnerName
+    +partnerId
     +itemCategory
     +quantity
   }
 
   ReFrogEvent "1" --> "*" DonationLocation : hosts
   DonationLocation "1" --> "*" VolunteerShift : staffed by
-  Volunteer "1" --> "*" VolunteerShift : assigned to
+  Volunteer "*" --> "*" VolunteerShift : assigned to
   Donator "1" --> "*" DonationRecord : creates
   DonationLocation "1" --> "*" DonationRecord : receives
-  DonationRecord "1" --> "*" Item : includes
+  DonationRecord "0..1" --> "*" Item : includes
   Shopper "1" --> "*" ShoppingRecord : completes
   DonationLocation "1" --> "*" ShoppingRecord : records
   Shopper --> TCUAffiliationCheck : verified by
@@ -298,7 +298,7 @@ The following dictionary identifies the core business data the system must manag
 | DonationPartner | partnerId | String | Unique partner identifier | Required. |
 |  | name | String | Partner organization name | Required; examples include Wellman Project, TRIO, Archway. |
 |  | pickupPriority | Integer | 1, 2, 3, ... | Required to reflect pickup order. |
-|  | pickupWindow | Date range | Pickup dates during event week | Required; should match the event's operational schedule. |
+|  | pickupWindow | Date range | Pickup dates during or immediately after event week | Required; should match the agreed partner pickup schedule. |
 | PickupRecord | pickupRecordId | String | Unique record identifier | Required. |
 |  | pickupDate | Date | Event week date | Required. |
 |  | partnerId | String | Existing DonationPartner.partnerId | Required. |
@@ -365,44 +365,51 @@ The system shall generate operational and reporting data in a format that can be
 
 ### 7.4 Data acquisition, integrity, retention, and disposal
 
-ReFrog's data is acquired from operational events, volunteers, shoppers, donation partners, and administrative staff. The system must preserve a defensible record of event activity without storing unnecessary personal data or duplicating information across disconnected tools. The following requirements are therefore based on the current process and existing business rules, while leaving the exact retention period and secure disposal practices to be confirmed by the client.
+[Where the data comes from, how it is kept correct, how long it is kept, and how it is destroyed. If your system holds anything about students or other identifiable people, this section is not optional, and its content is usually a business rule you should cite rather than invent.]
+
+This section distinguishes the data-handling behavior required to support the business rules from retention and disposal policies that ReFrog has not yet established. The authoritative business rules are maintained in [business-rules.md](business-rules.md); this section cites those rules rather than restating them as new policy.
 
 #### 7.4.1 Data acquisition
 
-- Donation data shall be acquired at the point of drop-off, using the donation site and the recorded item count as the minimum source data for each donation submission.
-- Shopping data shall be acquired at the point of exit, with date, location, and item count tied to the individual shopper record or verification record when the system supports that pattern.
-- Volunteer assignment and staffing data shall be acquired from the committee's scheduling workflow and shall support assignment, claims, and cancellations.
-- TCU affiliation status shall be acquired through a verification process before shopping is approved; the chosen method may be visual, digital, or another approved process, but the system shall record the result and method of verification.
-- Donation partner pickup data shall be acquired at the time of the handoff, with enough detail to reconcile expected and actual volumes.
+- The system shall record the ReFrog location and item count for each donation submission, as required by `BR-donation-location-recorded` and `BR-donation-count-recorded`.
+- The system shall record the event date, location, and number of items taken for each shopping visit, as required by `BR-shopping-activity-recorded`.
+- The system shall record the result of the TCU-affiliation check before permitting a person to shop, as required by `BR-shopper-verification` and `BR-shopper-tcu-affiliation`. The specific electronic verification method is unresolved by the business rules.
+- The system shall record volunteer assignments against the location and shift the volunteer has claimed or been assigned, as required by `BR-volunteer-assignment`. The business rules do not yet define the complete cancellation and reassignment workflow.
+- The system shall record remaining-item handoffs to donation partners in the agreed pickup order and according to item priorities, as required by `BR-partner-pickup-priority` and `BR-remaining-items-distributed`.
 
 #### 7.4.2 Data integrity
 
-- Each operational record shall have a unique identifier and a clear association to the correct event and location.
-- Required data fields shall be validated before a record is accepted, and incomplete records shall be rejected or flagged for review rather than silently stored.
-- Donation and shopping totals shall be reconciled at the site and event level to ensure that counts are not duplicated, omitted, or mismatched across source systems.
-- A shopper's verification status shall be checked before a shopping record is accepted; unverified or ineligible shoppers shall not be treated as approved shoppers.
-- If a volunteer is assigned to a shift, the system shall prevent conflicting assignments or duplicate coverage unless explicitly overridden by an administrator.
-- Any suspected shopping abuse or exceptional event outcome shall be recorded with the supporting evidence needed for later review by an administrator.
+- Each donation record shall remain associated with the physical ReFrog location where it was received, in accordance with `BR-donation-location-recorded`.
+- Each shopping record shall contain the event date, location, and item count required by `BR-shopping-activity-recorded`.
+- The system shall not accept a shopping record as an approved shopping activity unless the shopper has demonstrated TCU affiliation, in accordance with `BR-shopper-verification` and `BR-shopper-tcu-affiliation`.
+- The system shall preserve the pickup order and item priorities used for partner handoffs, in accordance with `BR-partner-pickup-priority`.
+- The system shall route suspected excessive or prohibited shopping to ReFrog administrator review before applying any action, in accordance with `BR-shopping-abuse-review`. The threshold and penalty for abuse remain unresolved and shall not be invented by the system.
+- The system shall preserve the distinction between free shopping and any other transaction type; ReFrog shopping is without charge under `BR-free-shopping`.
+
+The business-rules document does not currently define general record identifiers, duplicate-detection rules, correction history, reconciliation formulas, or backup integrity requirements. Those are implementation or policy decisions and require confirmation before they are made mandatory requirements.
 
 #### 7.4.3 Retention
 
-- The system shall retain operational records needed to support event reporting, auditability, and partner reconciliation for the period required by the client and TCU sustainability operations.
-- Raw personal information, especially any TCU ID value, shall not be retained longer than necessary for verification and review; the preferred record is the verification result and the time of check, not the full identifier itself.
-- Event-level records shall remain available for the current season and the reporting cycle in which the client documents impact metrics.
-- The final retention period and archival policy shall be approved by the ReFrog committee before production use; until then, the system shall operate under a minimum necessary retention policy and shall not keep data beyond the active reporting cycle without a documented justification.
+No retention period is currently specified in `business-rules.md`. The rules document defines the operational data that must be recorded, but it does not state how long donation, shopping, volunteer, affiliation-check, or partner-pickup records must be kept.
+
+- **Open decision:** ReFrog and TCU must define retention periods for operational records and any personally identifiable information before production use.
+- **Open decision:** ReFrog and TCU must decide whether the system may retain a shopper's identity or only an affiliation-check result and event history.
+- Until those decisions are made, this document does not impose a numeric retention period or claim that a particular identifier must be stored.
 
 #### 7.4.4 Disposal and secure removal
 
-- When a record exceeds the approved retention period, it shall be removed from active storage and deleted from system logs where practical.
-- Backups and archived copies shall be managed so that expired records are eventually purged according to the approved retention policy.
-- Any data exports created for reporting shall be retained only as long as needed for the reporting purpose and then removed or archived under the same retention rules.
-- Access to retired records shall be limited to authorized administrators, and any physical or digital disposal method shall be consistent with the committee's privacy and security expectations.
+No disposal, archival, backup-purge, or export-destruction rule is currently stated in `business-rules.md`.
+
+- **Open decision:** ReFrog and TCU must define how expired records, exports, backups, and archived copies are disposed of.
+- **Open decision:** ReFrog and TCU must identify who is authorized to approve or perform disposal.
+- Until those decisions are made, the system shall not silently delete operational records or represent a disposal schedule as an approved business rule.
 
 #### 7.4.5 Privacy and data minimization
 
-- The system shall collect only the minimum data needed to support volunteer staffing, site activity reporting, shopper verification, and donation-partner reconciliation.
-- The system shall not treat a donor or shopper record as a substitute for a full identity record when a verification result and event history are sufficient for the business task.
-- Where a specific data element is not required by current business rules or use cases, it shall be excluded from storage until the client confirms the need for it.
+- The system shall collect the data needed to enforce `BR-shopper-verification`, `BR-shopper-tcu-affiliation`, `BR-shopping-activity-recorded`, `BR-donation-location-recorded`, `BR-donation-count-recorded`, `BR-volunteer-assignment`, `BR-partner-pickup-priority`, and `BR-remaining-items-distributed`.
+- The system shall not require a raw TCU ID number unless ReFrog and TCU confirm that it is necessary for the affiliation-check process. `BR-shopper-verification` requires demonstration of affiliation but does not require storage of the ID itself.
+- The system shall not infer a definition, threshold, or penalty for shopping abuse beyond `BR-shopping-abuse-review`; those decisions remain with ReFrog administrators.
+- Any additional personal data, retention period, or disposal behavior must be approved by the client and documented as a business rule, requirement, or open issue before implementation.
 
 ---
 
