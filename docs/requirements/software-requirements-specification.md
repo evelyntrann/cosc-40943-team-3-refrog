@@ -243,7 +243,7 @@ classDiagram
   Donator "1" --> "*" DonationRecord : creates
   DonationLocation "1" --> "*" DonationRecord : receives
   DonationRecord "0..1" --> "*" Item : includes
-  Shopper "1" --> "*" ShoppingRecord : completes
+  Shopper "0..1" --> "*" ShoppingRecord : completes
   DonationLocation "1" --> "*" ShoppingRecord : records
   Shopper --> TCUAffiliationCheck : verified by
   DonationPartner "1" --> "*" PickupRecord : receives
