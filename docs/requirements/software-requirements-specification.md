@@ -563,27 +563,114 @@ No disposal, archival, backup-purge, or export-destruction rule is currently sta
 
 ## 8. External Interface Requirements
 
-### 8.1 User interfaces
 
-_[The user-facing surfaces, at requirement level: which views exist, standards they must conform to, accessibility requirements. Link to wireframes or prototypes rather than describing pixel layouts.]_
+8.1 User interfaces
 
-### 8.2 Hardware interfaces
+ReFrog is a mobile-first, browser-based application intended to be used primarily on personal smartphones during ReFrog events and on desktop or mobile devices by administrators. The interface requirements below identify the required user-facing surfaces without prescribing a specific visual layout.
 
-_[Any hardware the system talks to, or "none".]_
+UI-public-event-info: The system shall provide a public-facing view of current ReFrog event information, including event dates, operating hours, donation locations, and information necessary for a participant to locate a ReFrog site.
 
-### 8.3 Software interfaces
+UI-volunteer-scheduling: The system shall provide volunteers with an interface for viewing available shifts, signing up for a shift, viewing their assigned shifts, and performing the cancellation actions defined by the applicable volunteer use cases.
 
-_[Other software systems yours connects to: what crosses the boundary, in which direction, in what format, and what happens when the other side is unavailable.]_
+UI-affiliation-verification: The system shall provide shoppers with an interface for completing the approved TCU-affiliation verification process before shopping. The exact authentication or credential interface remains dependent on resolution of OI-10.
 
-### 8.4 API document
+UI-donation-entry: The system shall provide a participant-facing interface for recording a donation, including the applicable donation location and item count required by the donation workflow.
 
-_[Link to your API documentation. It is generated from the code, so link it rather than transcribing endpoints that will be stale within a week.]_
+UI-shopping-entry: The system shall provide an interface for recording shopping activity after affiliation requirements have been satisfied.
 
-### 8.5 Communications interfaces
+UI-admin-dashboard: The system shall provide authorized ReFrog administrators with a dashboard for reviewing volunteer coverage, donation activity, shopping activity, location activity, and information surfaced for administrator review.
 
-_[Email, notifications, messaging, and the protocols involved.]_
+UI-admin-configuration: The system shall provide administrators with user-facing controls for configuration that the approved use cases place within the ReFrog application, including applicable event, location, and shift information. Whether creation and configuration of volunteer shifts occurs in ReFrog or an external scheduling system remains unresolved under OI-9.
 
----
+UI-validation-feedback: When a participant or administrator submits invalid or incomplete information, the interface shall identify the affected fields, explain what must be corrected, and preserve previously entered valid information.
+
+UI-mobile-responsive: Participant-facing workflows shall remain usable on supported smartphone browsers without requiring a desktop computer.
+
+UI-accessibility: User-facing interfaces shall satisfy the accessibility requirement defined by USE-accessibility and the applicable TCU accessibility constraint.
+
+Detailed visual layouts, component placement, typography, and branding treatment shall be defined in the project's wireframes or prototypes rather than duplicated in this specification.
+
+8.2 Hardware interfaces
+
+ReFrog has no required direct interface with dedicated external hardware for the initial release.
+
+Users access the system through ordinary personal devices such as smartphones, tablets, laptops, and desktop computers running supported web browsers.
+
+The existing ReFrog process uses printed QR codes to direct donors and shoppers to forms. ReFrog may continue to use QR codes as entry points to application URLs, but a QR code is treated as a navigation mechanism rather than as a hardware integration. The system does not require control of or direct communication with a scanner, card reader, kiosk, printer, or other dedicated peripheral.
+
+The current TCU-affiliation process may involve a participant displaying a physical TCU ID or information on a phone for visual inspection by a volunteer. The application does not assume an electronic TCU ID-card reader or other dedicated verification hardware unless such an interface is later approved and specified.
+
+8.3 Software interfaces
+
+SI-tcu-affiliation-service
+
+The final electronic mechanism for verifying TCU affiliation has not yet been selected.
+
+If the approved verification method requires communication with a TCU identity or university service:
+
+the ReFrog application shall send only the information required to establish the user's affiliation;
+
+the external service shall return sufficient information for ReFrog to determine whether the user satisfies the approved affiliation requirement;
+
+ReFrog shall not request or retain unrelated university information;
+
+communication shall use the authentication method, protocol, and data format approved by TCU; and
+
+the application shall not represent a shopper as electronically verified when the required external verification service cannot successfully complete the check.
+
+No integration with TCU identity services shall be implemented until the client and TCU approve the verification approach. The final provider, credential type, protocol, and failure behavior remain dependent on resolution of OI-10.
+
+SI-volunteer-scheduling-source
+
+ReFrog currently uses SignUpGenius as part of its volunteer-scheduling process. The intended application includes volunteer scheduling capabilities, but whether administrators will create and configure shifts directly in ReFrog or continue to use an external scheduling system remains unresolved under OI-9.
+
+Until that issue is resolved:
+
+the system shall not assume that a SignUpGenius API integration is required;
+
+the system shall not define SignUpGenius as the authoritative source of shift data; and
+
+any import, export, synchronization, or API requirement involving SignUpGenius shall remain outside the approved interface specification.
+
+If ReFrog becomes the authoritative scheduling system, no runtime SignUpGenius interface is required for the final workflow.
+
+SI-legacy-google-forms
+
+The current donation and shopping processes use QR-code-linked Google Forms and associated spreadsheets. The new ReFrog application is intended to provide its own donation- and shopping-recording workflows rather than depend on those forms during normal operation.
+
+No ongoing Google Forms or Google Sheets API integration is required by the currently approved requirements. Any migration of historical data or temporary transition process shall be specified separately if the client requests it.
+
+SI-production-database
+
+The application backend shall communicate with the production database using the TCU-approved Microsoft Azure hosting configuration required by CO-azure-database-hosting.
+
+Application data shall cross this interface only through the server-side application layer. Participant browsers shall not receive direct database credentials or connect directly to the production database.
+
+If the database is unavailable, the application shall report that the requested operation could not be completed rather than displaying an unconfirmed operation as successful.
+
+8.4 API document
+
+The application API documentation will be generated from the implemented backend and linked here when the API exists.
+
+API documentation: Not yet available — implementation has not reached the point at which generated API documentation can be linked.
+
+This SRS shall not duplicate individual endpoint paths, request bodies, or response schemas. The generated API documentation shall remain the authoritative technical reference for implemented endpoints, while this SRS remains the authoritative source for externally required system behavior.
+
+8.5 Communications interfaces
+
+ReFrog requires system-generated communication primarily for volunteer scheduling and staffing workflows. The exact delivery technology has not yet been approved, so this section specifies required communication behavior without selecting an email, SMS, push-notification, or third-party messaging provider.
+
+CI-volunteer-shift-reminder: When the approved reminder condition defined by FR-NOTIFY-shift-reminder is met, the system shall send a notification to the volunteer assigned to the applicable shift.
+
+CI-notification-revalidation: Immediately before sending a scheduled notification, the system shall confirm that the underlying information is still valid so that, for example, a volunteer does not receive a reminder for a shift that has already been cancelled.
+
+CI-notification-failure: Failure of the communications service shall not undo a volunteer sign-up, cancellation, schedule change, or other business operation that has already been successfully stored. A failed notification shall be made visible to an administrator as required by the applicable functional requirement.
+
+CI-understaffed-shift-communication: The system shall not assume whether an understaffed shift should result primarily in a broadcast to available volunteers, an alert to administrators, or both until OI-7 is resolved.
+
+CI-approved-contact-data: The system shall use only the participant contact information required by the approved notification mechanism.
+
+The selected communications provider, protocol, sender identity, notification channel, and exact reminder timing remain implementation dependencies until the client confirms the required communication workflow. Once selected, those details shall be added here or referenced through the applicable design/API documentation rather than inferred by the development team.
 
 ## 9. Quality Attributes
 
