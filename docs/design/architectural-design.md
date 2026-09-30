@@ -46,6 +46,8 @@ _Due: Checkpoint 1._
 
 _[Your [specification](../requirements/software-requirements-specification.md) and your [use cases](../requirements/use-cases.md) are the requirements overview. Link them here; do not summarize them.]_
 
+
+The requirements overview is maintained in the [Software Requirements Specification](../requirements/software-requirements-specification.md) and [Use Cases](../requirements/use-cases.md).
 ### 1.2 Quality goals
 
 _[The **three** quality attributes that most shape your system, in priority order. Pick them from section 9 of your [specification](../requirements/software-requirements-specification.md) and cite their identifiers. If you cannot rank them, ask your client which one they would give up first; that answer is the ranking._
@@ -60,9 +62,18 @@ _Example, from the Cafeteria Ordering System:]_
 | 2 | _Orders placed before 10:00 are not lost_ | _`ROB-order-persisted`, `AVL-lunch-window`_ | _The lunch rush is the only load that matters, and a lost order is a hungry employee with a payroll charge._ |
 | 3 | _Cafeteria staff can run it without IT_ | _`CO-no-dedicated-ops`, `MNT-menu-self-service`_ | _Nobody on the cafeteria side can deploy, restart, or patch anything._ |
 
+| Priority | Quality goal | Specification handles | Why it shapes the architecture |
+|---|---|---|---|
+| 1 | Phone-first participant workflows are quick and accessible | `USE-mobile-responsive`, `USE-donation-completion`, `USE-volunteer-signup-completion`, `USE-validation-feedback`, `USE-accessibility` | Donors, shoppers, and volunteers use the system in busy, distributed event locations. The PWA must work directly from a QR code without making donation or shift sign-up burdensome, while centralizing the workflows that currently use SignUpGenius and QR-code Google Forms. |
+| 2 | Shopper affiliation and administrative data are protected | `SEC-authenticated-administration`, `SEC-role-based-access`, `SEC-least-privilege`, `SEC-affiliation-data`, `SEC-transport-encryption`, `SEC-authentication-provider` | Shoppers are verified through their TCU email, while only Wendy Macias, Courtney Hendrix, and Erick Trevino administer event data. The architecture must keep verification and administrative functions separate from public participant workflows. |
+| 3 | ReFrog information and essential workflows remain available during event operations | `AVL-event-hours`, `AVL-uptime`, `AVL-fallback-information`, `AVL-outage-recovery` | A service outage during volunteer recruitment or a live event prevents shift coverage, location information, donation logging, and shopping records. The architecture needs reliable hosting, backups, and an accessible outage fallback. |
+
 ### 1.3 Stakeholders
 
 _[Your stakeholders are profiled in section 3.1 of [vision and scope](../requirements/vision-and-scope.md). Link it here; do not copy it.]_
+
+
+Stakeholders are profiled in [Vision and Scope](../requirements/vision-and-scope.md#31-stakeholder-profiles).
 
 ## 2. Architecture Constraints
 
@@ -71,6 +82,12 @@ _Due: Checkpoint 1._
 _[The constraints the architecture has to honor. They are already written as `CO-*` in section 2.4 of your specification, and `OE-*` in section 2.3; **list the identifiers here, do not restate them.** Add one sentence only where a constraint narrows an architectural choice in a way that is not obvious from its text._
 
 _Your technology stack is a constraint only if something external fixes it: the client's IT department, an existing system, or the person who maintains this after you graduate. A stack your team chose is a decision, and it goes in section 9 with the alternative you rejected.]_
+
+The architecture must honor the following operating-environment requirements: `OE-mobile-location-access`, `OE-in-person-event-support`, and `OE-decentralized-tool-replacement`.
+
+The applicable design and implementation constraints are `CO-nontechnical-administration`, `CO-tcu-it-approval`, `CO-tcu-accessibility`, `CO-tcu-data-governance`, `CO-approved-branding`, and `CO-operational-ownership`.
+
+**Unresolved production hosting.** The team and client have not selected a production hosting provider. `CO-azure-database-hosting` and `CO-tcu-application-hosting` remain conditional constraints pending the client's comparison of TCU-managed hosting with an outside option and any required TCU IT decision. This uncertainty is tracked by `DE-tcu-azure-hosting` and `DE-operational-ownership`.
 
 ## 3. Context and Scope
 
