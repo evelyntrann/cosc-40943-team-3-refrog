@@ -101,31 +101,53 @@ _This is your project's one context diagram. Section 4.1 of [vision and scope](.
 
 _arc42 divides context into a **business context** (who and what crosses the boundary) and a **technical context** (the channels and protocols). This diagram is the business context. The protocols go on the arrows of the container diagram in section 5.1._
 
-_The **trust boundary** is not drawn here. You name it in writing in section 8.1, as Project Pulse does._
-
-_Example:]_
+_The **trust boundary** is not drawn here. You name it in writing in section 8.1, as Project Pulse does.]_
 
 ```mermaid
 C4Context
-    title System Context: Cafeteria Ordering System
+    title System Context: ReFrog
 
-    Person(patron, "Patron", "Employee ordering a meal")
-    Person(staff, "Cafeteria Staff", "Prepares and delivers orders")
-    Person(menu, "Menu Manager", "Maintains the daily menu")
+    Person(admin, "ReFrog Administrator", "Wendy, Erik, Courtney, and designated helpers. Creates events, manages shifts, reviews data and abuse flags.")
+    Person(volunteer, "Volunteer", "Signs up for shifts, views schedule, works at event locations.")
+    Person(donor, "Donor", "Drops off items at a donation location during move-out.")
+    Person(shopper, "Shopper", "TCU student, faculty, staff, or volunteer who takes donated items after affiliation is verified.")
+    Person(visitor, "TCU Community Visitor", "Views public event information without signing in.")
 
-    System(cos, "Cafeteria Ordering System", "Takes, prepares, and delivers meal orders")
+    System(refrog, "ReFrog Application", "PWA that manages volunteer scheduling, donation and shopping forms, TCU-affiliation verification, and organizer reporting.")
 
-    System_Ext(payroll, "Payroll System", "Deducts meal payments from pay")
-    System_Ext(sso, "Corporate Sign-On", "Authenticates employees")
-    System_Ext(email, "Corporate Email", "Order confirmations")
+    System_Ext(authprovider, "Google Sign-In", "Refrog account sign-in options includes Google sign in. Depends on Google services.")
+    System_Ext(notification, "Notification Service", "Delivers shift reminders and staffing alerts to volunteers and administrators.")
 
-    Rel(patron, cos, "Orders meals")
-    Rel(staff, cos, "Fulfils orders")
-    Rel(menu, cos, "Edits menu")
-    Rel(cos, payroll, "Submits payment requests")
-    Rel(cos, sso, "Verifies identity")
-    Rel(cos, email, "Sends confirmations")
+    Rel(admin, refrog, "Manages events, shifts, locations; reviews dashboard and abuse flags")
+    Rel(volunteer, refrog, "Signs up for and cancels shifts; views schedule and hours")
+    Rel(donor, refrog, "Submits donation forms")
+    Rel(shopper, refrog, "Submits shopping forms after affiliation is confirmed")
+    Rel(visitor, refrog, "Views event info, locations, hours")
+    Rel(refrog, authprovider, "Authenticates users; derives TCU affiliation")
+    Rel(refrog, notification, "Sends shift reminders and staffing alerts")
 ```
+
+### Boundary-crossing relationships
+
+**Users.** Five user types cross the system boundary, matching the user classes in section 2.2 of the [specification](../requirements/software-requirements-specification.md). The sixth class listed there, **Donation-recipient partners**, does not appear on this diagram because their direct use of the application is unresolved (`OI-3`); if they are confirmed as app users, they become a Person box here and a row in section 5.2.
+
+- **ReFrog Administrator** — the three founders and their helpers. They use the admin dashboard (`UC-ADM-view-dashboard`, `UC-ADM-manage-shifts`) to create events, configure shifts and locations, review volunteer coverage, monitor donation and shopping activity, and inspect shopping-abuse flags (`UC-ABU-review-alert`). They are the only users who can export data (`INT-data-export`). Access is gated by `SEC-authenticated-administration` and `SEC-role-based-access`.
+
+- **Volunteer** — signs up for shifts (`UC-VOL-signup`), cancels shifts (`UC-VOL-cancel-shift`), and views their assigned schedule and hours (`UC-VOL-view-schedule`). Must be signed in. Receives shift reminders via the Notification Service (`FR-NOTIFY-shift-reminder`).
+
+- **Donor** — submits a donation form at a drop-off location (`UC-DON-log-donation`). Whether sign-in is required is resolved under `OI-4`; if anonymous logging is retained, the donor does not authenticate through the Authentication Provider.
+
+- **Shopper** — must sign in and have TCU affiliation confirmed (`UC-IDV-verify-affiliation`, `FR-AUTH-affiliation-from-signin`) before submitting a shopping form (`UC-SHP-log-item-taken`). The affiliation badge is displayed on the account profile view for in-person verification by a volunteer.
+
+- **TCU Community Visitor** — views public event information (`UC-LOC-view-locations`) without signing in. No data crosses the trust boundary beyond publicly displayed event details.
+
+**External systems.** Two external systems are shown. No external-system integration is committed for the initial release (`SRS §2.1`), but both are architecturally necessary for the features the specification requires:
+
+- **Google Sign-In** — the application delegates sign-in to Google Sign-In, per `SEC-authentication-provider` and `DE-affiliation-verification`. TCU affiliation is derived from the user's `@tcu.edu` email domain. The application does not store passwords or issue its own credentials; it consumes an identity token from Google.
+
+- **Notification Service** — the channel through which the application delivers shift reminders (`FR-NOTIFY-shift-reminder`) and staffing alerts (`FR-ALERT-understaffed-shift`, pending `OI-7`). The specific channel (email, push notification, or both) is a team decision. The system must check notification accuracy before sending (`FR-NOTIFY-current-state`) and must not block business-state changes if a notification fails (`FR-NOTIFY-preserve-business-state`).
+
+**What is not on this diagram.** The current toolchain — SignUpGenius, Google Forms, Google Sheets, and the ReFrog website — does not appear because the application replaces rather than integrates with them (`OE-decentralized-tool-replacement`; `INT-integration-scope`). If any of those tools is later selected for integration rather than replacement, it becomes an external-system box here and needs a corresponding `SI-*` or `CI-*` entry in the specification. The Azure database (`CO-azure-database-hosting`) is internal to the system boundary and appears on the container diagram in section 5.1, not here.
 
 ## 4. Solution Strategy
 
@@ -187,6 +209,40 @@ C4Container
 
 _The system is one application and one database because nobody on the cafeteria side can operate more (`KD-deployment-shape`). The front end is a separate container only because it runs in the browser; it ships inside the application's package._
 
+```mermaid
+C4Container
+    title Container Diagram: ReFrog
+
+    Person(donor, "Donor", "Drops off items at a location")
+    Person(shopper, "Shopper", "Takes items after verifying TCU affiliation")
+    Person(volunteer, "Volunteer", "Signs up for and works shifts")
+    Person(admin, "Administrator", "Manages shifts and reviews activity")
+
+    System_Boundary(refrog, "ReFrog") {
+        Container(web, "Web Front End", "PWA, technology not yet chosen", "Donor, shopper, volunteer, and administrator screens in the browser")
+        Container(app, "Application", "technology not yet chosen", "Every business rule from the component table in 5.2; serves the front end")
+        ContainerDb(db, "Database", "technology not yet chosen", "Shifts, volunteer assignments, donations, shopping visits, administrator accounts")
+    }
+
+    System_Ext(google, "Sign-in provider", "Authenticates users; not yet chosen which provider")
+    System_Ext(notify, "Email delivery channel", "Sends TCU verification codes and shift notifications; exact provider not yet chosen")
+
+    Rel(donor, web, "Logs a donation", "HTTPS")
+    Rel(shopper, web, "Verifies affiliation, logs items taken", "HTTPS")
+    Rel(volunteer, web, "Signs up for and cancels shifts", "HTTPS")
+    Rel(admin, web, "Manages shifts, views dashboard", "HTTPS")
+    Rel(web, app, "Calls", "JSON/HTTPS")
+    Rel(app, db, "Reads and writes", "not yet chosen")
+    Rel(app, google, "Signs a user in", "OAuth / OpenID Connect")
+    Rel(app, notify, "Sends a TCU email verification code; sends shift reminders and administrator-triggered notifications", "not yet chosen")
+```
+
+ReFrog ships as one deployable, reflecting the team's working direction for `KD-deployment-shape` (formal write-up pending §9.2): the three ReFrog founders cannot operate infrastructure, and the team's lack of mobile development experience already ruled out a native app in favor of a single web application. The front end is a separate container only because it runs in the browser as a PWA — it ships inside the application's package, not deployed independently, same as the worked example above.
+
+Technology for all three containers is marked "not yet chosen" deliberately — nothing decided so far commits the team to a specific language, framework, or database, and guessing one here would be exactly the kind of invented precision this document warns against. External systems are provisional pending §3's context diagram.
+
+**Corrected 2026-10-02:** this diagram previously showed "Google Sign-In" deriving TCU affiliation directly from the sign-in email's domain. The client meeting confirmed a different mechanism instead (`OI-10`, resolved): a one-time code sent to a TCU email address the shopper enters, independent of whatever account they signed in with. That no longer depends on TCU's email running on the same provider used for sign-in — an assumption that was never actually confirmed. The sign-in provider itself (for general authentication) is still unchosen and unrelated to the affiliation check.
+
 ### 5.2 Use case areas and components
 
 _[One row per use case area in your [use cases](../requirements/use-cases.md), taken from the area column of [traceability.md](../traceability.md) section 1, plus one row per **cross-cutting component** that no single area owns (authentication, notifications, file handling, an integration with an external system). A use case area with no row is a part of your system with no home; a component with no area and no cross-cutting reason is one nobody asked for._
@@ -207,6 +263,26 @@ _Example:]_
 | _(cross-cutting)_ | _Notification_ | _Sends every email the system sends_ | _Corporate Email_ | _provisional_ |
 
 _[Check before Checkpoint 1: every area in your use case file appears in the first column, and every external system in section 3 appears in some Depends on cell.]_
+
+| Use case area | Component | Responsibility | Depends on | Status |
+|---|---|---|---|---|
+| `VOL` | Volunteer Scheduling | Owns a volunteer's shift sign-ups, cancellations, and their own schedule and hours | Administration, Authentication, Notifications | provisional |
+| `IDV` | Identity Verification | Owns determining whether a signed-in shopper is eligible to shop — TCU-affiliated (confirmed 2026-10-02 via a one-time code sent to a TCU email, not a sign-in domain check) or a registered volunteer | Authentication, Volunteer Scheduling, Email delivery channel | provisional |
+| `LOC` | Location Info | Owns the list of active ReFrog locations, hours, and event info shown to every participant | Administration | provisional |
+| `ADM` | Administration | Owns shift creation and configuration, manually triggering a notification to volunteers about open shifts (confirmed 2026-10-02, not an automatic alert), and the cross-location dashboard of donation, shopping, and volunteer-coverage activity | Authentication, Volunteer Scheduling, Shopping, Donation, Shopping-Abuse Monitoring, Email delivery channel | provisional |
+| `ABU` | Shopping-Abuse Monitoring | Owns flagging and administrator review of potentially-excessive shopping activity | Shopping, Authentication | provisional |
+| `SHP` | Shopping | Owns recording what a shopper takes during a visit | Identity Verification, Administration | provisional |
+| `DON` | Donation | Owns recording what a donor drops off at a location | Administration | provisional |
+| _(cross-cutting)_ | Authentication | Owns signing a user in and recognizing whether that account is one of the three ReFrog administrators | Sign-in provider (external, not yet chosen) | provisional |
+| _(cross-cutting)_ | Notifications | Owns every reminder and alert the system sends — shift reminders, understaffed-shift alerts | Volunteer Scheduling, an external delivery channel (not yet chosen) | provisional |
+
+`IDV` is kept separate from `Authentication` deliberately: Authentication answers only "who signed in"; Identity Verification is the ReFrog-specific eligibility logic built on top of that (TCU-affiliation-or-volunteer-status), and collapsing the two would bury that business rule inside generic sign-in plumbing.
+
+`Administration` owns shift creation (`UC-ADM-manage-shifts`), not `Volunteer Scheduling`, matching the area assignment already in `use-cases.md`. Volunteer Scheduling reads shift definitions Administration creates; Administration separately reads Volunteer Scheduling's (and Shopping's, Donation's, Shopping-Abuse Monitoring's) data for its dashboard — two distinct, correctly one-directional dependencies rather than a circular one.
+
+`DON`'s dependency on Authentication is intentionally omitted rather than guessed either way, since `OI-4` (whether donation logging requires sign-in) is still open.
+
+One gap this table surfaces rather than silently papers over: no use case currently specifies who configures the base list of active ReFrog locations each year, separate from shift creation. Folded into Administration's responsibility here as the closest fit, but it is not backed by a dedicated use case yet.
 
 ## 6. Runtime View
 

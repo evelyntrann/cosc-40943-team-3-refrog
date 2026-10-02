@@ -246,7 +246,7 @@ _[One statement summarizing, at the highest level, the position this product int
 |---|---|
 | **For** | _[student donors, shoppers, volunteers, and ReFrog's organizers]_ |
 | **Who** | _[need an easier way to sign up for volunteer shifts and cover last-minute cancellations, verify TCU affiliation, and see reliable numbers on donations and shopping instead of piecing them together by hand]_ |
-| **The** _[ReFrog app]_ | _[is a mobile-first application (exact platform not yet finalized, see `OI-1`)]_ |
+| **The** _[ReFrog app]_ | _[is a progressive web app (PWA) — accessible by QR code or browser link with no install required, with adding it to the home screen offered as optional; confirmed with the client 2026-10-02, resolving `OI-1`]_ |
 | **That** | _[lets volunteers sign up and get notified when a shift opens, lets organizers verify TCU affiliation and flag unusual shopping activity, and brings donation, shopping, and volunteer data into one dashboard]_ |
 | **Unlike** | _[the current process of signing volunteers up through Sign Up Genius and logging donations and shopping through separate, disconnected Google Forms, reconciled by hand]_ |
 | **Our product** | _[consolidates volunteer sign-up, donation logging, and shopping activity into one system, cutting down the "unknown amount of error" in the numbers ReFrog reports]_ |
@@ -444,13 +444,9 @@ _[The section you will cite most often. Scope is what keeps a friendly client's 
 
 _[Put the product in context relative to other systems and the user's environment. If it is independent and self-contained, say so. If it is one component of something larger, describe how they interact and identify the interfaces between them. A context diagram shows this most clearly: your system as one box, every external actor and system around it, and a labeled arrow for each thing that crosses the boundary.]_
 
-    ```mermaid
-    flowchart LR
-      Student[Student] --> PP[Project Pulse]
-      Instructor[Instructor] --> PP
-      PP --> Gmail[(Gmail)]
-      PP --> LMS[(Learning management system)]
-    ```
+The ReFrog application is a self-contained PWA for the initial release; it replaces the current SignUpGenius, Google Forms, and Google Sheets workflows rather than integrating with them. Two external systems — an Authentication Provider and a Notification Service — are required for sign-in and shift reminders respectively.
+
+The project's canonical context diagram, showing all user types, the system, and every external system it talks to, is maintained in [architectural-design.md §3](../design/architectural-design.md#3-context-and-scope).
 
 ### 4.2 Major Features and Scope
 

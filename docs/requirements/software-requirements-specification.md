@@ -48,7 +48,7 @@ _Requirements cited from elsewhere keep their own identifiers: `UC-*` from [use-
 
 _[What the system is for: who wants it, why, and who will use it. Even though the vision and scope answers this, restate it in a paragraph here, because people read this document without having read that one.]_
 
-ReFrog is a mobile-first application for the ReFrog™ volunteer initiative at Texas Christian University. ReFrog organizers want it to replace disconnected volunteer sign-up, donation, and shopping-recording tools with one system that reduces errors in the program's impact data and eases the burden of coordinating the event. It will be used by ReFrog organizers and volunteers, with student donors and shoppers using the public-facing event and participation features.
+ReFrog is a progressive web application (PWA) for the ReFrog™ volunteer initiative at Texas Christian University. ReFrog organizers want it to replace disconnected volunteer sign-up, donation, and shopping-recording tools with one system that reduces errors in the program's impact data and eases the burden of coordinating the event. It will be used by ReFrog organizers and volunteers, with student donors and shoppers using the public-facing event and participation features.
 
 ### 1.2 The purpose of this document
 
@@ -85,7 +85,7 @@ _[Every document this specification refers to, with a link. At minimum, the four
 
 _[How this system relates to other systems and to the user's environment. Self-contained, or one component of something larger? Link to the product perspective section of your vision and scope and to your architecture's context diagram rather than redrawing them.]_
 
-ReFrog is an application that supports, but does not change, ReFrog's existing in-person move-out donation and shopping program at Texas Christian University. It consolidates capabilities now distributed across SignUpGenius, QR-code Google Forms, and Google Sheets: volunteer coordination, event participation records, and organizer reporting. The ReFrog website is currently the public source of event information; the application will also provide general event information. The final delivery platform is a mobile-first progressive web app (PWA) that runs in a standard web browser without requiring an app-store installation. QR codes displayed at ReFrog event locations will take participants directly to the relevant PWA workflows.
+ReFrog is an application that supports, but does not change, ReFrog's existing in-person move-out donation and shopping program at Texas Christian University. It consolidates capabilities now distributed across SignUpGenius, QR-code Google Forms, and Google Sheets: volunteer coordination, event participation records, and organizer reporting. The ReFrog website is currently the public source of event information; the application will also provide general event information. The final delivery platform is a mobile-first progressive web app (PWA), accessible from both mobile and desktop browsers without requiring an app-store installation, and installable on mobile devices directly from the browser for users who want it on their home screen. QR codes displayed at ReFrog event locations take participants directly to the relevant PWA workflows.
 
 No external-system integration is committed for the initial release. The system must therefore be designed as a self-contained application that can replace the current tools used for the ReFrog event, subject to future migration and integration decisions.
 
@@ -212,9 +212,9 @@ When a user requests volunteer scheduling data, shopping activity, or an adminis
 
 **`FR-AUTH-affiliation-from-signin`**
 
-The system shall derive a shopper's TCU-affiliation status directly from their sign-in credential rather than tracking it as a separate status, consistent with `UC-IDV-verify-affiliation`.
+Confirmed with the client 2026-10-02 (resolves `OI-10`): the system shall verify a shopper's TCU affiliation by sending a one-time code to a TCU email address the shopper provides, and shall persist that verified status on their account rather than repeating the check on every visit, consistent with `UC-IDV-verify-affiliation`. This replaces an earlier draft of this requirement that assumed affiliation could be derived directly from a sign-in provider's email domain — that depended on TCU's email running on the same provider used for sign-in, which was never confirmed and is not what the client chose.
 
-**Verification:** Sign in with a TCU credential and confirm affiliation shows verified immediately, with no separate verification step, pending state, or possibility of being signed in but unverified.
+**Verification:** Enter a TCU email, receive and submit the code, and confirm affiliation shows verified. Sign out and back in, and confirm the verified status persists without repeating the email-code step.
 
 #### 5.2.2 Shared validation
 
@@ -260,9 +260,9 @@ If the same volunteer sign-up, shift cancellation, donation log, or shopping log
 
 **`FR-NOTIFY-shift-reminder`**
 
-When a volunteer's shift is approaching, the system shall notify the assigned volunteer. The exact timing is not yet defined; see `OI-7`.
+When a volunteer's shift is approaching, the system shall notify the assigned volunteer. The exact timing is not yet defined with the client — this is distinct from `OI-7` (resolved 2026-10-02), which concerned prompting *other* volunteers about open shifts, not reminding an already-assigned volunteer of their own shift. See the newly filed open item for this specific question.
 
-**Verification:** Cannot be fully specified until `OI-7` sets the timing. Once set, confirm a volunteer receives a reminder at that interval before their shift, and not before.
+**Verification:** Cannot be fully specified until the timing is set. Once set, confirm a volunteer receives a reminder at that interval before their shift, and not before.
 
 **`FR-NOTIFY-current-state`**
 
@@ -284,15 +284,9 @@ If requested data cannot be retrieved, then the system shall show that the data 
 
 **Verification:** Simulate a failed data request for the dashboard. The dashboard shows the data as unavailable, not as zero donations or zero volunteers.
 
-#### 5.2.6 Staffing alerts (optional, pending `OI-7`)
+#### 5.2.6 Staffing alerts — superseded
 
-This entire subsection is a candidate, not an approved requirement. `OI-7` has not settled whether an administrator alert is even the right primary response to an understaffed shift, as opposed to broadcasting the opening to other volunteers — see the discussion already filed there.
-
-**`FR-ALERT-understaffed-shift`**
-
-Where automatic staffing alerts are included, when a shift remains understaffed as it approaches the event, the system shall alert an administrator.
-
-**Verification:** Cannot be fully specified until `OI-7` resolves whether this feature is included, who is alerted, and how soon.
+This subsection previously held a candidate `FR-ALERT-understaffed-shift`, framed as an automatic alert to administrators, pending `OI-7`. `OI-7` is now resolved (2026-10-02), and the answer was neither of the two options this subsection assumed: not an automatic admin alert, and not an automatic volunteer broadcast. It's a manual, administrator-triggered notification — the administrator decides when to send one and who receives it, rather than the system firing one automatically. That has an actor-driven trigger, so it's specified as a use case instead: `UC-ADM-notify-volunteers` in `use-cases.md`. Removed from here rather than left as a stale automatic-alert requirement.
 
 ---
 
@@ -538,11 +532,13 @@ The business-rules document does not currently define general record identifiers
 
 #### 7.4.3 Retention
 
-No retention period is currently specified in `business-rules.md`. The rules document defines the operational data that must be recorded, but it does not state how long donation, shopping, volunteer, affiliation-check, or partner-pickup records must be kept.
+No retention period is currently specified in `business-rules.md`, and none is finalized here either — `OI-6` remains open. The client gave real guidance in the October 2, 2026 meeting, which narrows the decision without closing it:
 
-- **Open decision:** ReFrog and TCU must define retention periods for operational records and any personally identifiable information before production use.
-- **Open decision:** ReFrog and TCU must decide whether the system may retain a shopper's identity or only an affiliation-check result and event history.
-- Until those decisions are made, this document does not impose a numeric retention period or claim that a particular identifier must be stored.
+- Role-specific, not a single period: roughly 4 years for student participants, matching their typical TCU tenure, versus substantially longer for volunteers, many of whom are long-tenured faculty or staff.
+- Annual data *exports* (for the program's own debrief/reporting) should be possible regardless of whatever retention window is chosen.
+- An annual re-verification or re-login is an acceptable lighter-weight alternative to long-term account storage, if role-specific retention proves hard to implement.
+- **Open decision, still unresolved:** ReFrog and TCU must still approve an exact numeric period and confirm the identity-vs-affiliation-only storage question (`OI-6`).
+- Until that approval exists, this document does not impose a numeric retention period or claim that a particular identifier must be stored.
 
 #### 7.4.4 Disposal and secure removal
 
@@ -566,6 +562,103 @@ No disposal, archival, backup-purge, or export-destruction rule is currently sta
 ### 8.1 User interfaces
 
 _[The user-facing surfaces, at requirement level: which views exist, standards they must conform to, accessibility requirements. Link to wireframes or prototypes rather than describing pixel layouts.]_
+
+The application is a progressive web application (PWA) accessible from both mobile browsers and desktop browsers, and installable on mobile devices from the browser without an app-store download. Participant facing views — volunteer sign-up, donation forms, shopping forms, and location information — are optimized for use on a personal smartphone at an outdoor event location, consistent with `OE-mobile-location-access` and the environmental constraints documented in [vision-and-scope.md §3.2](vision-and-scope.md#32-user-environment). Administrator dashboard and reporting views are designed to work on both mobile and desktop.
+
+All views shall conform to `USE-mobile-responsive`, `USE-accessibility` (WCAG 2.1 Level AA), and `CO-approved-branding`.
+
+> Wireframes and prototypes shall be linked here when produced. This section does not describe pixel layouts — it defines view-level requirements. Detailed layout and visual design live in the design artifact.
+
+**`UI-home-page`** - Default landing page for the app. Incudes basic info 
+
+**`UI-public-info`** — Public event information view
+
+A public facing view, accessible without sign in, that displays ReFrog event dates, operating hours, donation location addresses, and general participation guidance. Provides entry points for signing in. This is the minimum useful state of the app for a TCU community visitor who does not intend to participate as a volunteer, donor, or shopper.
+
+- The view shall present donation location addresses or maps suitable for navigation on a mobile device.
+- The view shall not require an account or sign-in to access event information.
+- The view shall conform to `CO-approved-branding` and use only the ReFrog™ and TCU branding materials approved by the applicable owners.
+
+*Supports:* `UC-LOC-view-locations`; `USE-mobile-responsive`
+
+
+**`UI-volunteer-schedule`** — Volunteer schedule and shift management view
+
+A signed-in view for volunteers that shows open shifts by date and location, allows a volunteer to claim an open shift (`UC-VOL-signup`), view their own assigned shifts and hours (`UC-VOL-view-schedule`), and cancel an assigned shift (`UC-VOL-cancel-shift`). This is the highest-priority view in the MVP, per the client's stated first priority.
+
+- The view shall display open shifts in a list or calendar organized by date and donation location, with the number of open slots visible before selection.
+- The view shall allow a signed-in volunteer to claim an open shift with no more than two interactions beyond the sign-in screen, consistent with `USE-volunteer-signup-completion`.
+- The view shall show the volunteer their assigned shifts, the location address, the date and time, and the number of hours credited so far.
+- The view shall allow the volunteer to cancel an assigned shift.
+- The view shall display a confirmation when a sign-up or cancellation is saved, consistent with `FR-SAVE-confirmed-success`, and shall not display a confirmation if the save did not complete.
+- If the shift the volunteer attempted to claim was filled between page load and submission, the view shall inform the volunteer the shift is no longer available without losing their other entries.
+
+*Supports:* `UC-VOL-signup`, `UC-VOL-cancel-shift`, `UC-VOL-view-schedule`; `FR-SAVE-confirmed-success`; `FR-SAVE-duplicate-submission`; `USE-volunteer-signup-completion`
+
+
+**`UI-account-profile`** — Account and profile management view
+
+A signed-in view where a user manages their account information and can complete TCU affiliation verification. This view contains the affiliation verification use case (`UC-IDV-verify-affiliation`): a user enters a TCU email address, receives a one-time code, and enters it here; once verified, the status is displayed so it can be presented to a volunteer at the physical event location — replacing the current visual ID check.
+
+- The view shall let a user enter a TCU email address and submit the one-time code sent to it.
+- Once verified, the view shall display the user's verified TCU affiliation status clearly and immediately on return visits, with no need to repeat the email-code step.
+- The view shall be presentable on a phone screen so a volunteer at the event location can confirm it at a glance.
+- The view shall not display a verified status for a user who has not completed the email-code check.
+- The view shall not display or transmit a raw TCU ID number, per `SEC-affiliation-data` and §7.4.5.
+
+*Supports:* `UC-IDV-verify-affiliation`; `FR-AUTH-affiliation-from-signin`; `SEC-affiliation-data`
+
+
+**`UI-donation-form`** — Donation submission form
+
+A low-friction form used at a donation drop-off location to record the number of items a donor is bringing in. Per the client's constraint, this must be fast enough to beat the alternative of throwing items in a dumpster (`vision-and-scope.md §3.2`). Confirmed 2026-10-02 (resolves `OI-4`): this form does not require sign-in.
+
+- The form shall allow a user to select the donation location and enter the number of items donated in as few steps as possible, consistent with `USE-donation-completion` (90% of first-time users within 60 seconds).
+- The form shall offer an optional category selection from a small, fixed set (confirmed 2026-10-02: 5–6 click-box options), never free text, so categorization cannot slow the form down.
+- The form shall display a confirmation when the submission is saved.
+- If the submission fails, the form shall preserve the entered location, item count, and category so the user can retry without re-entering, consistent with `FR-VAL-preserve-input`.
+
+*Supports:* `UC-DON-log-donation`; `FR-VAL-server-validation`; `FR-VAL-preserve-input`; `FR-SAVE-confirmed-success`; `USE-donation-completion`
+
+
+**`UI-shopping-form`** — Shopping submission form
+
+A signed-in form used at the event to record the number of items a shopper takes. Only accessible after TCU affiliation is confirmed via `UI-account-profile`.
+
+- The form shall allow a verified shopper to enter the number of items taken and the location in as few steps as possible.
+- The form shall offer the same optional category selection used on `UI-donation-form` (confirmed 2026-10-02), so both sides of the program use consistent categories.
+- The form shall display a confirmation when the submission is saved.
+- The form shall not permit submission for a user whose affiliation is not verified, consistent with `FR-AUTH-affiliation-from-signin` and `BR-shopper-tcu-affiliation`.
+- If the submission fails, the form shall preserve the entered values, consistent with `FR-VAL-preserve-input`.
+
+*Supports:* `UC-SHP-log-item-taken`; `UC-IDV-verify-affiliation`; `FR-AUTH-enforce-permissions`; `USE-mobile-responsive`
+
+
+**`UI-admin-dashboard`** — Administrator dashboard and event management view
+
+A signed-in, administrator-only view providing event schedule creation and management, volunteer coverage, donation and shopping activity reporting, and shopping-abuse review. Accessible only to the three ReFrog administrators (or their designated helpers), consistent with `FR-AUTH-enforce-permissions` and `SEC-authenticated-administration`.
+
+- The view shall allow an administrator to create, configure, and modify events: including event dates, operating hours, active donation locations, shift time blocks, and the number of volunteer slots required per shift and per location — without changing application code, consistent with `MNT-event-configuration` and `USE-admin-no-code`.
+- The view shall display the current volunteer staffing level by location and shift, including open and filled slots and cancellation status.
+- The view shall let an administrator manually send a notification to volunteers about open shifts, targeting either everyone or only volunteers who have not signed up, consistent with `UC-ADM-notify-volunteers`. No notification shall be sent automatically on a cancellation.
+- The view shall display donation and shopping activity counts by location and day, drawing from the reports defined in §7.3.
+- The view shall surface shopping-abuse review flags for administrator inspection, consistent with `UC-ABU-review-alert` and `SEC-administrator-review`. No automatic penalty or action shall be applied; the view shall route flagged cases to administrator review only, consistent with `BR-shopping-abuse-review`.
+- The view shall not be accessible to volunteers, donors, shoppers, or unauthenticated users, consistent with `SEC-least-privilege`.
+- The view shall allow an authorized administrator to export volunteer, donation, and shopping data in CSV format, consistent with `INT-data-export`.
+- If data cannot be retrieved, the view shall display the data as unavailable rather than as zero, consistent with `FR-DISPLAY-unavailable-data`.
+
+*Supports:* `UC-ADM-view-dashboard`, `UC-ADM-manage-shifts`, `UC-ADM-notify-volunteers`, `UC-ABU-review-alert`; `FR-AUTH-enforce-permissions`; `SEC-authenticated-administration`; `MNT-event-configuration`; `INT-data-export`; `FR-DISPLAY-unavailable-data`
+
+
+The following requirements apply across all views:
+
+- **`UI-responsive`**: All views shall be usable without horizontal scrolling at a viewport width of 320 CSS pixels (mobile) and shall remain functional and well-laid-out at desktop viewport widths, per `USE-mobile-responsive`. The application is a PWA; no view may require a native app installation.
+- **`UI-wcag-aa`**: All views shall conform to WCAG 2.1 Level AA, per `USE-accessibility`.
+- **`UI-validation-inline`**: When a form submission fails validation, the view shall identify each affected field and explain the correction needed, per `USE-validation-feedback` and `FR-VAL-field-feedback`.
+- **`UI-preserve-input`**: When a form submission fails for any reason, all valid fields entered by the user shall remain filled, per `FR-VAL-preserve-input`.
+- **`UI-confirmed-saves`**: A success confirmation shall only be displayed after the system confirms the data was saved, per `FR-SAVE-confirmed-success`.
+- **`UI-branding`**: All views shall use approved ReFrog™ and TCU branding materials, per `CO-approved-branding`.
+- **`UI-no-raw-tcu-id`**: No view shall display or transmit a raw TCU ID number to the user, per `SEC-affiliation-data` and §7.4.5.
 
 ### 8.2 Hardware interfaces
 
