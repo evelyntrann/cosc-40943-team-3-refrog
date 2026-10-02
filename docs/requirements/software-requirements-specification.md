@@ -560,30 +560,100 @@ No disposal, archival, backup-purge, or export-destruction rule is currently sta
 - Any additional personal data, retention period, or disposal behavior must be approved by the client and documented as a business rule, requirement, or open issue before implementation.
 
 ---
-
 ## 8. External Interface Requirements
 
 ### 8.1 User interfaces
 
-_[The user-facing surfaces, at requirement level: which views exist, standards they must conform to, accessibility requirements. Link to wireframes or prototypes rather than describing pixel layouts.]_
+The ReFrog application shall provide mobile-friendly interfaces for volunteers, donors, shoppers, and ReFrog administrators. The interface shall support the workflows defined in the project use cases while exposing only the functions appropriate to each user's role.
+
+- `UI-mobile-first`: Participant-facing interfaces shall be designed primarily for use on personal smartphones and shall remain usable without horizontal scrolling at a viewport width of 320 CSS pixels.
+- `UI-public-event-information`: The system shall provide a public-facing view containing current ReFrog event dates, operating hours, donation locations, and general participation instructions.
+- `UI-volunteer-dashboard`: An authenticated volunteer shall be able to view available shifts, claim an available shift, view assigned shifts, and cancel or modify an assignment where permitted by the applicable business rules.
+- `UI-donation-entry`: The system shall provide a donation-recording interface that allows the user to identify the ReFrog location and record the number of donated items with minimal required input.
+- `UI-shopping-entry`: The system shall provide a shopping-recording interface that captures the shopping location, number of items taken, and the required TCU-affiliation verification result.
+- `UI-admin-dashboard`: The system shall provide an authenticated administrative interface where authorized ReFrog administrators can view event activity, volunteer coverage, donation and shopping information, reporting data, and items requiring administrative review.
+- `UI-event-configuration`: The administrative interface shall allow authorized administrators to configure event dates, locations, operating hours, shifts, and staffing requirements without modifying application code.
+- `UI-validation-feedback`: When user input is incomplete or invalid, the interface shall identify the affected field, explain the required correction, and preserve valid information already entered.
+- `UI-accessibility`: All user-facing interfaces shall conform to WCAG 2.1 Level AA, consistent with `USE-accessibility`.
+- `UI-consistent-status`: The interface shall distinguish between successfully recorded data, failed submissions, unavailable data, and submissions whose outcome is still being determined.
+
+Wireframes and prototypes, when created, shall be maintained separately from this specification and linked here rather than duplicated.
 
 ### 8.2 Hardware interfaces
 
-_[Any hardware the system talks to, or "none".]_
+The initial ReFrog release does not require a dedicated hardware interface.
+
+The system is intended to operate through ordinary user devices, primarily smartphones and computers, using their standard web or application capabilities.
+
+- `HI-standard-device-access`: The system shall operate without requiring specialized hardware owned by ReFrog participants.
+- `HI-personal-mobile-devices`: Participant-facing workflows shall support personal mobile devices used at ReFrog event locations.
+- `HI-camera-optional`: Where QR-code scanning is included in the selected implementation, the system may use a device camera through the operating system or browser's approved camera interface.
+- `HI-camera-fallback`: Where camera-based QR scanning is provided, the system shall provide an alternative method of reaching the same workflow if camera access is unavailable or denied.
+
+No barcode scanner, card reader, payment terminal, RFID reader, or other dedicated peripheral is required for the initial release unless later added to project scope.
 
 ### 8.3 Software interfaces
 
-_[Other software systems yours connects to: what crosses the boundary, in which direction, in what format, and what happens when the other side is unavailable.]_
+The initial release shall operate as a self-contained ReFrog application. Integration with external systems shall occur only where the integration has been approved for the project.
+
+#### Authentication and TCU affiliation
+
+- `SI-authentication-service`: Where electronic authentication is included, the system shall exchange only the information required to authenticate the user and determine the user's authorized ReFrog role.
+- `SI-tcu-identity-approval`: The system shall not connect to TCU identity or other university services until the integration has been approved by TCU.
+- `SI-affiliation-result`: Where an approved TCU identity service provides affiliation information, the system shall use the resulting affiliation status for shopping eligibility without requiring storage of a raw TCU ID number unless explicitly approved.
+- `SI-authentication-failure`: If the external authentication or affiliation-verification service is unavailable, the system shall identify the affected function and shall not represent the user as successfully verified.
+
+#### Database
+
+- `SI-azure-database`: The production application shall store persistent application data in the Microsoft Azure-hosted database required by `CO-azure-database-hosting`.
+- `SI-database-validation`: Data sent to persistent storage shall satisfy the applicable validation and authorization requirements before being committed.
+- `SI-database-failure`: If a database operation fails, the system shall not report the operation as successfully completed.
+
+#### Existing ReFrog tools
+
+The current ReFrog process uses SignUpGenius, Google Forms, Google Sheets, and the ReFrog website. These systems are context for the replacement application and are not automatically considered integrations.
+
+- `SI-existing-tools`: For each existing service selected for continued integration, the project shall document the information exchanged, direction of exchange, data format, authentication method, and failure behavior.
+- `SI-nonintegrated-tools`: Any existing service not selected for integration shall be documented as replaced, retained as a manual process, or outside the initial release scope.
+
+#### Mapping services
+
+- `SI-mapping-service`: Where an external mapping service is used to display or provide directions to ReFrog locations, the system shall provide the service with only the location information required to perform that function.
+- `SI-mapping-failure`: If the mapping service is unavailable, the system shall continue to display the ReFrog location's textual name and location information rather than making the event information unavailable.
 
 ### 8.4 API document
 
-_[Link to your API documentation. It is generated from the code, so link it rather than transcribing endpoints that will be stale within a week.]_
+The application's implementation-level API documentation shall be generated or maintained with the source code rather than duplicated in this Software Requirements Specification.
+
+- `SI-api-documentation`: The project shall provide API documentation for interfaces used between the client application, server application, database-facing services, and any approved external integrations.
+- `SI-api-current`: API documentation delivered with the project shall correspond to the version of the application deployed for the ReFrog release.
+- `SI-api-protected-operations`: API operations that expose or modify nonpublic volunteer, shopper, donation, scheduling, or administrative information shall enforce the authentication and authorization requirements defined elsewhere in this specification.
+- `SI-api-errors`: API responses shall distinguish successful requests, validation failures, authorization failures, unavailable dependencies, and internal failures sufficiently for the client application to respond correctly.
+
+**API documentation:** _[Insert link to generated API documentation when available.]_
 
 ### 8.5 Communications interfaces
 
-_[Email, notifications, messaging, and the protocols involved.]_
+The system may use network communication, email, and application notifications to support ReFrog operations.
 
----
+#### Network communication
+
+- `CI-https`: All production communication carrying authentication credentials, participant information, TCU-affiliation information, or administrative data shall use HTTPS.
+- `CI-standard-web-access`: Where the selected delivery platform is web-based, the client and server shall communicate using standard HTTPS-based web protocols supported by the approved deployment environment.
+
+#### Volunteer notifications
+
+- `CI-shift-notifications`: When volunteer shift reminders are included, the system shall send the assigned volunteer a notification using the communication method selected by the team and client.
+- `CI-notification-current-state`: Immediately before sending a scheduled shift-related notification, the system shall confirm that the underlying shift or assignment is still valid.
+- `CI-notification-failure`: If a notification fails after the underlying scheduling change has already been saved, the scheduling change shall remain valid and the failure shall be visible to an authorized administrator.
+- `CI-reminder-timing`: The timing of volunteer shift reminders shall remain configurable until the unresolved timing decision associated with `OI-7` is settled.
+
+#### Communication-service availability
+
+- `CI-service-failure`: If an external email or notification service is unavailable, the system shall not report a message as successfully delivered when delivery has not been confirmed.
+- `CI-business-state-independent`: Failure of an email or notification service shall not reverse or delete an otherwise successful volunteer assignment, cancellation, donation record, shopping record, or administrator update.
+
+No SMS, push-notification, or specific email provider is mandated by this specification unless the team and client select one during implementation.
 
 ## 9. Quality Attributes
 
