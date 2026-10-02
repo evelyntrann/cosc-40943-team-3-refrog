@@ -15,7 +15,7 @@ _**What it is not.** A second copy of your requirements. The specification says 
 
 _**The test for what belongs here.** Decide now what is hard to reverse, affects the whole system, and is forced by a quality attribute or a constraint: how many deployables, where the data lives, how users sign in, which external systems you depend on. Leave to per-area design what is local and cheap to change: class names, endpoint shapes, table columns._
 
-_**Structure.** The sections follow **arc42** (Starke and Hruschka), with **C4** diagrams (Simon Brown) for context and containers, written as mermaid so they diff in git. All twelve arc42 sections are here in arc42's order, numbering, and titles. The three subsections whose content another document already owns (the requirements overview, the stakeholders, and the quality requirements overview) are kept as one-line links to that document, so the numbering matches arc42's and nothing is written twice. arc42 orders sections by topic, not by when you write them, so Checkpoint 1 covers sections 1–5, 8.1, and 9, and sections 6 and 7 come later. The full worked example is Project Pulse's [architecture-of-record](https://github.com/Washingtonwei/project-pulse/blob/main/docs/design/architectural-design.md); read it for the shape, then write your own, because your client's quality attributes are not Project Pulse's.]_
+_**Structure.** The sections follow **arc42** (Starke and Hruschka), with **C4** diagrams (Simon Brown) for context and containers, written as mermaid so they diff in git. All twelve arc42 sections are here in arc42's order, numbering, and titles. The three subsections whose content another document already owns (the requirements overview, the stakeholders, and the quality requirements overview) are kept as one-line links to that document, so the numbering matches arc42's and nothing is written twice. arc42 orders sections by topic, not by when you write them, so Checkpoint 1 covers sections 1–5, 8, and 9, and sections 6 and 7 come later. The full worked example is Project Pulse's [architecture-of-record](https://github.com/Washingtonwei/project-pulse/blob/main/docs/design/architectural-design.md); read it for the shape, then write your own, because your client's quality attributes are not Project Pulse's.]_
 
 ## Identifiers
 
@@ -28,7 +28,7 @@ _[The new identifiers this document creates. Everything else it cites keeps the 
 | `RISK-<slug>` | Technical risks | `RISK-payroll-api-unavailable` |
 | `TD-<slug>` | Technical debt the architecture knowingly carries | `TD-no-rate-limiting` |
 
-_[Project Pulse numbers its decisions and scenarios (`KD-1`, `QS-1`). Yours use slugs, like every other identifier in your project, so an inserted decision renumbers nothing and a citation says what it points at.]_
+_[These are slugs, like every other identifier in your project, so an inserted decision renumbers nothing and a citation says what it points at. Project Pulse uses the same form: `KD-modular-monolith`, `QS-cross-team-denial`.]_
 
 ## Revision History
 
@@ -226,6 +226,8 @@ _Section 4.4 of [vision and scope](../requirements/vision-and-scope.md) says who
 
 ## 8. Crosscutting Concepts
 
+_[arc42 leaves this section an open list of concepts. This template fixes its first entry, 8.1 Security, because Checkpoint 1 asks for the trust boundary; 8.2 holds every other concept.]_
+
 ### 8.1 Security
 
 _Due: named at Checkpoint 1, detailed at Checkpoint 2._
@@ -241,7 +243,26 @@ _Secrets (passwords, API keys, connection strings) never appear in this document
 
 ### 8.2 Other concepts
 
-_Due: when they appear. [Error handling, logging, validation, time zones: anything every component must do the same way. Add a subsection the first time two components would otherwise do it differently.]_
+_Due: Checkpoint 1, a subsection for every concept in the table below; then kept current, adding the file that shows each rule once code exists and a new concept whenever one appears. [Anything every component must do the same way. Your agent starts every session with no memory of the last, so a convention that is not written here gets reinvented each time. Write every concept now, while each is still cheap to choose; the last column says when a missing one would start to hurt._
+
+_One short subsection each: the rule in one sentence, why, and the file that shows it done right once one exists. Put the one-line instruction in your charter too, citing this subsection, because the charter is what your agent always reads. Project Pulse's Crosscutting Concepts section is a worked example; its headings differ from this template's.]_
+
+| Concept | The question it settles | When it usually bites |
+|---|---|---|
+| _Error handling_ | _What does a failure look like to the caller, and where is it caught?_ | _The second endpoint_ |
+| _Time and time zones_ | _Whose clock decides a deadline, what zone is stored, and can a test set the time?_ | _The first deadline or "submitted late"_ |
+| _API conventions_ | _What shape does every response take, and how are endpoints named?_ | _The second endpoint_ |
+| _Code conventions_ | _Which libraries and idioms does every file use, and which are banned? (Formatting belongs to a formatter, not here.)_ | _The first file an agent writes_ |
+| _Validation_ | _Where is input checked, and which check is the one that counts?_ | _The first form_ |
+| _Configuration and secrets_ | _What differs between development and production, and where does it live?_ | _The first deploy_ |
+| _Logging_ | _What is logged, at what level, and what must never be?_ | _The first bug you cannot reproduce_ |
+| _Persistence and concurrency_ | _Where does a transaction begin and end, and what happens when two people edit at once?_ | _The first shared record_ |
+| _Auditing_ | _Who changed what, and when?_ | _The first "who did this?"_ |
+| _Testing_ | _Which kinds of test, at which layer, with what data?_ | _The first pull request_ |
+
+_Example, from the Cafeteria Ordering System:_
+
+**8.2.1 Error handling.** _Every endpoint returns `{ "ok": false, "error": { "code", "message" } }` on failure, produced by one exception handler; no controller builds its own error body, and no response carries an exception's own message. Why: the ordering screen and the menu screen share one error display, and an exception's message can reveal the database behind it. Shown in: `ApiExceptionHandler`._
 
 ## 9. Architecture Decisions
 
