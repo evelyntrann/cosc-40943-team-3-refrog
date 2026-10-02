@@ -444,13 +444,9 @@ _[The section you will cite most often. Scope is what keeps a friendly client's 
 
 _[Put the product in context relative to other systems and the user's environment. If it is independent and self-contained, say so. If it is one component of something larger, describe how they interact and identify the interfaces between them. A context diagram shows this most clearly: your system as one box, every external actor and system around it, and a labeled arrow for each thing that crosses the boundary.]_
 
-    ```mermaid
-    flowchart LR
-      Student[Student] --> PP[Project Pulse]
-      Instructor[Instructor] --> PP
-      PP --> Gmail[(Gmail)]
-      PP --> LMS[(Learning management system)]
-    ```
+The ReFrog application is a self-contained PWA for the initial release; it replaces the current SignUpGenius, Google Forms, and Google Sheets workflows rather than integrating with them. Two external systems — an Authentication Provider and a Notification Service — are required for sign-in and shift reminders respectively.
+
+The project's canonical context diagram, showing all user types, the system, and every external system it talks to, is maintained in [architectural-design.md §3](../design/architectural-design.md#3-context-and-scope).
 
 ### 4.2 Major Features and Scope
 
