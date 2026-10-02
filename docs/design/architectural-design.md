@@ -115,7 +115,7 @@ C4Context
 
     System(refrog, "ReFrog Application", "PWA that manages volunteer scheduling, donation and shopping forms, TCU-affiliation verification, and organizer reporting.")
 
-    System_Ext(authprovider, "Sign-in provider", "Authenticates users; exact provider not yet chosen (OI-17)")
+    System_Ext(authprovider, "Google Sign-In", "Authenticates users for general account access")
     System_Ext(notification, "Email delivery channel", "Sends TCU verification codes and shift/staffing notifications; exact provider not yet chosen")
 
     Rel(admin, refrog, "Manages events, shifts, locations; reviews dashboard and abuse flags")
@@ -137,13 +137,13 @@ C4Context
 
 - **Donor** — submits a donation form at a drop-off location (`UC-DON-log-donation`). Confirmed under `OI-4` (resolved): no sign-in is required, so the donor does not authenticate through the sign-in provider at all.
 
-- **Shopper** — must sign in and have TCU affiliation confirmed (`UC-IDV-verify-affiliation`, `FR-AUTH-affiliation-from-signin`) before submitting a shopping form (`UC-SHP-log-item-taken`). Affiliation is confirmed by a one-time code sent to a TCU email address the shopper enters, independent of whichever account they used to sign in — not derived from the sign-in provider itself. The verified confirmation is displayed on the account profile view for in-person verification by a volunteer.
+- **Shopper** — signs in via Google Sign-In like any other user, then completes an additional, optional TCU-affiliation check (`UC-IDV-verify-affiliation`, `FR-AUTH-affiliation-from-signin`) before submitting a shopping form (`UC-SHP-log-item-taken`). That check is a one-time code sent to a TCU email address the shopper enters — a separate step on top of signing in, not something derived from the Google account itself. The verified confirmation is displayed on the account profile view for in-person verification by a volunteer.
 
 - **TCU Community Visitor** — views public event information (`UC-LOC-view-locations`) without signing in. No data crosses the trust boundary beyond publicly displayed event details.
 
 **External systems.** Two external systems are shown. No external-system integration is committed for the initial release (`SRS §2.1`), but both are architecturally necessary for the features the specification requires:
 
-- **Sign-in provider** — the application delegates general authentication to an external sign-in provider; which one is not yet chosen (`OI-17`). The application does not store passwords or issue its own credentials; it consumes an identity token from whichever provider is selected. **Corrected 2026-10-02:** this previously named "Google Sign-In" specifically and claimed TCU affiliation was derived from the sign-in email's domain. Neither is accurate — the provider choice is still open, and `SEC-authentication-provider`'s own text already said as much ("remains unresolved"); this diagram had drifted out of sync with it. TCU affiliation is handled entirely separately, below.
+- **Google Sign-In** — the application delegates general account sign-in to Google Sign-In, the team's chosen provider for any account (TCU-affiliated or not), open to volunteers and administrators alike. The application does not store passwords or issue its own credentials; it consumes an identity token from Google. **Corrected 2026-10-02:** this previously also claimed TCU affiliation was derived from the sign-in email's domain — that part was wrong and is now handled entirely separately, below, as its own optional step on top of sign-in. `SEC-authentication-provider`'s text still frames the choice of authentication *method* as open at the specification level; this diagram reflects the team's working decision to use Google Sign-In specifically, not yet confirmed with the client.
 
 - **Email delivery channel** — the channel through which the application sends a TCU affiliation verification code (`UC-IDV-verify-affiliation`, resolves `OI-10`), shift reminders (`FR-NOTIFY-shift-reminder`), and administrator-triggered volunteer notifications (`UC-ADM-notify-volunteers`). The specific provider is a team decision, not yet made. The system must check notification accuracy before sending (`FR-NOTIFY-current-state`) and must not block business-state changes if a notification fails (`FR-NOTIFY-preserve-business-state`).
 
@@ -224,7 +224,7 @@ C4Container
         ContainerDb(db, "Database", "technology not yet chosen", "Shifts, volunteer assignments, donations, shopping visits, administrator accounts")
     }
 
-    System_Ext(google, "Sign-in provider", "Authenticates users; not yet chosen which provider")
+    System_Ext(google, "Google Sign-In", "Authenticates users for general account access")
     System_Ext(notify, "Email delivery channel", "Sends TCU verification codes and shift notifications; exact provider not yet chosen")
 
     Rel(donor, web, "Logs a donation", "HTTPS")
@@ -241,7 +241,7 @@ ReFrog ships as one deployable, reflecting the team's working direction for `KD-
 
 Technology for all three containers is marked "not yet chosen" deliberately — nothing decided so far commits the team to a specific language, framework, or database, and guessing one here would be exactly the kind of invented precision this document warns against. External systems are provisional pending §3's context diagram.
 
-**Corrected 2026-10-02:** this diagram previously showed "Google Sign-In" deriving TCU affiliation directly from the sign-in email's domain. The client meeting confirmed a different mechanism instead (`OI-10`, resolved): a one-time code sent to a TCU email address the shopper enters, independent of whatever account they signed in with. That no longer depends on TCU's email running on the same provider used for sign-in — an assumption that was never actually confirmed. The sign-in provider itself (for general authentication) is still unchosen and unrelated to the affiliation check.
+**Corrected 2026-10-02:** this diagram previously showed Google Sign-In itself deriving TCU affiliation directly from the sign-in email's domain. The client meeting confirmed a different mechanism instead (`OI-10`, resolved): a one-time code sent to a TCU email address the shopper enters, independent of whatever Google account they signed in with. Google Sign-In remains the team's chosen provider for general account access (not yet confirmed with the client); TCU affiliation is a separate, optional step on top of it, not derived from it.
 
 ### 5.2 Use case areas and components
 
@@ -273,7 +273,7 @@ _[Check before Checkpoint 1: every area in your use case file appears in the fir
 | `ABU` | Shopping-Abuse Monitoring | Owns flagging and administrator review of potentially-excessive shopping activity | Shopping, Authentication | provisional |
 | `SHP` | Shopping | Owns recording what a shopper takes during a visit | Identity Verification, Administration | provisional |
 | `DON` | Donation | Owns recording what a donor drops off at a location | Administration | provisional |
-| _(cross-cutting)_ | Authentication | Owns signing a user in and recognizing whether that account is one of the three ReFrog administrators | Sign-in provider (external, not yet chosen) | provisional |
+| _(cross-cutting)_ | Authentication | Owns signing a user in and recognizing whether that account is one of the three ReFrog administrators | Google Sign-In (external) | provisional |
 | _(cross-cutting)_ | Notifications | Owns every reminder and alert the system sends — shift reminders, understaffed-shift alerts | Volunteer Scheduling, an external delivery channel (not yet chosen) | provisional |
 
 `IDV` is kept separate from `Authentication` deliberately: Authentication answers only "who signed in"; Identity Verification is the ReFrog-specific eligibility logic built on top of that (TCU-affiliation-or-volunteer-status), and collapsing the two would bury that business rule inside generic sign-in plumbing.
