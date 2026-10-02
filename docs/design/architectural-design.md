@@ -280,7 +280,8 @@ _List three to six, ranked by importance to your client times difficulty to achi
 |---|---|---|---|---|
 | 1 | Phone-first participant workflows are quick and accessible | `USE-mobile-responsive`, `USE-donation-completion`, `USE-volunteer-signup-completion`, `USE-validation-feedback`, `USE-accessibility` | High × High | The PWA client container and QR-code entry path |
 | 2 | Shopper affiliation and administrative data are protected | `SEC-authenticated-administration`, `SEC-role-based-access`, `SEC-least-privilege`, `SEC-affiliation-data`, `SEC-transport-encryption`, `SEC-authentication-provider` | High × High | The section 8.1 trust boundary, TCU-email authentication boundary, and Identity component |
-| 3 | ReFrog information and essential workflows remain available during event operations | `AVL-event-hours`, `AVL-uptime`, `AVL-fallback-information`, `AVL-outage-recovery` | High × Medium | `KD-deployment-shape`, persistent storage, backup and recovery, and outage-fallback responsibilities |
+| 3 | ReFrog information and essential workflows remain available during event operations | `AVL-event-hours`, `AVL-uptime`, `AVL-fallback-information`, `AVL-outage-recovery`, `ROB-submission-status`, `ROB-duplicate-submission`, `ROB-connectivity-loss` | High × Medium | `KD-deployment-shape`, persistent storage, duplicate-safe submission handling, backup and recovery, and outage-fallback responsibilities |
+| 4 | The system remains operable by nontechnical administrators and maintainable after team handoff | `CO-nontechnical-administration`, `CO-operational-ownership`, `MNT-event-configuration`, `MNT-deployment-documentation`, `MNT-operational-handoff` | High × Medium | `KD-deployment-shape` and the configuration and operational boundaries |
 
 ### 9.2 Key decisions
 
