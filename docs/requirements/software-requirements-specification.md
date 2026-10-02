@@ -85,7 +85,7 @@ _[Every document this specification refers to, with a link. At minimum, the four
 
 _[How this system relates to other systems and to the user's environment. Self-contained, or one component of something larger? Link to the product perspective section of your vision and scope and to your architecture's context diagram rather than redrawing them.]_
 
-ReFrog is an application that supports, but does not change, ReFrog's existing in-person move-out donation and shopping program at Texas Christian University. It consolidates capabilities now distributed across SignUpGenius, QR-code Google Forms, and Google Sheets: volunteer coordination, event participation records, and organizer reporting. The ReFrog website is currently the public source of event information; the application will also provide general event information. The application is intended to be mobile-first, although the final delivery platform is not yet decided.
+ReFrog is an application that supports, but does not change, ReFrog's existing in-person move-out donation and shopping program at Texas Christian University. It consolidates capabilities now distributed across SignUpGenius, QR-code Google Forms, and Google Sheets: volunteer coordination, event participation records, and organizer reporting. The ReFrog website is currently the public source of event information; the application will also provide general event information. The final delivery platform is a mobile-first progressive web app (PWA) that runs in a standard web browser without requiring an app-store installation. QR codes displayed at ReFrog event locations will take participants directly to the relevant PWA workflows.
 
 No external-system integration is committed for the initial release. The system must therefore be designed as a self-contained application that can replace the current tools used for the ReFrog event, subject to future migration and integration decisions.
 
@@ -628,7 +628,7 @@ _Example: `SEC-authentication`: The system shall authenticate every request to a
 - `SEC-administrator-review`: The system shall restrict access to suspected shopping-abuse information to authorized ReFrog administrators, consistent with `BR-shopping-abuse-review`.
 - `SEC-transport-encryption`: The system shall encrypt network communication containing authentication credentials, affiliation information, or participant records by using HTTPS.
 - `SEC-audit-log`: The system shall record successful and unsuccessful administrator authentication attempts and administrator changes to event, schedule, and participant records.
-- `SEC-authentication-provider`: The system shall use the authentication and TCU-affiliation method approved by ReFrog and TCU. The choice among TCU single sign-on, TCU email verification, another electronic method, or continued in-person ID verification remains unresolved under `AS-authentication-approach` and `AS-affiliation-verification`.
+- `SEC-authentication-provider`: Before permitting a shopper to record shopping activity, the PWA shall require the shopper to verify control of a TCU-issued email address and shall treat successful verification as evidence of TCU affiliation.
 - `SEC-session-expiration`: The system shall expire an administrator session after the team-approved period of inactivity.
 
 ### 9.4 Safety
