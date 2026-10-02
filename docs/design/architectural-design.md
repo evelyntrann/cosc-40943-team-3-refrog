@@ -38,23 +38,6 @@ _[Project Pulse numbers its decisions and scenarios (`KD-1`, `QS-1`). Yours use 
 
 ---
 
-## Work Division
-
-_Six parts, split so each covers a coherent, self-contained piece of Checkpoint 1 (sections 1–5, 8.1 named, 9), with a natural owner for the related sections that come due at Checkpoints 2 and 3. Put your name in the blank column below._
-
-| Part | Sections | What it covers | Later carries into | Assigned to |
-|---|---|---|---|---|
-| 1 | §1 Introduction and Goals, §2 Architecture Constraints | Rank the 3 quality goals that most shape the system (from SRS §9) and say why each matters to Wendy; list the `CO-*`/`OE-*` constraint identifiers from the SRS | §10.2 Quality scenarios (Checkpoint 2/3) | _[name]_ |
-| 2 | §3 Context and Scope | One C4 context diagram: ReFrog as a single box, every actor (donor, shopper, volunteer, administrator), and every external system (from `SI-*`, `CI-*`, `DE-*` in the SRS) | — | _[name]_ |
-| 3 | §4 Solution Strategy, §9 Architecture Decisions | 3–5 bullets on the moves that shape everything else; the `9.1` architecturally-significant-requirements table; `KD-deployment-shape` (one deployable or several, and why) — required for Checkpoint 1 | §11 Risks and Technical Debt (Checkpoint 2) | _[name]_ |
-| 4 | §5.1 Containers | One C4 container diagram (front end, back end, database, etc.) with technology named for each, plus why the system is divided this way | §7 Deployment View (Checkpoint 3) | _[name]_ |
-| 5 | §5.2 Use case areas and components | One row per use case area (`VOL`, `IDV`, `LOC`, `ADM`, `ABU`, `SHP`, `DON`) plus cross-cutting components (e.g., identity/auth, notifications), each with responsibility, dependencies, and status | §6 Runtime View (Checkpoint 2) | _[name]_ |
-| 6 | §8.1 Security | Trust boundary, authentication, authorization, and sensitive data — named now, detailed at Checkpoint 2, each citing the `SEC-*` requirement it answers | §8.1 detail (Checkpoint 2) | _[name]_ |
-
-Parts 3 and 4 depend on each other (the container diagram has to match whatever `KD-deployment-shape` decides), so whoever takes those two should sync before finalizing either.
-
----
-
 ## 1. Introduction and Goals
 
 _Due: Checkpoint 1._
