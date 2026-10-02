@@ -98,7 +98,7 @@ C4Context
 
     System(refrog, "ReFrog Application", "PWA that manages volunteer scheduling, donation and shopping forms, TCU-affiliation verification, and organizer reporting.")
 
-    System_Ext(authprovider, "Google Sign-In", "Authenticates users via Google account; TCU affiliation derived from @tcu.edu email domain.")
+    System_Ext(authprovider, "Google Sign-In", "Refrog account sign-in options includes Google sign in. Depends on Google services.")
     System_Ext(notification, "Notification Service", "Delivers shift reminders and staffing alerts to volunteers and administrators.")
 
     Rel(admin, refrog, "Manages events, shifts, locations; reviews dashboard and abuse flags")
