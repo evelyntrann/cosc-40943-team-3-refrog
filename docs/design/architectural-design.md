@@ -115,16 +115,16 @@ C4Context
 
     System(refrog, "ReFrog Application", "PWA that manages volunteer scheduling, donation and shopping forms, TCU-affiliation verification, and organizer reporting.")
 
-    System_Ext(authprovider, "Google Sign-In", "Refrog account sign-in options includes Google sign in. Depends on Google services.")
-    System_Ext(notification, "Notification Service", "Delivers shift reminders and staffing alerts to volunteers and administrators.")
+    System_Ext(authprovider, "Sign-in provider", "Authenticates users; exact provider not yet chosen (OI-17)")
+    System_Ext(notification, "Email delivery channel", "Sends TCU verification codes and shift/staffing notifications; exact provider not yet chosen")
 
     Rel(admin, refrog, "Manages events, shifts, locations; reviews dashboard and abuse flags")
     Rel(volunteer, refrog, "Signs up for and cancels shifts; views schedule and hours")
     Rel(donor, refrog, "Submits donation forms")
     Rel(shopper, refrog, "Submits shopping forms after affiliation is confirmed")
     Rel(visitor, refrog, "Views event info, locations, hours")
-    Rel(refrog, authprovider, "Authenticates users; derives TCU affiliation")
-    Rel(refrog, notification, "Sends shift reminders and staffing alerts")
+    Rel(refrog, authprovider, "Authenticates users")
+    Rel(refrog, notification, "Sends a TCU email verification code; sends shift reminders and staffing alerts")
 ```
 
 ### Boundary-crossing relationships
@@ -135,17 +135,17 @@ C4Context
 
 - **Volunteer** — signs up for shifts (`UC-VOL-signup`), cancels shifts (`UC-VOL-cancel-shift`), and views their assigned schedule and hours (`UC-VOL-view-schedule`). Must be signed in. Receives shift reminders via the Notification Service (`FR-NOTIFY-shift-reminder`).
 
-- **Donor** — submits a donation form at a drop-off location (`UC-DON-log-donation`). Whether sign-in is required is resolved under `OI-4`; if anonymous logging is retained, the donor does not authenticate through the Authentication Provider.
+- **Donor** — submits a donation form at a drop-off location (`UC-DON-log-donation`). Confirmed under `OI-4` (resolved): no sign-in is required, so the donor does not authenticate through the sign-in provider at all.
 
-- **Shopper** — must sign in and have TCU affiliation confirmed (`UC-IDV-verify-affiliation`, `FR-AUTH-affiliation-from-signin`) before submitting a shopping form (`UC-SHP-log-item-taken`). The affiliation badge is displayed on the account profile view for in-person verification by a volunteer.
+- **Shopper** — must sign in and have TCU affiliation confirmed (`UC-IDV-verify-affiliation`, `FR-AUTH-affiliation-from-signin`) before submitting a shopping form (`UC-SHP-log-item-taken`). Affiliation is confirmed by a one-time code sent to a TCU email address the shopper enters, independent of whichever account they used to sign in — not derived from the sign-in provider itself. The verified confirmation is displayed on the account profile view for in-person verification by a volunteer.
 
 - **TCU Community Visitor** — views public event information (`UC-LOC-view-locations`) without signing in. No data crosses the trust boundary beyond publicly displayed event details.
 
 **External systems.** Two external systems are shown. No external-system integration is committed for the initial release (`SRS §2.1`), but both are architecturally necessary for the features the specification requires:
 
-- **Google Sign-In** — the application delegates sign-in to Google Sign-In, per `SEC-authentication-provider` and `DE-affiliation-verification`. TCU affiliation is derived from the user's `@tcu.edu` email domain. The application does not store passwords or issue its own credentials; it consumes an identity token from Google.
+- **Sign-in provider** — the application delegates general authentication to an external sign-in provider; which one is not yet chosen (`OI-17`). The application does not store passwords or issue its own credentials; it consumes an identity token from whichever provider is selected. **Corrected 2026-10-02:** this previously named "Google Sign-In" specifically and claimed TCU affiliation was derived from the sign-in email's domain. Neither is accurate — the provider choice is still open, and `SEC-authentication-provider`'s own text already said as much ("remains unresolved"); this diagram had drifted out of sync with it. TCU affiliation is handled entirely separately, below.
 
-- **Notification Service** — the channel through which the application delivers shift reminders (`FR-NOTIFY-shift-reminder`) and staffing alerts (`FR-ALERT-understaffed-shift`, pending `OI-7`). The specific channel (email, push notification, or both) is a team decision. The system must check notification accuracy before sending (`FR-NOTIFY-current-state`) and must not block business-state changes if a notification fails (`FR-NOTIFY-preserve-business-state`).
+- **Email delivery channel** — the channel through which the application sends a TCU affiliation verification code (`UC-IDV-verify-affiliation`, resolves `OI-10`), shift reminders (`FR-NOTIFY-shift-reminder`), and administrator-triggered volunteer notifications (`UC-ADM-notify-volunteers`). The specific provider is a team decision, not yet made. The system must check notification accuracy before sending (`FR-NOTIFY-current-state`) and must not block business-state changes if a notification fails (`FR-NOTIFY-preserve-business-state`).
 
 **What is not on this diagram.** The current toolchain — SignUpGenius, Google Forms, Google Sheets, and the ReFrog website — does not appear because the application replaces rather than integrates with them (`OE-decentralized-tool-replacement`; `INT-integration-scope`). If any of those tools is later selected for integration rather than replacement, it becomes an external-system box here and needs a corresponding `SI-*` or `CI-*` entry in the specification. The Azure database (`CO-azure-database-hosting`) is internal to the system boundary and appears on the container diagram in section 5.1, not here.
 
