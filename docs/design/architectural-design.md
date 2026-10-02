@@ -395,13 +395,13 @@ _A decision that turns out wrong is not deleted or rewritten. Mark it **Supersed
 
 _Example:]_
 
-**`KD-deployment-shape`: one deployable.** _Accepted._
+**`KD-deployment-shape`: one deployable modular application.** _Accepted._
 
-- **Driving requirements:** _`CO-no-dedicated-ops`; `AVL-lunch-window`._
-- **Context:** _About 400 patrons, one lunch peak a day, and nobody on the client side who can operate infrastructure._
-- **Decision:** _The front end is built into the back end's package and ships as one container to one host, with one managed database._
-- **Rejected:** _Separate services for ordering, menu, and delivery. They would add network calls, three deployments, and failure modes between them, to solve a scaling problem 400 users do not have._
-- **Trade-off:** _The system scales only as a whole, and a bad deploy takes all of it down._
+- **Driving requirements:** `AVL-uptime`, `AVL-outage-recovery`, `CO-operational-ownership`, `MNT-deployment-documentation`, and `MNT-operational-handoff`.
+- **Context:** ReFrog's event-scale workload is bounded by `SCA-event-capacity`: at least eight active locations, 200 volunteers, 3,000 shoppers, and 10,000 item-activity records per event. The three nontechnical ReFrog founders cannot operate multiple application services, and the long-term maintenance owner is not yet settled. Section 5.2 still requires clear internal ownership for every use-case area and cross-cutting responsibility.
+- **Decision:** Build the use-case-area and cross-cutting components from section 5.2 as modules inside one application. Build the PWA front end into that application's package and release both as one deployable artifact to one application-hosting target. Keep persistent data in the single database container shown in section 5.1. The application framework, database technology, and production hosting provider remain open decisions.
+- **Rejected:** Deploying the PWA independently from the application, or deploying the use-case areas as separate services. Either alternative would add deployment pipelines, network calls, distributed authentication and authorization, cross-service data coordination, and additional failure modes without a requirement for independent release or scaling.
+- **Trade-off:** The application is released and scaled as a whole, and an application failure can interrupt every workflow. This decision must be revisited if a future requirement demands independent scaling, deployment, security isolation, or availability for one part of the system.
 
 ## 10. Quality Requirements
 
