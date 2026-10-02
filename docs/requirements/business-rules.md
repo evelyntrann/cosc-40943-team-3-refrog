@@ -120,7 +120,7 @@ _Format each rule as a bold identifier, the rule in one sentence, then its sourc
   **Source:** team decision, 2026-09-10. **Candidate for the specification instead of this file**, since the team, not the client, would approve a change.
 
 **Eligibility and Shopping:**
-- **`BR-shopper-verification`:** A person must demonstrate TCU affiliation before shopping at ReFrog locations. **Source:** Current-process description in vision-and-scope.md §1.2; current method is visual inspection of a physical or phone ID. Electronic verification is unresolved.
+- **`BR-shopper-verification`:** A person must demonstrate TCU affiliation before shopping at ReFrog locations, verified electronically by a one-time code sent to their TCU email, with the existing visual ID check as a fallback when that is not possible. **Source:** Client meeting, October 2, 2026 — chosen directly over an in-app physical-ID check (`OI-10`, resolved).
 - **`BR-free-shopping`:** ReFrog shoppers receive usable donated items without charge. 
   **Source:** Client brief and client meeting, recorded in vision-and-scope.md §1.1.
 - **`BR-shopping-activity-recorded`:** Each shopping visit records the event date, location, and number of items taken. 
@@ -133,10 +133,10 @@ _Format each rule as a bold identifier, the rule in one sentence, then its sourc
 **Event Operations:**
 - **`BR-event-in-person`:** Donations and shopping take place at staffed physical ReFrog locations.
   **Source:** Client meeting and vision-and-scope.md §2.5.
-- **`BR-location-staffing`:** Each operating donation location must have a volunteer presence while the location is open.
-  **Source:** vision-and-scope.md §2.5 and §3.2. The required number of volunteers per location still needs confirmation.
-- **`BR-event-schedule`:** The ReFrog event operates during finals week, generally from Monday through Saturday and beginning around 2:00 p.m.
-  **Source:** Current-process description in vision-and-scope.md §1.2 and §3.2. Exact dates and hours must be confirmed for each event.
+- **`BR-location-staffing`:** Each operating donation location must have a volunteer presence while the location is open, with the required number of volunteers set per location rather than a single fixed minimum (e.g., King Family Commons needs 3, most locations need 2).
+  **Source:** Client meeting, October 2, 2026.
+- **`BR-event-schedule`:** The ReFrog event operates during finals week, beginning around 2:00 p.m.; which days each location is open varies by location (some Monday–Tuesday only, others Monday–Saturday), not a single schedule for every location.
+  **Source:** Current-process description in vision-and-scope.md §1.2 and §3.2; per-location day variation confirmed in the client meeting, October 2, 2026.
 - **`BR-volunteer-assignment`:** A volunteer may work only the location and shift to which they are assigned or have claimed.
   **Source:** Proposed process flow and AS-event-configuration. Cancellation and reassignment procedures still need client confirmation.
 

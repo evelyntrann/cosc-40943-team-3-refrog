@@ -246,7 +246,7 @@ _[One statement summarizing, at the highest level, the position this product int
 |---|---|
 | **For** | _[student donors, shoppers, volunteers, and ReFrog's organizers]_ |
 | **Who** | _[need an easier way to sign up for volunteer shifts and cover last-minute cancellations, verify TCU affiliation, and see reliable numbers on donations and shopping instead of piecing them together by hand]_ |
-| **The** _[ReFrog app]_ | _[is a mobile-first application (exact platform not yet finalized, see `OI-1`)]_ |
+| **The** _[ReFrog app]_ | _[is a progressive web app (PWA) — accessible by QR code or browser link with no install required, with adding it to the home screen offered as optional; confirmed with the client 2026-10-02, resolving `OI-1`]_ |
 | **That** | _[lets volunteers sign up and get notified when a shift opens, lets organizers verify TCU affiliation and flag unusual shopping activity, and brings donation, shopping, and volunteer data into one dashboard]_ |
 | **Unlike** | _[the current process of signing volunteers up through Sign Up Genius and logging donations and shopping through separate, disconnected Google Forms, reconciled by hand]_ |
 | **Our product** | _[consolidates volunteer sign-up, donation logging, and shopping activity into one system, cutting down the "unknown amount of error" in the numbers ReFrog reports]_ |
