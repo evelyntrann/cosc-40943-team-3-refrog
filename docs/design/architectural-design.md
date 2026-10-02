@@ -151,17 +151,15 @@ C4Context
 
 ## 4. Solution Strategy
 
-_Due: Checkpoint 1._
+- **ReFrog is a mobile-first progressive web application delivered as one deployable with one persistent database** (`KD-deployment-shape`, section 5.1), keeping participant workflows phone-friendly while minimizing operational complexity for ReFrog's nontechnical administrators (quality goals 1 and 3).
 
-_[Three to five bullets: the few moves that shape everything else. arc42 suggests four kinds: the technology you build on, how the system is divided at the top level, how the quality goals in section 1.2 are met, and any organizational choice that shapes the code (who maintains what, what you buy instead of build)._
+- **The application is divided by use case area** — Volunteer Scheduling, Identity Verification, Location Info, Administration, Shopping-Abuse Monitoring, Shopping, and Donation — with shared Authentication and Notifications components for concerns used across multiple areas (section 5.2).
 
-_Each bullet is one sentence, and it cites what explains it: the key decision in section 9.2 where one exists, and otherwise the quality goal and the building block in section 5 it shapes. Keep it short; the reasoning lives in section 9. A bullet that cites nothing is either not load-bearing, or it is a decision you have not written down yet._
+- **General account authentication is delegated to Google Sign-In, while TCU affiliation is verified separately through a one-time code sent to a TCU email address** (section 8.1, `SEC-authentication-provider`, `UC-IDV-verify-affiliation`), keeping identity and ReFrog-specific shopping eligibility as separate concerns (quality goal 2).
 
-_Example:]_
+- **Public and participant-facing workflows remain separated from protected administrative operations at the Application trust boundary**, where authentication, authorization, and role-based access are enforced before protected data is returned or changed (section 8.1, `SEC-authenticated-administration`, `SEC-role-based-access`, `SEC-least-privilege`).
 
-- _**One deployable with one managed database** (`KD-deployment-shape`), because nobody on the cafeteria side can operate infrastructure (quality goal 3)._
-- _**Payment is the only component that talks to the Payroll System** (section 5.2), so payroll data crosses the trust boundary in exactly one place (quality goal 1)._
-- _**Divided by use case area**, Ordering, Menu, and Delivery, each owning its own rules, so a menu change never touches ordering code (quality goal 3, `MNT-menu-self-service`)._
+- **The initial release replaces the current SignUpGenius, Google Forms, and Google Sheets workflow rather than integrating with those systems**, limiting external dependencies to authentication and email delivery so essential ReFrog workflows remain simpler to operate and recover during event periods (`OE-decentralized-tool-replacement`, quality goal 3).
 
 ## 5. Building Block View
 
