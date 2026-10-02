@@ -108,6 +108,12 @@ A TCU student who is in the process of moving out and contributes items they no 
 
 **Synonyms:** donor — use *donator* to match the client's language.
 
+### Form
+
+The primary mechanism through which participants submit data to the ReFrog application. A form is a structured screen that collects required fields — such as a donation location and item count — and submits them as a single record upon confirmation. Forms replace the QR-code-linked Google Forms used in the current process.
+
+**Not to be confused with:** a Google Form, which is the external tool the current process uses; in this project, "form" refers to the in-app submission screens.
+
 ### Item
 
 The fundamental unit tracked by ReFrog: any physical object donated at a donation location, including furniture, appliances, clothing, linens, and household goods. Items are counted at donation and again at shopping, and their aggregate is used to estimate landfill diversion.
