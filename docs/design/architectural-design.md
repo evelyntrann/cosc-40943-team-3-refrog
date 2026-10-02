@@ -101,31 +101,53 @@ _This is your project's one context diagram. Section 4.1 of [vision and scope](.
 
 _arc42 divides context into a **business context** (who and what crosses the boundary) and a **technical context** (the channels and protocols). This diagram is the business context. The protocols go on the arrows of the container diagram in section 5.1._
 
-_The **trust boundary** is not drawn here. You name it in writing in section 8.1, as Project Pulse does._
-
-_Example:]_
+_The **trust boundary** is not drawn here. You name it in writing in section 8.1, as Project Pulse does.]_
 
 ```mermaid
 C4Context
-    title System Context: Cafeteria Ordering System
+    title System Context: ReFrog
 
-    Person(patron, "Patron", "Employee ordering a meal")
-    Person(staff, "Cafeteria Staff", "Prepares and delivers orders")
-    Person(menu, "Menu Manager", "Maintains the daily menu")
+    Person(admin, "ReFrog Administrator", "Wendy, Erik, Courtney, and designated helpers. Creates events, manages shifts, reviews data and abuse flags.")
+    Person(volunteer, "Volunteer", "Signs up for shifts, views schedule, works at event locations.")
+    Person(donor, "Donor", "Drops off items at a donation location during move-out.")
+    Person(shopper, "Shopper", "TCU student, faculty, staff, or volunteer who takes donated items after affiliation is verified.")
+    Person(visitor, "TCU Community Visitor", "Views public event information without signing in.")
 
-    System(cos, "Cafeteria Ordering System", "Takes, prepares, and delivers meal orders")
+    System(refrog, "ReFrog Application", "PWA that manages volunteer scheduling, donation and shopping forms, TCU-affiliation verification, and organizer reporting.")
 
-    System_Ext(payroll, "Payroll System", "Deducts meal payments from pay")
-    System_Ext(sso, "Corporate Sign-On", "Authenticates employees")
-    System_Ext(email, "Corporate Email", "Order confirmations")
+    System_Ext(authprovider, "Google Sign-In", "Refrog account sign-in options includes Google sign in. Depends on Google services.")
+    System_Ext(notification, "Notification Service", "Delivers shift reminders and staffing alerts to volunteers and administrators.")
 
-    Rel(patron, cos, "Orders meals")
-    Rel(staff, cos, "Fulfils orders")
-    Rel(menu, cos, "Edits menu")
-    Rel(cos, payroll, "Submits payment requests")
-    Rel(cos, sso, "Verifies identity")
-    Rel(cos, email, "Sends confirmations")
+    Rel(admin, refrog, "Manages events, shifts, locations; reviews dashboard and abuse flags")
+    Rel(volunteer, refrog, "Signs up for and cancels shifts; views schedule and hours")
+    Rel(donor, refrog, "Submits donation forms")
+    Rel(shopper, refrog, "Submits shopping forms after affiliation is confirmed")
+    Rel(visitor, refrog, "Views event info, locations, hours")
+    Rel(refrog, authprovider, "Authenticates users; derives TCU affiliation")
+    Rel(refrog, notification, "Sends shift reminders and staffing alerts")
 ```
+
+### Boundary-crossing relationships
+
+**Users.** Five user types cross the system boundary, matching the user classes in section 2.2 of the [specification](../requirements/software-requirements-specification.md). The sixth class listed there, **Donation-recipient partners**, does not appear on this diagram because their direct use of the application is unresolved (`OI-3`); if they are confirmed as app users, they become a Person box here and a row in section 5.2.
+
+- **ReFrog Administrator** — the three founders and their helpers. They use the admin dashboard (`UC-ADM-view-dashboard`, `UC-ADM-manage-shifts`) to create events, configure shifts and locations, review volunteer coverage, monitor donation and shopping activity, and inspect shopping-abuse flags (`UC-ABU-review-alert`). They are the only users who can export data (`INT-data-export`). Access is gated by `SEC-authenticated-administration` and `SEC-role-based-access`.
+
+- **Volunteer** — signs up for shifts (`UC-VOL-signup`), cancels shifts (`UC-VOL-cancel-shift`), and views their assigned schedule and hours (`UC-VOL-view-schedule`). Must be signed in. Receives shift reminders via the Notification Service (`FR-NOTIFY-shift-reminder`).
+
+- **Donor** — submits a donation form at a drop-off location (`UC-DON-log-donation`). Whether sign-in is required is resolved under `OI-4`; if anonymous logging is retained, the donor does not authenticate through the Authentication Provider.
+
+- **Shopper** — must sign in and have TCU affiliation confirmed (`UC-IDV-verify-affiliation`, `FR-AUTH-affiliation-from-signin`) before submitting a shopping form (`UC-SHP-log-item-taken`). The affiliation badge is displayed on the account profile view for in-person verification by a volunteer.
+
+- **TCU Community Visitor** — views public event information (`UC-LOC-view-locations`) without signing in. No data crosses the trust boundary beyond publicly displayed event details.
+
+**External systems.** Two external systems are shown. No external-system integration is committed for the initial release (`SRS §2.1`), but both are architecturally necessary for the features the specification requires:
+
+- **Google Sign-In** — the application delegates sign-in to Google Sign-In, per `SEC-authentication-provider` and `DE-affiliation-verification`. TCU affiliation is derived from the user's `@tcu.edu` email domain. The application does not store passwords or issue its own credentials; it consumes an identity token from Google.
+
+- **Notification Service** — the channel through which the application delivers shift reminders (`FR-NOTIFY-shift-reminder`) and staffing alerts (`FR-ALERT-understaffed-shift`, pending `OI-7`). The specific channel (email, push notification, or both) is a team decision. The system must check notification accuracy before sending (`FR-NOTIFY-current-state`) and must not block business-state changes if a notification fails (`FR-NOTIFY-preserve-business-state`).
+
+**What is not on this diagram.** The current toolchain — SignUpGenius, Google Forms, Google Sheets, and the ReFrog website — does not appear because the application replaces rather than integrates with them (`OE-decentralized-tool-replacement`; `INT-integration-scope`). If any of those tools is later selected for integration rather than replacement, it becomes an external-system box here and needs a corresponding `SI-*` or `CI-*` entry in the specification. The Azure database (`CO-azure-database-hosting`) is internal to the system boundary and appears on the container diagram in section 5.1, not here.
 
 ## 4. Solution Strategy
 
