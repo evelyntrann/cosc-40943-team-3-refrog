@@ -129,17 +129,15 @@ C4Context
 
 ## 4. Solution Strategy
 
-_Due: Checkpoint 1._
+- **Use a mobile-first web application with a browser-based front end, application backend, and persistent database** (section 5.1), so donors, shoppers, volunteers, and administrators can use ReFrog from personal mobile devices without installing dedicated software (quality goal 1, `USE-mobile-responsive`).
 
-_[Three to five bullets: the few moves that shape everything else. arc42 suggests four kinds: the technology you build on, how the system is divided at the top level, how the quality goals in section 1.2 are met, and any organizational choice that shapes the code (who maintains what, what you buy instead of build)._
+- **Deploy the application as one primary application with one managed database** (`KD-deployment-shape`) rather than separate microservices, reducing operational complexity for ReFrog's non-technical administrators and future maintenance owner (`CO-nontechnical-administration`, `CO-operational-ownership`).
 
-_Each bullet is one sentence, and it cites what explains it: the key decision in section 9.2 where one exists, and otherwise the quality goal and the building block in section 5 it shapes. Keep it short; the reasoning lives in section 9. A bullet that cites nothing is either not load-bearing, or it is a decision you have not written down yet._
+- **Divide the application by use case area** — Volunteer Scheduling (`VOL`), Identity Verification (`IDV`), Location Information (`LOC`), Administration (`ADM`), Shopping-Abuse Monitoring (`ABU`), Shopping (`SHP`), and Donation (`DON`) — so each area owns its behavior while sharing only necessary cross-cutting services (section 5.2).
 
-_Example:]_
+- **Centralize authentication and authorization in a shared identity/access concern** (section 5.2), so protected administrative and TCU-affiliation data is checked consistently before protected operations are allowed (quality goal 2, `SEC-authenticated-administration`, `SEC-role-based-access`, `SEC-least-privilege`).
 
-- _**One deployable with one managed database** (`KD-deployment-shape`), because nobody on the cafeteria side can operate infrastructure (quality goal 3)._
-- _**Payment is the only component that talks to the Payroll System** (section 5.2), so payroll data crosses the trust boundary in exactly one place (quality goal 1)._
-- _**Divided by use case area**, Ordering, Menu, and Delivery, each owning its own rules, so a menu change never touches ordering code (quality goal 3, `MNT-menu-self-service`)._
+- **Keep the initial system self-contained and minimize required external integrations**, adding TCU identity or other university-system integrations only after approval, reducing external failure dependencies during volunteer recruitment and live event operations (quality goal 3, `CO-tcu-it-approval`, `AVL-event-hours`, `AVL-outage-recovery`).
 
 ## 5. Building Block View
 
