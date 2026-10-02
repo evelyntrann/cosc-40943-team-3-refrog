@@ -37,7 +37,7 @@ _Within one use case, `PRE-1`, `POST-1`, and the step numbers are local and may 
 | `SHP` | Shopping | `FEAT-shopping` |
 | `DON` | Donation | `FEAT-donation` |
 
-`FEAT-donation-partners` has no use cases yet. Whether donation partners are meant to be app users at all is unresolved (`OI-3`); this document covers only the seven areas above until that is answered.
+`FEAT-donation-partners` has no use cases yet. Confirmed 2026-10-02 (`OI-3`, resolved): donation partners are not app users — pickup coordination stays with administrators, outside the app, same as today.
 
 ## Revision History
 
@@ -57,7 +57,7 @@ This document specifies the goals a donor, shopper, volunteer, or administrator 
 
 This document covers the feature areas listed above: `FEAT-volunteer-scheduling`, `FEAT-volunteer-notification`, `FEAT-identity-verification`, `FEAT-location-info`, `FEAT-adminstration`, `FEAT-shopping-monitoring`, `FEAT-shopping`, and `FEAT-donation`.
 
-`FEAT-donation-partners` is explicitly **not** covered here — no use cases exist for it, pending `OI-3` (what capabilities, if any, donation partners should have within the app).
+`FEAT-donation-partners` is explicitly **not** covered here — confirmed 2026-10-02 (`OI-3`, resolved) that donation partners get no app access at all; pickups stay coordinated through administrators.
 
 `FEAT-volunteer-notification` is deliberately **not** represented as its own use case either, and that is worth stating rather than leaving silent. A shift reminder is system-initiated on a schedule, with no actor-driven goal behind it — it belongs in the specification's non-use-case functional requirements (an event-driven EARS requirement: "When a shift begins in `<N>` hours, the system shall notify the assigned volunteer"), not here. What *is* missing and should not be: an administrator-side use case for creating the shifts that `UC-VOL-signup` assumes already exist. That gap is fixed below with `UC-ADM-manage-shifts`.
 
@@ -119,7 +119,7 @@ _Data fields are specified as a table:_
 | `VOL` | Volunteer scheduling, from `FEAT-volunteer-scheduling` | `UC-VOL-signup`, `UC-VOL-cancel-shift`, `UC-VOL-view-schedule` |
 | `IDV` | Identity verification, from `FEAT-identity-verification` | `UC-IDV-verify-affiliation` |
 | `LOC` | Location info, from `FEAT-location-info` | `UC-LOC-view-locations` |
-| `ADM` | Administration, from `FEAT-adminstration` | `UC-ADM-view-dashboard`, `UC-ADM-manage-shifts` |
+| `ADM` | Administration, from `FEAT-adminstration` | `UC-ADM-view-dashboard`, `UC-ADM-manage-shifts`, `UC-ADM-notify-volunteers` |
 | `ABU` | Shopping-abuse monitoring, from `FEAT-shopping-monitoring` | `UC-ABU-review-alert` |
 | `SHP` | Shopping, from `FEAT-shopping` | `UC-SHP-log-item-taken` |
 | `DON` | Donation, from `FEAT-donation` | `UC-DON-log-donation` |
@@ -195,7 +195,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 **Related Use Cases:** `UC-VOL-cancel-shift`: Cancel a signed-up shift; `UC-VOL-view-schedule`: View assigned shifts and hours; `UC-ADM-manage-shifts`: Create and configure volunteer shifts
 **Assumptions:** none beyond the sign-in mechanism itself, which is unresolved (see Open Issues).
-**Open Issues:** `OI-10` — the sign-in/identification mechanism for volunteers is not yet finalized.
+**Open Issues:** `OI-17` — the general sign-in provider is not yet finalized. This is distinct from `OI-10` (resolved), which settled TCU-affiliation verification specifically, not general sign-in.
 
 ---
 
@@ -205,9 +205,9 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 **Created By:** Evelyn Tran
 **Date Created:** 2026-09-23
 **Primary Actor:** Volunteer
-**Secondary Actors:** Administrator (notified in one extension)
+**Secondary Actors:** none
 **Trigger:** The volunteer indicates they can no longer work a shift they are assigned to.
-**Description:** A volunteer who cannot make a shift cancels it so the resulting gap becomes visible for another volunteer to claim, rather than requiring an administrator to notice and cover it by hand, which is how this is handled today.
+**Description:** A volunteer who cannot make a shift cancels it so the resulting gap becomes visible for another volunteer to claim, rather than requiring an administrator to notice and cover it by hand, which is how this is handled today. An administrator may separately choose to notify volunteers about the opening (`UC-ADM-notify-volunteers`), but that is a distinct, deliberate action, not a consequence of cancelling.
 
 **Preconditions:**
 
@@ -238,9 +238,6 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 - **6a. The removal cannot be saved (e.g., a network or server failure):**
     - 6a1. The system informs the volunteer the cancellation did not complete and that they remain assigned to the shift.
     - 6a2. The volunteer may retry from step 3.
-- **6b. The cancellation leaves the shift understaffed close enough to the event that it may not be claimed in time:**
-    - 6b1. The system notifies administrators that the shift is open and unfilled.
-    - 6b2. Use case continues at step 7.
 
 **Priority:** High — directly targets the client's stated pain point of manually covering last-minute cancellations.
 **Frequency of Use:** Occasional relative to sign-ups, but concentrated in the days immediately before each event.
@@ -248,9 +245,9 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 **Associated Information:** Reuses the shift and volunteer fields defined in `UC-VOL-signup`; no new fields. A failed removal leaves the volunteer's assignment unchanged. Retrying a cancellation that already succeeded (e.g., a duplicate submission) must not error or have any further effect beyond confirming the volunteer is no longer assigned.
 
-**Related Use Cases:** `UC-VOL-signup`: Sign up for a volunteer shift
+**Related Use Cases:** `UC-VOL-signup`: Sign up for a volunteer shift; `UC-ADM-notify-volunteers`: Notify volunteers of open shifts
 **Assumptions:** none beyond `UC-VOL-signup`'s.
-**Open Issues:** How soon before a shift should administrators be alerted about an unfilled cancellation (extension 6b)? Not defined by the client. See `OI-7`.
+**Open Issues:** none — `OI-7` is resolved. This use case no longer automatically notifies anyone on cancellation; it just reopens the shift. Confirmed 2026-10-02: notifying volunteers about open shifts is a separate, administrator-triggered action (`UC-ADM-notify-volunteers`), not an automatic consequence of a cancellation. Wendy was explicit she doesn't want volunteers over-notified.
 
 ---
 
@@ -307,44 +304,57 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 **Primary Actor:** Shopper
 **Secondary Actors:** Volunteer (may observe or fall back to a manual check at the location)
 **Trigger:** A shopper at a ReFrog location wants to begin shopping.
-**Description:** A shopper demonstrates TCU affiliation so they can be admitted to shop, per `BR-shopper-tcu-affiliation`. Per the team's resolution of `OI-8`, signing in with a TCU credential (e.g., a tcu.edu email address) is itself the affiliation check — there is no separate "signed in but not verified" state. What happens at the physical location is a practical, visual confirmation (showing the signed-in app, or a TCU ID/email) to a volunteer, similar to today's process, not a second electronic check.
+**Description:** A shopper verifies TCU affiliation by email code so they can be admitted to shop, per `BR-shopper-tcu-affiliation`. Confirmed with the client 2026-10-02 (resolves `OI-10`): the shopper enters their TCU email on a profile page, the system sends a one-time code to that email, and the shopper enters the code to verify. This is a deliberate choice over an in-app physical-ID check — Wendy wanted the ID step out of the app specifically so the app could focus on shoppers self-logging what they take (`UC-SHP-log-item-taken`). The email check happens once per shopper (not once per visit); after that, showing the verified screen to a volunteer at the location is the practical, physical confirmation, similar to today's process.
 
 **Preconditions:**
 
-- PRE-1. The shopper is signed in with a TCU credential.
+- PRE-1. The shopper is signed in.
 
 **Postconditions:**
 
-- POST-1. The shopper is permitted to shop, enabling `UC-SHP-log-item-taken`.
+- POST-1. The shopper's TCU affiliation is verified (if not already) and the shopper is permitted to shop, enabling `UC-SHP-log-item-taken`.
 
 **Main Success Scenario:**
 
 1. The shopper indicates they want to shop.
-2. The system confirms the shopper is signed in with a TCU credential.
-3. The system displays a confirmation the shopper can show a volunteer (e.g., on their phone).
-4. The shopper shows the confirmation, or a physical TCU ID or TCU email, to the volunteer at the location for a quick visual check, consistent with `BR-shopper-verification`.
-5. Use case ends.
+2. The system checks whether the shopper has already completed TCU email verification.
+3. The shopper enters their TCU email address on their profile.
+4. The system sends a one-time code to that email address.
+5. The shopper enters the code.
+6. The system verifies the code and marks the shopper as TCU-affiliated.
+7. The system displays a confirmation the shopper can show a volunteer.
+8. The shopper shows the confirmation to the volunteer at the location for a quick visual check, consistent with `BR-shopper-verification`.
+9. Use case ends.
 
 **Extensions:**
 
-- **2a. The shopper is not signed in, or is not signed in with a TCU credential:**
-    - 2a1. The system informs the shopper they cannot be verified electronically this way.
-    - 2a2. The volunteer falls back to the current visual ID check (`BR-shopper-verification`) rather than the app.
-    - 2a3. Use case ends.
+- **2a. The shopper has already verified on a previous visit:**
+    - 2a1. The system skips steps 3–6 and displays the existing verified confirmation.
+    - 2a2. Use case continues at step 8.
+- **3a. The entered email is not a TCU email address:**
+    - 3a1. The system rejects the entry and asks the shopper to enter a TCU email.
+    - 3a2. Use case resumes at step 3.
+- **5a. The entered code is incorrect or expired:**
+    - 5a1. The system rejects the code and offers to resend it.
+    - 5a2. Use case resumes at step 4 or step 5.
+- **5b. The shopper cannot access a TCU email at all:**
+    - 5b1. The volunteer falls back to the current visual ID check (`BR-shopper-verification`) rather than the app.
+    - 5b2. Use case ends.
 
 **Priority:** High — named by the client alongside volunteer sign-up as a top priority.
-**Frequency of Use:** Every shopping visit; thousands per event.
+**Frequency of Use:** The email-code check happens once per shopper; the confirmation display happens every shopping visit, thousands per event.
 **Business Rules:** `BR-shopper-tcu-affiliation`, `BR-shopper-verification`
 
 **Associated Information:**
 
 | Property name | Data type | Validation rule | Security or access concerns | Glossary reference |
 |---|---|---|---|---|
-| TCU credential | String/token | Required; exact provider and format still unresolved (`OI-10`) | Should reveal affiliation status only, not other personal data | TCU ID |
+| TCU email address | String | Required; must end in the TCU email domain | Visible only to the shopper and administrators | TCU ID |
+| verification code | String | Required; time-limited, single-use | Never logged in plain form after use | — |
 
 **Related Use Cases:** `UC-SHP-log-item-taken`: Record items taken while shopping
-**Assumptions:** Signing in with a TCU credential is sufficient affiliation proof on its own, with no separate override/failure path beyond "not signed in" — a team decision, not yet confirmed with the client.
-**Open Issues:** `OI-10` — the client suggested a TCU email address or a phone-displayed indicator rather than single sign-on, but the exact sign-in provider and credential format have not been chosen.
+**Assumptions:** Verification persists across visits once completed, rather than being repeated every time — not explicitly confirmed with the client, but implied by "that would help a lot" language around keeping the app simple for repeat shoppers.
+**Open Issues:** none — `OI-10` is resolved. Whether the code is delivered only by email or could also use a phone-displayed indicator (mentioned once by the client as an alternative) is a minor implementation detail, not a blocking question.
 
 ---
 
@@ -453,7 +463,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 **Primary Actor:** Administrator
 **Secondary Actors:** none
 **Trigger:** An administrator wants to set up or adjust the shifts volunteers can sign up for an upcoming event.
-**Description:** An administrator defines each shift's location, date, time, and required number of volunteers, before volunteer sign-up opens. Every other `UC-VOL-*` use case assumes shifts already exist; this is the use case that creates them. `AS-event-configuration` establishes that organizers confirm dates, hours, locations, shift lengths, and staffing needs before registration opens, but does not say whether that happens inside this app or through some other process — this use case assumes it moves into the app, which should be confirmed with the client.
+**Description:** An administrator defines each shift's location, date, time, and required number of volunteers, before volunteer sign-up opens. Every other `UC-VOL-*` use case assumes shifts already exist; this is the use case that creates them. `AS-event-configuration` establishes that organizers confirm dates, hours, locations, shift lengths, and staffing needs before registration opens; confirmed 2026-10-02 that this now happens inside the app rather than SignUpGenius (resolves `OI-9`): "that would make things more integrated and help a lot."
 
 **Preconditions:**
 
@@ -497,11 +507,57 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 |---|---|---|---|---|
 | location | Reference | Required; must reference an active ReFrog location | Visible to any signed-in volunteer once created | Donation Location |
 | date/time | Date/time | Required; within the event's operating window | Visible to any signed-in volunteer once created | — |
-| required volunteer count | Integer | Required; per `BR-location-staffing`, ReFrog's stated practice is a minimum of two | Editable only by administrators | — |
+| required volunteer count | Integer | Required; set per location — confirmed 2026-10-02 this varies (e.g., King Family Commons needs 3, most locations need 2), not a single fixed minimum | Editable only by administrators | — |
+| operating days | Set of weekdays | Required; set per location — confirmed 2026-10-02 this also varies (some locations open Monday–Tuesday only, others Monday–Saturday) | Editable only by administrators | — |
 
-**Related Use Cases:** `UC-VOL-signup`: Sign up for a volunteer shift; `UC-ADM-view-dashboard`
-**Assumptions:** Shift creation happens inside this app rather than a separate tool; not confirmed with the client.
-**Open Issues:** `OI-9` — does shift creation belong in this app, or does the client intend to keep using an external tool for it? Editing/removing a shift with assigned volunteers (extension 6a) is also unspecified.
+**Related Use Cases:** `UC-VOL-signup`: Sign up for a volunteer shift; `UC-ADM-view-dashboard`; `UC-ADM-notify-volunteers`: Notify volunteers of open shifts
+**Assumptions:** Shift creation happens inside this app rather than a separate tool — confirmed 2026-10-02 (resolves `OI-9`).
+**Open Issues:** none beyond editing/removing a shift with assigned volunteers (extension 6a), which is still unspecified.
+
+---
+
+### UC-ADM-notify-volunteers: Notify volunteers of open shifts
+
+**UC ID and Name:** `UC-ADM-notify-volunteers`: Notify volunteers of open shifts
+**Created By:** Evelyn Tran
+**Date Created:** 2026-10-02
+**Primary Actor:** Administrator
+**Secondary Actors:** Volunteer (receives the notification)
+**Trigger:** An administrator decides shifts need more coverage and wants to prompt volunteers to sign up.
+**Description:** An administrator manually sends a notification to volunteers about open shifts, rather than the system notifying automatically on every cancellation. This resolves `OI-7`: Wendy asked for a way to prompt volunteers when slots are open (to reduce the founders personally covering gaps), but was explicit she doesn't want volunteers over-notified — "I don't want to mistreat our volunteers... I wouldn't want them to be getting too many notifications." The team proposed, and she approved, putting the decision of when to send one in the administrator's hands rather than automating it.
+
+**Preconditions:**
+
+- PRE-1. The administrator is signed in with administrator privileges.
+
+**Postconditions:**
+
+- POST-1. A notification has been sent to the selected recipients.
+
+**Main Success Scenario:**
+
+1. The administrator indicates they want to notify volunteers about open shifts.
+2. The system asks whether to notify everyone, or only volunteers who have not signed up for any shift.
+3. The administrator selects the audience and confirms.
+4. The system sends the notification.
+5. The system confirms the notification was sent.
+6. Use case ends.
+
+**Extensions:**
+
+- **4a. The notification cannot be sent (e.g., the delivery channel is unavailable):**
+    - 4a1. The system informs the administrator the notification did not go out.
+    - 4a2. The administrator may retry from step 3.
+
+**Priority:** High — directly addresses the client's stated pain point of covering shifts themselves, without the over-notification risk she flagged.
+**Frequency of Use:** At the administrator's discretion — the client described a cadence of roughly once a week or every few days in the weeks before an event, not per-cancellation.
+**Business Rules:** none identified yet.
+
+**Associated Information:** No new data fields beyond the shift and volunteer data already captured in `UC-VOL-signup` and `UC-ADM-manage-shifts`. The actual delivery channel (email, push, etc.) is not yet chosen — see the architecture's open items.
+
+**Related Use Cases:** `UC-VOL-cancel-shift`: Cancel a signed-up shift; `UC-VOL-signup`: Sign up for a volunteer shift
+**Assumptions:** none.
+**Open Issues:** none — `OI-7` is resolved. The exact notification delivery channel is a separate, smaller open item tracked in the architecture document, not in this use case.
 
 ---
 
@@ -588,6 +644,9 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 **Extensions:**
 
+- **2a. The shopper selects a category for the items taken:**
+    - 2a1. The system offers the same fixed category set used for donations (confirmed 2026-10-02, matching `UC-DON-log-donation`'s extension 2a), so the two sides of the program use consistent categories.
+    - 2a2. Use case continues at step 3.
 - **3a. The shopper enters an invalid count (negative, non-numeric, or zero):**
     - 3a1. The system rejects the entry and asks the shopper to correct it.
     - 3a2. Use case resumes at step 2.
@@ -608,11 +667,12 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 |---|---|---|---|---|
 | location | Reference | Required; must reference an active ReFrog location | Visible to administrators | Donation Location |
 | item count | Integer | Required; positive whole number | Visible to administrators | Item |
+| category | Enum, same fixed set as `UC-DON-log-donation` | Optional | Visible to administrators | Item |
 
 A failed save leaves no visit recorded. A retry of the same submission, whether user-initiated or a duplicate, must not record the same visit twice.
 
 **Related Use Cases:** `UC-IDV-verify-affiliation`, `UC-ADM-view-dashboard`, `UC-ABU-review-alert`
-**Assumptions:** Items are counted in aggregate, not itemized individually, consistent with current practice.
+**Assumptions:** Items are counted in aggregate, not itemized individually, consistent with current practice. Confirmed 2026-10-02 that the shopper self-reports this (not a volunteer on their behalf), resolving `OI-13`.
 **Open Issues:** none beyond `OI-11`, already tracked under `UC-ABU-review-alert`.
 
 ---
@@ -627,9 +687,9 @@ A failed save leaves no visit recorded. A retry of the same submission, whether 
 **Primary Actor:** Donor
 **Secondary Actors:** none
 **Trigger:** A donor has dropped off items at a ReFrog location and wants to record the donation.
-**Description:** A donor records what they donated, replacing the current QR-code Google Form, so ReFrog can track donation activity by location.
+**Description:** A donor records what they donated, replacing the current QR-code Google Form, so ReFrog can track donation activity by location. A volunteer may also complete this on a donor's behalf.
 
-**Preconditions:** none confirmed. Whether logging a donation requires the donor to be signed in is unresolved (see Open Issues); this use case does not assume either answer.
+**Preconditions:** none. Confirmed 2026-10-02 (resolves `OI-4`): donation logging does not require sign-in. Wendy was explicit she's "happy for it to be anybody," including parents dropping items off for a student.
 
 **Postconditions:**
 
@@ -649,8 +709,8 @@ A failed save leaves no visit recorded. A retry of the same submission, whether 
 - **3a. The donor enters an invalid item count:**
     - 3a1. The system rejects the entry and asks the donor to correct it.
     - 3a2. Use case resumes at step 2.
-- **2a. Optional item categorization is enabled:**
-    - 2a1. The system offers a fast, low-friction category selection, consistent with the client's condition that categorization must not make donating harder.
+- **2a. The donor selects a category for the donation:**
+    - 2a1. The system offers a small, fixed set of categories (confirmed 2026-10-02: 5–6 click-box options, e.g., mattress toppers, headboards, large furniture) rather than free text, consistent with the client's condition that categorization must not make donating harder.
     - 2a2. Use case continues at step 3.
 - **4a. The entry cannot be saved (for example, a connectivity issue at an outdoor location):**
     - 4a1. The system informs the donor the entry could not be saved and offers to retry.
@@ -669,12 +729,13 @@ A failed save leaves no visit recorded. A retry of the same submission, whether 
 |---|---|---|---|---|
 | location | Reference | Required; must reference an active ReFrog location | Visible to administrators | Donation Location |
 | item count | Integer | Required; positive whole number | Visible to administrators | Item |
+| category | Enum, one of a fixed set (e.g., mattress toppers, headboards, large furniture — final list TBD) | Optional | Visible to administrators | Item |
 
 A failed save leaves no donation recorded. A retry of the same submission, whether donor-initiated or a duplicate, must not record the same donation twice.
 
 **Related Use Cases:** `UC-LOC-view-locations`, `UC-ADM-view-dashboard`
-**Assumptions:** none beyond the identity question below.
-**Open Issues:** `OI-4` — does logging a donation require the donor to be signed in, or can it stay anonymous like today's QR-code form?
+**Assumptions:** none.
+**Open Issues:** none — `OI-4` is resolved. The exact final category list is not yet finalized with the client, but the shape (5–6 fixed options) is confirmed.
 
 ---
 
