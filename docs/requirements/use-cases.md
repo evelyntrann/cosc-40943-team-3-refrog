@@ -194,8 +194,8 @@ A note on `UC-VOL-claim-open-shift`: an earlier draft of this list had it as a s
 A failed save leaves no assignment recorded (fails cleanly, no partial state). A retry of the same sign-up, whether user-initiated or a duplicate submission, must not create two assignments for the same volunteer on the same shift or double-count against the shift's capacity.
 
 **Related Use Cases:** `UC-VOL-cancel-shift`: Cancel a signed-up shift; `UC-VOL-view-schedule`: View assigned shifts and hours; `UC-ADM-manage-shifts`: Create and configure volunteer shifts
-**Assumptions:** none beyond the sign-in mechanism itself, which is unresolved (see Open Issues).
-**Open Issues:** `OI-17` — the general sign-in provider is not yet finalized. This is distinct from `OI-10` (resolved), which settled TCU-affiliation verification specifically, not general sign-in.
+**Assumptions:** Sign-in is via Google Sign-In — the team's working decision (resolves `OI-17`), not yet confirmed with the client. Distinct from `OI-10` (resolved), which settled TCU-affiliation verification specifically, not general sign-in.
+**Open Issues:** none.
 
 ---
 
