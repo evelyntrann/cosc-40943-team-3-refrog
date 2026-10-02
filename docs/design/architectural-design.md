@@ -278,7 +278,9 @@ _List three to six, ranked by importance to your client times difficulty to achi
 
 | Rank | Requirement | Specification handles | Importance × difficulty | Drives |
 |---|---|---|---|---|
-| 1 | _Payroll data confidential_ | _`SEC-payroll-auth`_ | _High × Medium_ | _`KD-payment-isolated`_ |
+| 1 | Phone-first participant workflows are quick and accessible | `USE-mobile-responsive`, `USE-donation-completion`, `USE-volunteer-signup-completion`, `USE-validation-feedback`, `USE-accessibility` | High × High | The PWA client container and QR-code entry path |
+| 2 | Shopper affiliation and administrative data are protected | `SEC-authenticated-administration`, `SEC-role-based-access`, `SEC-least-privilege`, `SEC-affiliation-data`, `SEC-transport-encryption`, `SEC-authentication-provider` | High × High | The section 8.1 trust boundary, TCU-email authentication boundary, and Identity component |
+| 3 | ReFrog information and essential workflows remain available during event operations | `AVL-event-hours`, `AVL-uptime`, `AVL-fallback-information`, `AVL-outage-recovery` | High × Medium | `KD-deployment-shape`, persistent storage, backup and recovery, and outage-fallback responsibilities |
 
 ### 9.2 Key decisions
 
