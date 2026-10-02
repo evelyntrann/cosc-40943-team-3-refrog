@@ -170,6 +170,38 @@ C4Container
 
 _The system is one application and one database because nobody on the cafeteria side can operate more (`KD-deployment-shape`). The front end is a separate container only because it runs in the browser; it ships inside the application's package._
 
+```mermaid
+C4Container
+    title Container Diagram: ReFrog
+
+    Person(donor, "Donor", "Drops off items at a location")
+    Person(shopper, "Shopper", "Takes items after verifying TCU affiliation")
+    Person(volunteer, "Volunteer", "Signs up for and works shifts")
+    Person(admin, "Administrator", "Manages shifts and reviews activity")
+
+    System_Boundary(refrog, "ReFrog") {
+        Container(web, "Web Front End", "PWA, technology not yet chosen", "Donor, shopper, volunteer, and administrator screens in the browser")
+        Container(app, "Application", "technology not yet chosen", "Every business rule from the component table in 5.2; serves the front end")
+        ContainerDb(db, "Database", "technology not yet chosen", "Shifts, volunteer assignments, donations, shopping visits, administrator accounts")
+    }
+
+    System_Ext(google, "Google Sign-In", "Authenticates users; TCU affiliation derived from email domain")
+    System_Ext(notify, "Notification delivery channel", "Not yet chosen (email, push, etc.)")
+
+    Rel(donor, web, "Logs a donation", "HTTPS")
+    Rel(shopper, web, "Verifies affiliation, logs items taken", "HTTPS")
+    Rel(volunteer, web, "Signs up for and cancels shifts", "HTTPS")
+    Rel(admin, web, "Manages shifts, views dashboard", "HTTPS")
+    Rel(web, app, "Calls", "JSON/HTTPS")
+    Rel(app, db, "Reads and writes", "not yet chosen")
+    Rel(app, google, "Verifies identity", "OAuth / OpenID Connect")
+    Rel(app, notify, "Sends shift reminders and alerts", "not yet chosen")
+```
+
+ReFrog ships as one deployable, reflecting the team's working direction for `KD-deployment-shape` (formal write-up pending §9.2): the three ReFrog founders cannot operate infrastructure, and the team's lack of mobile development experience already ruled out a native app in favor of a single web application. The front end is a separate container only because it runs in the browser as a PWA — it ships inside the application's package, not deployed independently, same as the worked example above.
+
+Technology for all three containers is marked "not yet chosen" deliberately — nothing decided so far commits the team to a specific language, framework, or database, and guessing one here would be exactly the kind of invented precision this document warns against. External systems are provisional pending §3's context diagram; right now that's Google Sign-In and an unnamed notification channel.
+
 ### 5.2 Use case areas and components
 
 _[One row per use case area in your [use cases](../requirements/use-cases.md), taken from the area column of [traceability.md](../traceability.md) section 1, plus one row per **cross-cutting component** that no single area owns (authentication, notifications, file handling, an integration with an external system). A use case area with no row is a part of your system with no home; a component with no area and no cross-cutting reason is one nobody asked for._
