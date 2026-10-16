@@ -76,3 +76,18 @@ _[Delegate: running both checks and reporting what fails; finding every `BR-`, `
 _Keep human: whether an area with no feature is a missing feature or a use case that should not exist, and whether an unenforced rule is an oversight or a decision. Both are questions about your client's business, and the answer is not in your repository._
 
 _**The specific failure to watch for:** an agent asked to "fill in the traceability matrix" produces a complete, well-formed table in which every cell is populated and some of the links are invented. A blank cell is information. A confidently wrong link is worse than no link, because it makes the check pass. Verify every row you did not write yourself by opening the document at the other end.]_
+
+## Volunteer role decision traceability
+
+Team decision with Alexa Mercado, October 16, 2026. This table supplements the template examples above.
+
+| Feature | Areas | Use cases |
+|---|---|---|
+| `FEAT-volunteer-scheduling` | `VOL`, `ADM` | `UC-VOL-request-access`, `UC-ADM-review-volunteer-request` |
+| `FEAT-adminstration` | `ADM` | `UC-ADM-review-volunteer-request`, `UC-ADM-grant-volunteer-access`, `UC-ADM-remove-volunteer-access` |
+| `FEAT-identity-verification` | `IDV`, `SHP` | `UC-IDV-verify-affiliation` extension 2b, `UC-SHP-log-item-taken` PRE-1 |
+
+| Business rule | Source | Enforced by |
+|---|---|---|
+| `BR-volunteer-role-approval` | Team decision with Alexa Mercado, 2026-10-16 | `UC-VOL-request-access`, `UC-ADM-review-volunteer-request`, `UC-ADM-grant-volunteer-access`, `UC-ADM-remove-volunteer-access`, `FR-AUTH-volunteer-role` |
+| `BR-shopper-verification` | Client email-verification decision 2026-10-02; team volunteer-role clarification 2026-10-16 | `UC-IDV-verify-affiliation` step 2 and extension 2b, `UC-SHP-log-item-taken` PRE-1, `FR-AUTH-shopping-eligibility` |

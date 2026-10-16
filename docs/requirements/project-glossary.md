@@ -130,7 +130,7 @@ A shipping-container-like storage unit, donated for use by DFW Capsule, placed a
 
 ### Shopper
 
-A TCU student, faculty member, staff member, or volunteer eligible to take donated items from a ReFrog event at no charge. Shopping is limited to these groups; TCU ID is checked at point of entry to verify eligibility.
+A TCU student, faculty member, staff member, or volunteer eligible to take donated items from a ReFrog event at no charge. Digital shopping eligibility is established by verified TCU email or an administrator-granted volunteer role; the existing visual ID check is an in-person fallback.
 
 **Not to be confused with:** a Donator, who brings items in rather than taking them out.
 
@@ -162,7 +162,7 @@ The small planning group behind ReFrog: founders Wendy Macias, Courtney Hendrix,
 
 ### Volunteer
 
-A person who works at a ReFrog event in an operational capacity — managing donation locations, assisting shoppers, or performing logistical tasks — without compensation. Volunteers may be TCU students, staff, faculty, administrators, or community members. Volunteers are also eligible to shop.
+A person who works at a ReFrog event in an operational capacity — managing donation locations, assisting shoppers, or performing logistical tasks — without compensation. Volunteers may be TCU students, staff, faculty, administrators, or community members. Volunteers are also eligible to shop. In the application, an administrator-granted volunteer role permits a signed-in account to shop without TCU email verification; having a TCU email is optional for this path.
 
 **Not to be confused with:** a Shopper, who participates only in the shopping portion; a Volunteer may also shop but is not defined by that role.
 
@@ -171,3 +171,19 @@ A person who works at a ReFrog event in an operational capacity — managing don
 The total time a volunteer works across one or more shifts during a move-out event. Used as a key year-over-year metric (e.g., 520 hours in Year 4).
 
 
+
+### Volunteer Role
+
+An account permission granted or removed only by an authorized administrator. It permits shopping without TCU email verification and is distinct from a shift assignment and from email-verification state. Shift cancellation does not remove the role.
+
+### Volunteer Access Request
+
+A signed-in user's request for the volunteer role. It is pending until an administrator approves or declines it; requesting alone grants no volunteer permissions.
+
+### Pending Volunteer Email Approval
+
+An administrator's manual approval for an email address that has no matching verified sign-in account yet. It grants no access until the person authenticates with the matching provider-verified sign-in email. It is not an invitation, account creation, or shift assignment.
+
+### Volunteer Role Lifecycle
+
+Volunteer privileges expire after the annual event and require administrator renewal each year. An email change on the same account preserves an active role. After revocation or expiry, the account has general-information access only, even if TCU email verification is retained. A declined role request grants no volunteer permissions. This lifecycle definition does not specify shift approval or assignment behavior.

@@ -95,7 +95,7 @@ See the [Vision Statement](vision-and-scope.md#24-vision-statement) and [User En
 
 _[The kinds of user, and what distinguishes them: frequency of use, technical skill, privilege level, whether they are inside or outside the client's organization. Link to the stakeholder profiles in your vision and scope; what belongs here is what affects the software's behavior, especially permissions.]_
 
-The application has six user classes. The account and TCU-affiliation-verification approach has not yet been decided, so the access mechanisms below describe intended roles rather than a final authentication design.
+The application has six user classes. General sign-in remains provisional. TCU email verification and administrator-approved volunteer roles are separate shopping eligibility paths; the volunteer role decision was recorded with Alexa Mercado on October 16, 2026.
 
 | User class | Characteristics and frequency of use | Intended access |
 |---|---|---|
@@ -182,7 +182,7 @@ _[Link only. Business requirements, objectives, metrics, and scope live in [visi
 
 ### 5.1 Use cases
 
-Most of the system's user-facing behavior is specified in [use-cases.md](use-cases.md): ten use cases across volunteer scheduling, identity verification, location info, administration, shopping-abuse monitoring, shopping, and donation. This section does not restate that behavior. It covers only what does not belong to any single use case: behavior repeated across several of them, and background behavior with no actor-driven trigger.
+Most of the system's user-facing behavior is specified in [use-cases.md](use-cases.md): use cases across volunteer scheduling, identity verification, location info, administration, shopping-abuse monitoring, shopping, and donation. This section does not restate that behavior. It covers only what does not belong to any single use case: behavior repeated across several of them, and background behavior with no actor-driven trigger.
 
 ### 5.2 Non-use-case functional requirements
 
@@ -215,6 +215,38 @@ When a user requests volunteer scheduling data, shopping activity, or an adminis
 Confirmed with the client 2026-10-02 (resolves `OI-10`): the system shall verify a shopper's TCU affiliation by sending a one-time code to a TCU email address the shopper provides, and shall persist that verified status on their account rather than repeating the check on every visit, consistent with `UC-IDV-verify-affiliation`. This replaces an earlier draft of this requirement that assumed affiliation could be derived directly from a sign-in provider's email domain — that depended on TCU's email running on the same provider used for sign-in, which was never confirmed and is not what the client chose.
 
 **Verification:** Enter a TCU email, receive and submit the code, and confirm affiliation shows verified. Sign out and back in, and confirm the verified status persists without repeating the email-code step.
+
+**`FR-AUTH-volunteer-role`**
+
+Only an authorized administrator shall grant or remove the volunteer role. A signed-in user may request approval through `UC-VOL-request-access`; a pending or declined request shall grant no volunteer permissions. Administrators may also approve a volunteer by email through `UC-ADM-grant-volunteer-access`; an unclaimed approval shall grant no access until matched to the account's provider-verified sign-in email. Role grants and removals shall be audited, and protected checks shall use current role state. Cancelling a shift shall not itself revoke the role.
+
+**Verification:** Confirm self-requesting does not grant access, approval does, an ordinary user cannot grant roles, only a verified matching sign-in email claims a manual approval, and removal prevents an existing session or old pending approval from restoring volunteer-based access.
+
+**`FR-AUTH-shopping-eligibility`**
+
+When a signed-in user requests to record shopping activity, the system shall permit the operation only if the account has persisted TCU email verification or the administrator-granted volunteer role. Either is sufficient. Volunteer eligibility shall not set the account's email-verification state; retained TCU email verification shall not bypass the general-information-only restriction after volunteer role removal or annual expiry (`FR-AUTH-volunteer-lifecycle`). The visual ID fallback remains an in-person process and shall not implicitly create an app role or verified email state.
+
+For every protected shopping submission, the server shall obtain the authenticated account identity and current authorization state from trusted server interfaces, check explicit account restrictions first, and then establish eligibility through either saved TCU email verification or an active administrator-granted volunteer role. Absence of a volunteer role alone shall not classify an ordinary shopper as restricted. Once one eligibility path succeeds, the other path need not be queried. Browser-supplied identities, roles, cached confirmations and old session role claims shall not authorize the operation.
+
+If current restriction state or eligibility cannot be established because required state is unavailable, the system shall temporarily deny the submission, explain that access cannot be verified and allow retry without clearing saved verification. An unavailable lookup shall not be treated as a confirmed negative result. Revocation shall deny the next protected submission, including from an already-open app; it shall not retroactively cancel an operation already authorized and in progress.
+
+**Verification:** A volunteer without TCU email can record shopping; a verified TCU user without the role can record shopping; an account with neither cannot. Removing the role blocks the volunteer-only account on its next protected request and blocks an independently email-verified account whose volunteer privileges were revoked or expired. A TCU-email-verified shopper who is not subject to that restriction remains eligible.
+
+**Verification of current shopping authorization:** Confirm a restricted email-verified account is denied, an unrestricted email-verified non-volunteer is accepted, and a role-only active volunteer is accepted. Confirm the next submission after revocation is denied without cancelling an already authorized operation. Simulate unavailable restriction and eligibility lookups: deny temporarily, offer retry, and retain saved verification. Confirm a successful eligibility path does not require the second source.
+
+**Source for the role requirements:** Team decision with Alexa Mercado, October 16, 2026, consistent with `BR-volunteer-role-approval` and `BR-shopper-verification`; not a recorded client approval. Whether approval gates shift signup remains `OI-18`.
+**`FR-AUTH-volunteer-lifecycle`**
+
+At or after the configured annual event end timestamp, evaluated using server time and the event’s America/Chicago time convention, the system shall expire volunteer privileges for that event. Each new annual event shall require administrator review and approval before volunteer access is renewed; renewal shall not be automatic. Explicitly revoked or expired volunteer accounts shall have general-information access only; retained TCU email verification shall not restore participation capabilities. The server shall enforce this restriction on subsequent protected requests, including requests made through an existing session. General information includes public event details, locations, hours, and guidance; restricted accounts shall not submit shopping or donation records, use volunteer operations, or perform administrative operations. Administrator renewal is the path to restored volunteer privileges; this requirement does not create a self-renewal capability.
+
+When an authenticated user changes the verified sign-in email on the same account, the system shall preserve an active volunteer role. Role ownership shall remain bound to the account, not transfer to another account merely because an email was entered. Declining a role request shall grant no volunteer role or permissions. Role expiry and access removal shall not itself delete historical records; retention remains governed by `OI-6`.
+
+**Verification:** With a fixed clock, cross the configured annual event end and confirm volunteer permissions expire and require administrator renewal. Confirm an email change on the same account preserves an active role. Confirm revoked and expired accounts can read public information but cannot perform participant operations, even with retained TCU email verification or an older session. Confirm a declined request grants no role. Role removal shall clear active assignments and release their occupied capacity as part of the completed operation; historical records follow retention policy. Shift approval is excluded from these changes.
+
+**Source:** Alexa Mercado, team decision, October 16, 2026; `BR-volunteer-role-lifecycle`, partially resolved `OI-18`. This replaces the earlier assumption that verified TCU email always preserves shopping access after volunteer-role removal.
+**Volunteer request resubmission:** A user whose volunteer access request was declined may submit a new request for the next annual event, subject to administrator approval. During the same event, the user may not submit another request, but Wendy may manually grant access through the verified sign-in email approval workflow. A decline or new request alone grants no volunteer permissions. Requests and decisions shall identify their annual event so a current-event decline does not prevent a next-event request. This implements `BR-volunteer-request-resubmission` in `UC-VOL-request-access` and `UC-ADM-grant-volunteer-access`.
+
+**Verification:** A current-event declined user cannot create another current-event request; a next-event request is accepted as pending, and Wendy can grant the role through the existing manual approval path before then.
 
 #### 5.2.2 Shared validation
 
@@ -521,7 +553,7 @@ This section distinguishes the data-handling behavior required to support the bu
 
 - The system shall record the ReFrog location and item count for each donation submission, as required by `BR-donation-location-recorded` and `BR-donation-count-recorded`.
 - The system shall record the event date, location, and number of items taken for each shopping visit, as required by `BR-shopping-activity-recorded`.
-- The system shall record the result of the TCU-affiliation check before permitting a person to shop, as required by `BR-shopper-verification` and `BR-shopper-tcu-affiliation`. The specific electronic verification method is unresolved by the business rules.
+- The system shall retain TCU email verification state separately from administrator-granted volunteer roles and check either qualification for digital shopping eligibility under `BR-shopper-verification` and `BR-shopper-tcu-affiliation`.
 - The system shall record volunteer assignments against the location and shift the volunteer has claimed or been assigned, as required by `BR-volunteer-assignment`. The business rules do not yet define the complete cancellation and reassignment workflow.
 - The system shall record remaining-item handoffs to donation partners in the agreed pickup order and according to item priorities, as required by `BR-partner-pickup-priority` and `BR-remaining-items-distributed`.
 
@@ -529,7 +561,7 @@ This section distinguishes the data-handling behavior required to support the bu
 
 - Each donation record shall remain associated with the physical ReFrog location where it was received, in accordance with `BR-donation-location-recorded`.
 - Each shopping record shall contain the event date, location, and item count required by `BR-shopping-activity-recorded`.
-- The system shall not accept a shopping record as an approved shopping activity unless the shopper has demonstrated TCU affiliation, in accordance with `BR-shopper-verification` and `BR-shopper-tcu-affiliation`.
+- The system shall accept a digital shopping submission only for a signed-in account eligible under `FR-AUTH-shopping-eligibility`, consistent with `BR-shopper-verification` and `BR-shopper-tcu-affiliation`.
 - The system shall preserve the pickup order and item priorities used for partner handoffs, in accordance with `BR-partner-pickup-priority`.
 - The system shall route suspected excessive or prohibited shopping to ReFrog administrator review before applying any action, in accordance with `BR-shopping-abuse-review`. The threshold and penalty for abuse remain unresolved and shall not be invented by the system.
 - The system shall preserve the distinction between free shopping and any other transaction type; ReFrog shopping is without charge under `BR-free-shopping`.
@@ -609,7 +641,9 @@ A signed-in view where a user manages their account information and can complete
 - The view shall let a user enter a TCU email address and submit the one-time code sent to it.
 - Once verified, the view shall display the user's verified TCU affiliation status clearly and immediately on return visits, with no need to repeat the email-code step.
 - The view shall be presentable on a phone screen so a volunteer at the event location can confirm it at a glance.
-- The view shall not display a verified status for a user who has not completed the email-code check.
+- The view shall display “TCU email verified” from saved successful email verification and separately show the current trusted role as “Volunteer” when applicable. An account may show both; volunteer-role-only eligibility shall not display TCU email as verified. Neither status shall override an account restriction.
+- When current trusted state indicates revoked or expired volunteer access, the account view shall show “Volunteer access inactive—administrator review required” rather than an active-access confirmation. This limited account-status feedback shall not restore participant operations.
+- The view shall offer Become a volunteer, display the request status, and explain that pending approval grants no volunteer permissions, supporting `UC-VOL-request-access`.
 - The view shall not display or transmit a raw TCU ID number, per `SEC-affiliation-data` and §7.4.5.
 
 *Supports:* `UC-IDV-verify-affiliation`; `FR-AUTH-affiliation-from-signin`; `SEC-affiliation-data`
@@ -629,12 +663,12 @@ A low-friction form used at a donation drop-off location to record the number of
 
 **`UI-shopping-form`** — Shopping submission form
 
-A signed-in form used at the event to record the number of items a shopper takes. Only accessible after TCU affiliation is confirmed via `UI-account-profile`.
+A signed-in form used at the event to record the number of items a shopper takes. Accessible to signed-in users with either verified TCU email or an administrator-granted volunteer role, as checked by the server.
 
 - The form shall allow a verified shopper to enter the number of items taken and the location in as few steps as possible.
 - The form shall offer the same optional category selection used on `UI-donation-form` (confirmed 2026-10-02), so both sides of the program use consistent categories.
 - The form shall display a confirmation when the submission is saved.
-- The form shall not permit submission for a user whose affiliation is not verified, consistent with `FR-AUTH-affiliation-from-signin` and `BR-shopper-tcu-affiliation`.
+- The form shall enforce `FR-AUTH-shopping-eligibility`: either persisted TCU email verification or an administrator-granted volunteer role is sufficient; the browser cannot grant itself eligibility.
 - If the submission fails, the form shall preserve the entered values, consistent with `FR-VAL-preserve-input`.
 
 *Supports:* `UC-SHP-log-item-taken`; `UC-IDV-verify-affiliation`; `FR-AUTH-enforce-permissions`; `USE-mobile-responsive`
@@ -646,6 +680,7 @@ A signed-in, administrator-only view providing event schedule creation and manag
 
 - The view shall allow an administrator to create, configure, and modify events: including event dates, operating hours, active donation locations, shift time blocks, and the number of volunteer slots required per shift and per location — without changing application code, consistent with `MNT-event-configuration` and `USE-admin-no-code`.
 - The view shall display the current volunteer staffing level by location and shift, including open and filled slots and cancellation status.
+- The view shall let administrators approve or decline volunteer requests, grant access manually by verified sign-in email, and remove roles or revoke pending email approvals, supporting `UC-ADM-review-volunteer-request`, `UC-ADM-grant-volunteer-access`, and `UC-ADM-remove-volunteer-access`.
 - The view shall let an administrator manually send a notification to volunteers about open shifts, targeting either everyone or only volunteers who have not signed up, consistent with `UC-ADM-notify-volunteers`. No notification shall be sent automatically on a cancellation.
 - The view shall display donation and shopping activity counts by location and day, drawing from the reports defined in §7.3.
 - The view shall surface shopping-abuse review flags for administrator inspection, consistent with `UC-ABU-review-alert` and `SEC-administrator-review`. No automatic penalty or action shall be applied; the view shall route flagged cases to administrator review only, consistent with `BR-shopping-abuse-review`.
@@ -727,7 +762,7 @@ _Example: `SEC-authentication`: The system shall authenticate every request to a
 - `SEC-administrator-review`: The system shall restrict access to suspected shopping-abuse information to authorized ReFrog administrators, consistent with `BR-shopping-abuse-review`.
 - `SEC-transport-encryption`: The system shall encrypt network communication containing authentication credentials, affiliation information, or participant records by using HTTPS.
 - `SEC-audit-log`: The system shall record successful and unsuccessful administrator authentication attempts and administrator changes to event, schedule, and participant records.
-- `SEC-authentication-provider`: Before permitting a shopper to record shopping activity, the PWA shall require the shopper to verify control of a TCU-issued email address and shall treat successful verification as evidence of TCU affiliation.
+- `SEC-authentication-provider`: Before accepting digital shopping activity, the system shall require a signed-in account with either verified control of a TCU-issued email address or an administrator-granted volunteer role. General sign-in email alone shall not establish TCU affiliation; role eligibility shall not imply email verification.
 - `SEC-session-expiration`: The system shall expire an administrator session after the team-approved period of inactivity.
 
 ### 9.4 Safety
