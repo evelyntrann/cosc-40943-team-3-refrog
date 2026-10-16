@@ -276,6 +276,12 @@ If a notification fails to send after a shift sign-up, cancellation, or schedule
 
 **Verification:** Save a shift cancellation and simulate a notification failure. The cancellation remains in effect, and an administrator can see that the notification failed.
 
+**`FR-NOTIFY-in-app-inbox`**
+
+When the system sends a notification to a user's account, it shall send it by email and also place it in that user's in-app inbox, where only that user can read it and it stays marked unread until they open it. TCU affiliation verification codes are the exception: they are sent by email only, because the code proves the shopper can read that TCU inbox. Team decision, 2026-10-16.
+
+**Verification:** Send a volunteer an approval decision. It arrives by email, it appears unread in their in-app inbox, and another signed-in user cannot see it. Request a verification code. It arrives by email and does not appear in the inbox.
+
 #### 5.2.5 Consistent information display
 
 **`FR-DISPLAY-unavailable-data`**

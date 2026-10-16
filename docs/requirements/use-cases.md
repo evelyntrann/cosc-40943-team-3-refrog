@@ -559,11 +559,11 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 **Frequency of Use:** At the administrator's discretion — the client described a cadence of roughly once a week or every few days in the weeks before an event, not per-cancellation.
 **Business Rules:** none identified yet.
 
-**Associated Information:** No new data fields beyond the shift and volunteer data already captured in `UC-VOL-signup` and `UC-ADM-manage-shifts`. The actual delivery channel (email, push, etc.) is not yet chosen — see the architecture's open items.
+**Associated Information:** No new data fields beyond the shift and volunteer data already captured in `UC-VOL-signup` and `UC-ADM-manage-shifts`. The notification goes by email and into each recipient's in-app inbox (`FR-NOTIFY-in-app-inbox`); only the email provider is still to be chosen.
 
 **Related Use Cases:** `UC-VOL-cancel-shift`: Cancel a signed-up shift; `UC-VOL-signup`: Sign up for a volunteer shift
 **Assumptions:** none.
-**Open Issues:** none — `OI-7` is resolved. The exact notification delivery channel is a separate, smaller open item tracked in the architecture document, not in this use case.
+**Open Issues:** none — `OI-7` is resolved. The channel is settled (email plus in-app inbox, team decision 2026-10-16); only the email provider remains open, tracked in the architecture document.
 
 ---
 
@@ -629,7 +629,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 | sign-up decision | Enum | Pending, approved, or denied, per sign-up; a denied sign-up is final for that shift | Visible to the person and administrators; editable only by administrators | — |
 
 **Related Use Cases:** `UC-VOL-signup`: Sign up for a volunteer shift; `UC-VOL-view-schedule`: View assigned shifts and hours; `UC-ADM-notify-volunteers`: Notify volunteers of open shifts
-**Assumptions:** The decision notification goes only to the person decided on, once per decision, so it does not add to the over-notification Wendy wants to avoid (`OI-7`). The delivery channel is the same undecided one as `UC-ADM-notify-volunteers`.
+**Assumptions:** The decision notification goes only to the person decided on, once per decision, so it does not add to the over-notification Wendy wants to avoid (`OI-7`). It goes by email and into the person's in-app inbox (`FR-NOTIFY-in-app-inbox`).
 **Open Issues:** none.
 
 ---
