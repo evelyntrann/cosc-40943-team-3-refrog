@@ -5,6 +5,7 @@
 **Area:** `UC-VOL`
 
 > **Realizes:** `UC-VOL-signup`, `UC-VOL-cancel-shift`, `UC-VOL-view-schedule`
+> **Supports:** `UC-ADM-review-volunteer` (VOL's part only: confirming or releasing pending sign-ups)
 > **Depends on:** `BR-volunteer-assignment`, `BR-location-staffing`, `BR-event-schedule`, `FR-AUTH-enforce-permissions`, `FR-VAL-server-validation`, `FR-SAVE-confirmed-success`, `FR-SAVE-unknown-outcome`, `FR-SAVE-duplicate-submission`, `ROB-duplicate-submission`, `USE-volunteer-signup-completion`, `PER-form-submission`, `SEC-least-privilege`, `UI-volunteer-schedule`
 > **See:** [use cases](../requirements/use-cases.md#area-volunteer-scheduling-vol), [SRS non-use-case FRs](../requirements/software-requirements-specification.md#52-non-use-case-functional-requirements), [data dictionary](../requirements/software-requirements-specification.md#72-data-dictionary), [architecture-of-record](architectural-design.md) (§5.2 components, §8 crosscutting concepts)
 > **Designed against:** `main` at `4323d3d` (2026-10-16). No application code exists yet; every class below is new.
@@ -35,11 +36,11 @@ _**Write it in this order.** Each step is one person's or one pair's work, and t
 
 _[One paragraph: what this area does, which components of your [architecture-of-record](architectural-design.md) it lives in, and what it reads from or calls in other areas. Link the container diagram rather than redrawing it. If this design changes the architecture-of-record, say so here and list the change under "Changes to the architecture-of-record" below.]_
 
-Volunteer Scheduling lets a signed-in volunteer claim an open slot on a shift, give a slot back, and see their own upcoming shifts and credited hours. It is the `VOL` module of the single Application container ([containers](architectural-design.md#51-containers), [use case areas](architectural-design.md#52-use-case-areas-and-components), `KD-deployment-shape`). It **owns one thing: the shift assignment**, the record that one volunteer holds one slot on one shift. It does not own shifts. Shifts, with their location, time, and required volunteer count, are created by Administration (`UC-ADM-manage-shifts`). VOL reads them through Administration's service and takes a row lock on a shift while it changes that shift's assignments. Location names and addresses come from Location Info. The signed-in user comes from Authentication. VOL sends no notifications. Cancelling does not notify anyone (`OI-7`, resolved). Shift reminders and admin-triggered notifications belong to the Notifications component, which reads VOL's assignments, not the other way round.
+Volunteer Scheduling lets a signed-in volunteer claim an open slot on a shift, give a slot back, and see their own upcoming shifts and credited hours. It is the `VOL` module of the single Application container ([containers](architectural-design.md#51-containers), [use case areas](architectural-design.md#52-use-case-areas-and-components), `KD-deployment-shape`). It **owns one thing: the shift assignment**, the record that one volunteer holds one slot on one shift. It does not own shifts. Shifts, with their location, time, and required volunteer count, are created by Administration (`UC-ADM-manage-shifts`). VOL reads them through Administration's service and takes a row lock on a shift while it changes that shift's assignments. Location names and addresses come from Location Info. The signed-in user, and whether an administrator has approved them as a volunteer, come from Authentication's account. Administration's `UC-ADM-review-volunteer` sets that approval and calls VOL to confirm or release the person's pending sign-ups. VOL sends no notifications. Cancelling does not notify anyone (`OI-7`, resolved). Shift reminders and admin-triggered notifications belong to the Notifications component, which reads VOL's assignments, not the other way round.
 
 The hard part of this area is three invariants that must hold under concurrent and repeated requests:
 
-1. **No overbooking.** A shift never has more active assignments than its required volunteer count, even when two volunteers claim the last slot at the same moment (`UC-VOL-signup` 4a, POST-2).
+1. **No overbooking.** A shift never has more **held** assignments (`ACTIVE` plus `PENDING` approval) than its required volunteer count, even when two volunteers claim the last slot at the same moment (`UC-VOL-signup` 4a, 5c1, POST-2). The required count is the shift's maximum. ADM sets it from the location's count when the event is set up, and an administrator may change it per shift (`UC-ADM-manage-shifts`).
 2. **No duplicate assignment.** One volunteer holds at most one slot on one shift, however many times the request arrives (4b, 5b, `FR-SAVE-duplicate-submission`, `ROB-duplicate-submission`).
 3. **Hours stay consistent with assignments.** Credited hours are never stored, so they cannot disagree with the assignments they come from (`UC-VOL-view-schedule`).
 
@@ -66,6 +67,13 @@ classDiagram
         +listOpenShifts(volunteerId) List~OpenShift~
         +signUp(volunteerId, shiftId) SignUpResult
         +cancel(volunteerId, shiftId) CancelResult
+        +confirmPending(volunteerId)
+        +denyPending(volunteerId, shiftId)
+    }
+    class VolunteerReviewService {
+        <<new, administration>>
+        +approve(volunteerId)
+        +deny(volunteerId, shiftId)
     }
     class ScheduleService {
         <<new, volunteer>>
@@ -74,19 +82,19 @@ classDiagram
     class AssignmentRepository {
         <<new, volunteer>>
         +findByShiftAndVolunteer(shiftId, volunteerId) Assignment
-        +countActiveByShift(shiftId) int
-        +findActiveByVolunteer(volunteerId) List~Assignment~
+        +countHeldByShift(shiftId) int
+        +findHeldByVolunteer(volunteerId) List~Assignment~
     }
     class AssignmentQueryService {
         <<new, volunteer, read-only>>
         +isActive(shiftId, volunteerId) bool
-        +activeCountsByShift(shiftIds) Map
+        +countsByShift(shiftIds) Map
     }
     class ShiftAssignment {
         <<new, entity>>
         shiftId
         volunteerId
-        status: ACTIVE | CANCELLED
+        status: PENDING | ACTIVE | CANCELLED | DENIED
     }
     class ShiftService {
         <<reused, administration>>
@@ -101,6 +109,7 @@ classDiagram
     class CurrentUser {
         <<reused, authentication>>
         +id() String
+        +volunteerStatus() NONE | APPROVED
     }
     class Clock {
         <<reused, crosscutting 8.2.2>>
@@ -119,30 +128,40 @@ classDiagram
     ScheduleService --> Clock
     AssignmentQueryService --> AssignmentRepository
     AssignmentRepository --> ShiftAssignment
+    VolunteerReviewService --> AssignmentService
+    VolunteerReviewService --> CurrentUser
 ```
 
 - `volunteer/VolunteerShiftController` (new): the HTTP entry point for all four endpoints. It takes the volunteer id from `CurrentUser`, never from the path or body. It checks the request shape and nothing else.
-- `volunteer/AssignmentService` (new): owns the three invariants. Each `signUp` and `cancel` call is one transaction.
-- `volunteer/ScheduleService` (new): read-only. It builds the volunteer's upcoming shifts and computes credited hours from assignments and shift times at read time.
+- `volunteer/AssignmentService` (new): owns the three invariants. Each `signUp` and `cancel` call is one transaction. `confirmPending` flips all of a person's `PENDING` rows to `ACTIVE`; `denyPending` flips one `PENDING` row to `DENIED`. Only ADM's `VolunteerReviewService` calls these two, inside ADM's transaction, so an approval changes the account's status and its pending sign-ups together (`UC-ADM-review-volunteer` steps 4 and 3a1).
+- `administration/VolunteerReviewService` (new, **owned by ADM**, shown for the contract only): `approve` sets the account's volunteer status to `APPROVED` and calls `confirmPending`; `deny` calls `denyPending` for one sign-up and leaves the account unchanged. ADM's design (`adm.md`) owns its endpoint, screen, and authorization.
+- `volunteer/ScheduleService` (new): read-only. It builds the volunteer's upcoming shifts, including pending ones, and computes hours from `ACTIVE` assignments and shift times at read time.
 - `volunteer/AssignmentRepository` and the `ShiftAssignment` entity (new): the only code that touches the `shift_assignment` table.
-- `volunteer/AssignmentQueryService` (new): the read-only face VOL shows other areas, so they never touch VOL's table. ADM's dashboard (`UC-ADM-view-dashboard`, `UC-ADM-notify-volunteers`) and the shift reminder's recheck (`FR-NOTIFY-current-state`) call it. Only the two methods shown are in VOL's scope. Any other method another area needs is added by that area's design, not here.
+- `volunteer/AssignmentQueryService` (new): the read-only face VOL shows other areas, so they never touch VOL's table. ADM's dashboard (`UC-ADM-view-dashboard`, `UC-ADM-notify-volunteers`) and the shift reminder's recheck (`FR-NOTIFY-current-state`) call it. `isActive` is false for a `PENDING` assignment, so an unapproved person gets no shift reminder. `countsByShift` returns active and pending counts separately. Only the two methods shown are in VOL's scope. Any other method another area needs is added by that area's design, not here.
 - `administration/ShiftService` (reused, **owned by ADM**): VOL needs three methods from it. `findSignupCandidates(now)` returns the shifts that have not started, in an event whose status is `planned` or `active`. `findById` is the plain lookup. `lockForAssignment` is the same lookup but holds a pessimistic write lock on the shift row until the caller's transaction ends. All three return a shift's start and end as **instants** (UTC), not as the data dictionary's local date and `HH:MM`. ADM converts from `America/Chicago` when it stores a shift (§8.2.2), and VOL compares them only with `Clock.now()`. These three methods are a contract with ADM's design (`adm.md`). See Open questions.
 - `location/LocationService` (reused, owned by LOC): location name and address for display.
-- `authentication/CurrentUser` (reused): the signed-in account's id. Any signed-in account can volunteer, including administrators. VOL keeps no separate volunteer table (see Data model).
+- `authentication/CurrentUser` (reused): the signed-in account's id and its volunteer status (`NONE` or `APPROVED`). The status lives on the account next to its roles; `APPROVED` is the Volunteer role. Only ADM's review changes it. VOL reads it and keeps no volunteer table of its own (see Data model).
 - `Clock` (reused, architecture §8.2.2): the injected clock, so tests can fix "now" for "has the shift started" and "has the shift ended".
-- **Front end** (new): the `UI-volunteer-schedule` view, with an open-shifts list, a sign-up action, and a my-schedule list with a cancel action. Sign-up is a single action on the open-shifts list, with no confirm dialog before it is sent, so a volunteer claims a shift within the two interactions `UI-volunteer-schedule` allows. The "signed up" confirmation shows only after the server answers `201` or `200` (step 6, `FR-SAVE-confirmed-success`). A confirm-before-send dialog is used only for cancel (`UC-VOL-cancel-shift` step 4). While a sign-up or cancel request is in flight, its button is disabled.
+- **Front end** (new): the `UI-volunteer-schedule` view, with an open-shifts list, a sign-up action, and a my-schedule list with a cancel action. Sign-up is a single action on the open-shifts list, with no confirm dialog before it is sent, so a volunteer claims a shift within the two interactions `UI-volunteer-schedule` allows. The "signed up" confirmation shows only after the server answers `201` or `200` (step 6, `FR-SAVE-confirmed-success`). When the response's status is `PENDING`, it says the sign-up is awaiting administrator approval (5c2), and the my-schedule list marks that shift the same way. A confirm-before-send dialog is used only for cancel (`UC-VOL-cancel-shift` step 4). While a sign-up or cancel request is in flight, its button is disabled.
 
 ### The assignment's states
 
-An assignment is never deleted. Cancelling flips it to `CANCELLED`, which keeps "cancellation status" for the coverage report (SRS §7.3.2). Signing up again reactivates the same row, which is why one row per (shift, volunteer) is enough.
+An assignment is never deleted. Cancelling flips it to `CANCELLED`, which keeps "cancellation status" for the coverage report (SRS §7.3.2). Signing up again reactivates the same row, which is why one row per (shift, volunteer) is enough. A sign-up by a person not yet approved starts `PENDING`. It holds the slot exactly like `ACTIVE` but earns no hours and gets no reminder. `DENIED` is final for that (shift, volunteer): the kept row is what stops the person claiming that shift again, and it holds no slot.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ACTIVE: signUp, slot free (UC-VOL-signup step 5)
+    [*] --> ACTIVE: signUp, approved, slot free (UC-VOL-signup step 5)
+    [*] --> PENDING: signUp, not yet approved, slot free (5c1)
+    PENDING --> ACTIVE: admin approves the person (UC-ADM-review-volunteer step 4)
+    PENDING --> DENIED: admin denies this sign-up (UC-ADM-review-volunteer 3a1)
+    PENDING --> CANCELLED: cancel, before shift start
     ACTIVE --> CANCELLED: cancel, before shift start (UC-VOL-cancel-shift step 6)
-    CANCELLED --> ACTIVE: signUp again, slot free
+    CANCELLED --> ACTIVE: signUp again, approved, slot free
+    CANCELLED --> PENDING: signUp again, not yet approved, slot free
     ACTIVE --> ACTIVE: signUp again (5b, no change)
+    PENDING --> PENDING: signUp again (5b, no change)
     CANCELLED --> CANCELLED: cancel again (duplicate, no change)
+    DENIED --> DENIED: signUp again refused (4c), cancel no change
 ```
 
 ## Sequence
@@ -163,7 +182,7 @@ sequenceDiagram
     WEB->>C: GET /api/v1/shifts/open
     C->>AS: listOpenShifts(volunteerId from session)
     AS->>SH: findSignupCandidates(clock.now())
-    AS->>R: active counts for those shifts
+    AS->>R: held (ACTIVE + PENDING) counts for those shifts
     AS-->>C: shifts with openSlots > 0, each with assignedToMe
     C-->>WEB: 200, list (possibly empty)
     WEB-->>V: Shifts by date and location, open slots shown (step 2), or "no shifts are open" (2a)
@@ -176,16 +195,18 @@ sequenceDiagram
         AS-->>C: refused, SHIFT_NOT_FOUND
     else
         AS->>R: findByShiftAndVolunteer(shiftId, volunteerId)
-        alt already ACTIVE (4b, 5b)
+        alt already ACTIVE or PENDING (4b, 5b)
             AS-->>C: existing assignment, alreadyAssigned = true
+        else DENIED for this shift (4c)
+            AS-->>C: refused, SIGNUP_DENIED
         else shift started, or event not planned/active (4a)
             AS-->>C: refused, SHIFT_NOT_OPEN
         else no row, or CANCELLED
-            AS->>R: countActiveByShift(shiftId) (step 4)
+            AS->>R: countHeldByShift(shiftId), ACTIVE + PENDING (step 4)
             alt count >= requiredCount (4a)
                 AS-->>C: refused, SHIFT_FULL
             else slot free
-                AS->>R: insert ACTIVE, or reactivate the CANCELLED row (step 5)
+                AS->>R: insert, or reactivate the CANCELLED row: ACTIVE if APPROVED (step 5), PENDING if NONE (5c1)
                 alt write or commit fails (5a)
                     AS-->>C: failure, nothing written
                 else committed
@@ -195,7 +216,7 @@ sequenceDiagram
         end
     end
     C-->>WEB: 201 new / 200 already assigned / 409 / 404 / 5xx
-    WEB-->>V: Confirmation (step 6, 5b2), "already signed up" (4b1), "no longer available", back to list (4a1, 4a2), or "not completed, no assignment made", retry (5a1, 5a2)
+    WEB-->>V: Confirmation (step 6, 5b2), "signed up, awaiting approval" (5c2), "already signed up" (4b1), "you cannot sign up for this shift", back to list (4c1, 4c2), "no longer available", back to list (4a1, 4a2), or "not completed, no assignment made", retry (5a1, 5a2)
 ```
 
 _The own-assignment check comes **before** both the not-open check and the capacity check. A retry on a shift that this volunteer's first attempt has just filled, or a retry that arrives after the shift has started, returns "already signed up" (5b). It never returns "shift full" or "not open" (4a)._
@@ -227,14 +248,14 @@ sequenceDiagram
         AS->>R: findByShiftAndVolunteer(shiftId, volunteerId)
         alt no row (PRE-2 fails)
             AS-->>C: refused, NOT_ASSIGNED
-        else CANCELLED already (duplicate submission)
+        else CANCELLED or DENIED already (duplicate submission)
             AS-->>C: assigned = false, no change
-        else ACTIVE, but shift has started
+        else ACTIVE or PENDING, but shift has started
             AS-->>C: refused, SHIFT_STARTED
-        else ACTIVE, shift not started
+        else ACTIVE or PENDING, shift not started
             AS->>R: set CANCELLED (step 6), the freed slot shows in the next open-shift list
             alt write or commit fails (6a)
-                AS-->>C: failure, still ACTIVE
+                AS-->>C: failure, status unchanged
             else committed
                 AS-->>C: assigned = false
             end
@@ -244,7 +265,7 @@ sequenceDiagram
     end
 ```
 
-_No notification is sent and nothing is queued on cancel (`OI-7`). The shift simply counts one fewer active assignment, which is how it "reappears as open" (POST-2)._
+_No notification is sent and nothing is queued on cancel (`OI-7`). The shift simply counts one fewer held assignment, which is how it "reappears as open" (POST-2)._
 
 **Unknown outcome (`FR-SAVE-unknown-outcome`).** If the connection drops before the `DELETE`'s response arrives, the front end does not report a failure. It calls `GET /api/v1/me/schedule`. If the shift is gone, it reports "Cancelled" (step 7). If the shift is still there, it shows the 6a1 message. Retrying the `DELETE` is also safe, because it is idempotent.
 
@@ -262,18 +283,43 @@ sequenceDiagram
     V->>WEB: View my schedule (step 1)
     WEB->>C: GET /api/v1/me/schedule
     C->>SS: scheduleFor(volunteerId from session)
-    SS->>R: findActiveByVolunteer(volunteerId) (step 2)
+    SS->>R: findHeldByVolunteer(volunteerId), ACTIVE and PENDING (step 2)
     SS->>SH: shift times for those assignments
     SS->>L: location names and addresses
-    SS->>SS: upcoming = shift end > clock.now(); finishedHours = sum of (end - start) for ended shifts; plannedHours = sum of (end - start) for upcoming shifts
-    SS-->>C: upcoming shifts, finishedHours, plannedHours
+    SS->>SS: upcoming = shift end > clock.now(); finishedHours = sum of (end - start) for ended ACTIVE shifts; plannedHours = sum of (end - start) for upcoming ACTIVE shifts
+    SS-->>C: upcoming shifts with status, finishedHours, plannedHours
     C-->>WEB: 200
     alt no upcoming shifts (2a)
         WEB-->>V: Empty schedule, finished hours, link to open shifts (2a1)
     else
-        WEB-->>V: Upcoming shifts with location, address, date, time, plus finished and planned hours (step 3)
+        WEB-->>V: Upcoming shifts with location, address, date, time, pending ones marked "awaiting approval", plus finished and planned hours (step 3)
     end
 ```
+
+### Approval hand-off: VOL's part of `UC-ADM-review-volunteer`
+
+That use case is ADM's, and `adm.md` owns its screen, endpoint, and authorization. This diagram shows only the contract with VOL.
+
+```mermaid
+sequenceDiagram
+    participant VR as VolunteerReviewService (ADM)
+    participant AS as AssignmentService
+    participant R as AssignmentRepository
+    Note over VR,R: one transaction, opened by ADM
+    alt approve (step 4)
+        VR->>VR: set account volunteerStatus = APPROVED
+        VR->>AS: confirmPending(volunteerId)
+        AS->>R: every PENDING row of this person becomes ACTIVE; held counts unchanged
+    else deny one sign-up (3a1)
+        VR->>AS: denyPending(volunteerId, shiftId)
+        AS->>R: that PENDING row becomes DENIED; its slot reopens; account unchanged
+    end
+    alt write or commit fails (4a)
+        AS-->>VR: failure, status and rows unchanged
+    end
+```
+
+_The notification to the person (`UC-ADM-review-volunteer` step 5, 3a2) is ADM's, sent after this transaction commits; VOL takes no part in it. Neither direction raises a held count, so neither needs the shift lock: confirming changes `PENDING` to `ACTIVE` one for one, and denying only lowers a count. Repeating a decision finds no `PENDING` row to change and changes nothing (4b)._
 
 ## API contract
 
@@ -283,10 +329,10 @@ The architecture's §8.2.1 and §8.2.3 don't fix an error shape yet (see Open qu
 
 | Endpoint | Caller (who may) | Request | Success | Errors, by extension |
 |---|---|---|---|---|
-| `GET /api/v1/shifts/open` | Any signed-in user | None | `200`: a list (empty is valid, 2a) of shifts with `openSlots > 0` that have not started, in a `planned` or `active` event. Each has shift id, location id, name and address, date, start and end in `America/Chicago`, `openSlots`, and `assignedToMe` | Not signed in: `401` |
-| `POST /api/v1/shifts/{shiftId}/assignments` | Any signed-in user, for themself only. The volunteer comes from the session, never the path or body | None | `201`: new or reactivated assignment, with shift summary and `openSlots` after. `200`: the volunteer already held the slot (4b, 5b), same body with `alreadyAssigned: true`, and nothing is written | 4a: `409 SHIFT_FULL`. 4a: `409 SHIFT_NOT_OPEN` (started, or event not `planned`/`active`; never returned when the volunteer already holds the slot). Unknown shift: `404 SHIFT_NOT_FOUND`. 5a: `5xx`, no assignment written. Not signed in: `401` |
-| `DELETE /api/v1/shifts/{shiftId}/assignments/me` | Any signed-in user, for their own assignment only | None | `200`: `{ assigned: false }`. Also returned when the assignment is already `CANCELLED` (duplicate cancel, no change) | PRE-2: `404 NOT_ASSIGNED` (never signed up for this shift). `409 SHIFT_STARTED` (shift start ≤ now). 6a: `5xx`, assignment unchanged. Not signed in: `401` |
-| `GET /api/v1/me/schedule` | Any signed-in user, their own schedule only | None | `200`: upcoming shifts (active assignments whose shift has not ended, ordered by start), each with shift id, location name and address, date, start, end. Also `finishedHours` (shifts that have ended) and `plannedHours` (upcoming shifts), each a decimal number of hours | Not signed in: `401` |
+| `GET /api/v1/shifts/open` | Any signed-in user | None | `200`: a list (empty is valid, 2a) of shifts with `openSlots > 0` (required count minus `ACTIVE` and `PENDING` assignments) that have not started, in a `planned` or `active` event, leaving out any shift where this volunteer's sign-up was `DENIED`. Each has shift id, location id, name and address, date, start and end in `America/Chicago`, `openSlots`, and `assignedToMe` | Not signed in: `401` |
+| `POST /api/v1/shifts/{shiftId}/assignments` | Any signed-in user, for themself only. The volunteer comes from the session, never the path or body | None | `201`: new or reactivated assignment, with shift summary, `openSlots` after, and `status`: `ACTIVE` for an approved volunteer, `PENDING` otherwise (5c). `200`: the volunteer already held the slot (4b, 5b), same body with `alreadyAssigned: true`, and nothing is written | 4c: `409 SIGNUP_DENIED` (this volunteer's sign-up for this shift was denied). 4a: `409 SHIFT_FULL`. 4a: `409 SHIFT_NOT_OPEN` (started, or event not `planned`/`active`; never returned when the volunteer already holds the slot). Unknown shift: `404 SHIFT_NOT_FOUND`. 5a: `5xx`, no assignment written. Not signed in: `401` |
+| `DELETE /api/v1/shifts/{shiftId}/assignments/me` | Any signed-in user, for their own `ACTIVE` or `PENDING` assignment only | None | `200`: `{ assigned: false }`. Also returned when the assignment is already `CANCELLED` or `DENIED` (no change) | PRE-2: `404 NOT_ASSIGNED` (never signed up for this shift). `409 SHIFT_STARTED` (shift start ≤ now). 6a: `5xx`, assignment unchanged. Not signed in: `401` |
+| `GET /api/v1/me/schedule` | Any signed-in user, their own schedule only | None | `200`: upcoming shifts (`ACTIVE` and `PENDING` assignments whose shift has not ended, ordered by start), each with shift id, location name and address, date, start, end, and `status`. Also `finishedHours` (`ACTIVE` shifts that have ended) and `plannedHours` (`ACTIVE` shifts still to come), each a decimal number of hours | Not signed in: `401` |
 
 There is no endpoint that takes a volunteer id. One volunteer cannot read or change another volunteer's assignments through this API, by construction (`SEC-least-privilege`, architecture §8.1 Authorization). Administrators see assignments through ADM's endpoints, which call `AssignmentQueryService`.
 
@@ -296,10 +342,10 @@ _[Only the decisions a reader could not recover from the code: an invariant, who
 
 _A decision that affects the whole system rather than this area is an architecture decision. It belongs in your architecture-of-record as a `KD-*` entry, not here.]_
 
-**How overbooking is prevented.** Inside the sign-up transaction, VOL locks the shift's row (`ShiftService.lockForAssignment`, a pessimistic write lock, e.g. `SELECT … FOR UPDATE` or the chosen database's equivalent). Then it counts active assignments and inserts. Two concurrent claims for the last slot run one after the other: the second sees the count at capacity and gets `SHIFT_FULL`. Cancel takes the same lock, so a cancel and a claim on the same shift cannot interleave.
+**How overbooking is prevented.** Inside the sign-up transaction, VOL locks the shift's row (`ShiftService.lockForAssignment`, a pessimistic write lock, e.g. `SELECT … FOR UPDATE` or the chosen database's equivalent). Then it counts held assignments (`ACTIVE` plus `PENDING`) and inserts. Two concurrent claims for the last slot run one after the other: the second sees the count at capacity and gets `SHIFT_FULL`. Cancel takes the same lock, so a cancel and a claim on the same shift cannot interleave.
 Rejected: a stored `filledCount` column decremented on cancel, which can drift from the real assignments after a partial failure. Rejected: an optimistic version check with retry, which the SRS §5.2 scoping note cut as more than this event's load needs (`SCA-event-capacity`: 200 volunteers), and which surfaces as spurious failures under the sign-up rush. Rejected: an in-process lock, which breaks as soon as the application runs more than one instance. Contention is per shift, so locking one shift row never blocks sign-ups for other shifts (`PER-form-submission`).
 
-**How duplicates are prevented.** Two layers. (1) The service looks up the volunteer's row first and returns `200 alreadyAssigned` if it is active (4b, 5b, `FR-SAVE-duplicate-submission`). (2) A database **unique constraint on (shift_id, volunteer_id)** is the backstop if two identical requests ever get past the lock. A violation of that constraint is caught and answered as `alreadyAssigned`, not as an error.
+**How duplicates are prevented.** Two layers. (1) The service looks up the volunteer's row first and returns `200 alreadyAssigned` if it is `ACTIVE` or `PENDING` (4b, 5b, `FR-SAVE-duplicate-submission`). (2) A database **unique constraint on (shift_id, volunteer_id)** is the backstop if two identical requests ever get past the lock. A violation of that constraint is caught and answered as `alreadyAssigned`, not as an error.
 Rejected: a client-generated idempotency key per submission, which adds a table and key handling for a case that "(shift, volunteer) is unique" already identifies exactly. Rejected: relying only on disabling the button, which does not survive a page reload or a retry after a lost response (`FR-SAVE-unknown-outcome`).
 
 **4b and 5b get the same response.** The server cannot tell "already signed up and selected it again" (4b) apart from "retry of a sign-up that succeeded" (5b). The state is identical. Both get `200` with `alreadyAssigned: true`, and the UI's "You're already signed up for this shift" satisfies both 4b1 and 5b2.
@@ -308,7 +354,7 @@ Rejected: returning `409` for 4b, which would make a lost-response retry look li
 **Cancel soft-deletes, and signing up again reactivates the same row.** Keeping a `CANCELLED` row gives the coverage report its cancellation status (SRS §7.3.2), lets a duplicate cancel answer `200` instead of `404`, and keeps the unique constraint simple.
 Rejected: deleting the row, which loses cancellation status and makes a duplicate cancel indistinguishable from "never assigned". Rejected: a new row per sign-up cycle, which needs a filtered unique index (database-specific, and the database is not yet chosen) and keeps a history no requirement asks for.
 
-**Hours are computed on read, never stored, and shown as two numbers.** Both come from scheduled shift length (end − start), with no check-in, per the use case's assumption. `finishedHours` sums the volunteer's `ACTIVE` assignments whose shift has **ended** by the injected clock. That is `UI-volunteer-schedule`'s "hours credited so far". `plannedHours` sums the `ACTIVE` assignments whose shift has not ended. A cancelled assignment counts toward neither. Because hours are derived from the assignments, a cancel or a failed save can never leave them inconsistent.
+**Hours are computed on read, never stored, and shown as two numbers.** Both come from scheduled shift length (end − start), with no check-in, per the use case's assumption. `finishedHours` sums the volunteer's `ACTIVE` assignments whose shift has **ended** by the injected clock. That is `UI-volunteer-schedule`'s "hours credited so far". `plannedHours` sums the `ACTIVE` assignments whose shift has not ended. A cancelled or `PENDING` assignment counts toward neither, because the person has not been approved to work it. Because hours are derived from the assignments, a cancel or a failed save can never leave them inconsistent.
 Rejected: an hours column updated on sign-up, cancel, and shift end, which needs a scheduled job and can drift. Rejected: one total that adds upcoming shifts to worked ones, which would credit hours not yet worked. Rejected: finished hours alone, which hides the volunteer's planned contribution (team decision, resolves Open questions item 1).
 
 **A volunteer cannot cancel once the shift has started.** Cancel is allowed up to the shift's start time, and refused with `SHIFT_STARTED` after. This matches step 2 ("upcoming shifts"). It also keeps a started or past shift's assignment, and so its credited hours and coverage record, from being erased after the fact. There is no earlier cut-off, because last-minute cancellations are exactly the client's pain point that this use case answers.
@@ -317,8 +363,11 @@ Rejected: no cut-off at all, which would let a volunteer wipe a worked shift fro
 **A shift is "open" only if it has not started and its event is `planned` or `active`.** Volunteer recruitment runs for a month or more *before* the event (`AS-seasonal-readiness`). If sign-up were limited to `active` events, as the data dictionary's "only active records may accept live submissions" would suggest, sign-up could never happen. VOL does not read the location's status. The event runs for one move-out week, every location is open for all of it, and a location starts open when an administrator creates it.
 Rejected: following the data dictionary literally (see Open questions, item 4). Rejected: filtering on `DonationLocation.status`, whose live values (`open`, `closed`, `maintenance`, `capacity`) say nothing about a shift weeks ahead, and which would hide shifts a location still needs staffed (`BR-location-staffing`).
 
-**Any signed-in account can volunteer; VOL keeps no Volunteer table.** The assignment references the Authentication account id. Name and email come from that account when ADM's views need them.
-Rejected: a separate `volunteer` profile with the data dictionary's `role` enum, which no `UC-VOL-*` reads.
+**A new volunteer claims first and is approved after; a pending claim holds the slot.** Everyone signs in. A sign-up by an account not yet approved is saved as `PENDING` and counts against the shift's capacity like an `ACTIVE` one, so the overbooking invariant still holds whatever the administrator later decides. Approval is once per person (`UC-ADM-review-volunteer`): it gives the account the Volunteer role and confirms all its pending sign-ups. After that, sign-ups go straight to `ACTIVE`. Denial is per sign-up: the administrator denies one pending sign-up, its slot reopens, and the person cannot claim that shift again (`409 SIGNUP_DENIED`). Their other sign-ups, in this event or later ones, are unaffected, and their account stays not yet approved. The person is notified of each decision (see Approval hand-off).
+Rejected: approving the person before they may claim anything, which keeps a first-time volunteer from claiming a shift within two minutes (`USE-volunteer-signup-completion`). Rejected: a pending claim that does not hold a slot, which lets approval push a shift past its required count, or forces the administrator to deny people only because the shift filled meanwhile. Rejected: approval per sign-up, which multiplies the founders' review work for no requirement. Rejected: denying the whole person, which would block them from every shift and every later event (team decision, 2026-10-16). Rejected: letting a denied sign-up be re-claimed, which would put the same request straight back in front of the administrator.
+
+**The volunteer status lives on the account; VOL keeps no Volunteer table.** The assignment references the Authentication account id. The status (`NONE` or `APPROVED`) sits on the account next to its roles, where architecture §8.1's role-based access already looks. Name and email come from that account when ADM's views need them.
+Rejected: a `volunteer` profile table owned by VOL, which would put the Volunteer role in a second place that §8.1's authorization does not read.
 
 ## Data model
 
@@ -331,19 +380,21 @@ One new table, `shift_assignment`, owned by VOL:
 | `id` | Surrogate key |
 | `shift_id` | References ADM's shift table |
 | `volunteer_id` | References Authentication's user account |
-| `status` | `ACTIVE` or `CANCELLED` |
-| `assigned_at` | When it last became `ACTIVE` (UTC, §8.2.2) |
-| `cancelled_at` | When it last became `CANCELLED`, null while active |
+| `status` | `PENDING`, `ACTIVE`, `CANCELLED`, or `DENIED` |
+| `assigned_at` | When it last became `PENDING` or `ACTIVE` (UTC, §8.2.2) |
+| `cancelled_at` | When it last became `CANCELLED` or `DENIED`, null while held |
 
 Constraint: **unique (`shift_id`, `volunteer_id`)**. Index on (`shift_id`, `status`) for the count under lock, and on (`volunteer_id`, `status`) for the schedule.
 
-This **realizes** the domain model's `Volunteer "*" --> "*" VolunteerShift : assigned to` association as its own record. The data dictionary's `VolunteerShift.assignmentStatus` (`assigned, claimed, cancelled, filled`) mixes the shift's state with each assignment's. Here "filled" is derived (active count ≥ required count), "claimed" and "assigned" are the same `ACTIVE` state (see the use-cases note on `UC-VOL-claim-open-shift`), and "cancelled" lives on the assignment. The shift table itself, including `required_count`, is ADM's.
+This **realizes** the domain model's `Volunteer "*" --> "*" VolunteerShift : assigned to` association as its own record. The data dictionary's `VolunteerShift.assignmentStatus` (`assigned, claimed, cancelled, filled`) mixes the shift's state with each assignment's. Here "filled" is derived (held count ≥ required count), "claimed" and "assigned" are the same `ACTIVE` state (see the use-cases note on `UC-VOL-claim-open-shift`), `PENDING` is a claim awaiting approval, `DENIED` is a claim an administrator refused, and "cancelled" lives on the assignment. The shift table itself, including `required_count`, is ADM's.
+
+Outside VOL's table, Authentication's user account gains a **volunteer status** column (`NONE` by default, or `APPROVED`), set only by ADM's approval. It realizes the data dictionary's `Volunteer.role` as the account's Volunteer role.
 
 ## Reuse & cross-cutting
 
 _[Which existing services, components, and conventions this area uses rather than rebuilding: authentication, the error handler, email, the clock, another area's service. Cite your architecture-of-record's section 8.2 for each convention by name rather than restating it.]_
 
-- **Authentication** (architecture §8.1): `CurrentUser` for the volunteer id; every VOL endpoint requires sign-in (`FR-AUTH-enforce-permissions`).
+- **Authentication** (architecture §8.1): `CurrentUser` for the volunteer id and volunteer status; every VOL endpoint requires sign-in, volunteers included (`FR-AUTH-enforce-permissions`).
 - **Authorization** (§8.1): own-records-only is enforced by endpoint shape. No VOL endpoint accepts a volunteer id.
 - **Error handling** (§8.2.1): a failed write is reported as "not recorded", never as success (`FR-SAVE-confirmed-success`). The `201`/`200` is sent only after commit.
 - **Time** (§8.2.2): shift times are stored in UTC and shown in `America/Chicago` on a 12-hour clock. "Started" and "ended" are decided by the injected `Clock`.
@@ -363,8 +414,13 @@ _[One row per flow: the main success scenario and **every** extension of every u
 | UC-VOL-signup step 2, `assignedToMe` | integration | A shift the volunteer holds that still has free slots is listed with `assignedToMe: true` |
 | UC-VOL-signup 2a | integration | No open shifts: `200` with an empty list |
 | UC-VOL-signup 4a, full | integration | A shift at capacity: `409 SHIFT_FULL`, nothing written |
-| UC-VOL-signup 4a, race | integration | Two different volunteers claim the last slot concurrently: exactly one `201`, one `409 SHIFT_FULL`, active count equals required count |
+| UC-VOL-signup 4a, race | integration | Two different volunteers claim the last slot concurrently: exactly one `201`, one `409 SHIFT_FULL`, held count equals required count |
 | UC-VOL-signup 4a, not open | unit | A shift whose start equals the fixed clock's now: `409 SHIFT_NOT_OPEN` |
+| UC-VOL-signup 4c | integration | The volunteer's sign-up for this shift was `DENIED`: signing up again gets `409 SIGNUP_DENIED`, nothing written. The same volunteer can still claim a different shift |
+| UC-VOL-signup step 2, denied | integration | A shift where this volunteer's sign-up was `DENIED` is left out of their open list, but still shown to other volunteers |
+| UC-VOL-signup 5c | integration | An account whose status is `NONE` claims a free slot: `201` with `status: PENDING`, one `PENDING` row, `openSlots` decreases by one |
+| UC-VOL-signup 5c, pending holds the slot | integration | Required count 2, one `ACTIVE` and one `PENDING`: a third volunteer gets `409 SHIFT_FULL`, and the shift is not in the open list |
+| UC-VOL-signup 5c2 | unit (front end) | A `201` with `status: PENDING` shows "signed up, awaiting approval", not plain "signed up" |
 | UC-VOL-signup 4b | integration | Signing up for a shift already held: `200 alreadyAssigned`, still one row, `openSlots` unchanged |
 | UC-VOL-signup 5a | integration | Write fails (simulated): `5xx`, no row, no success shown |
 | UC-VOL-signup 5b, sequential | integration | The same `POST` sent twice: one `201`, one `200 alreadyAssigned`, one row, slot counted once (`FR-SAVE-duplicate-submission` verification) |
@@ -380,9 +436,15 @@ _[One row per flow: the main success scenario and **every** extension of every u
 | UC-VOL-cancel-shift, duplicate | integration | Cancel sent twice: both `200`, row `CANCELLED`, open slots increased once |
 | UC-VOL-cancel-shift, PRE-2 | integration | Cancelling a shift never signed up for: `404 NOT_ASSIGNED` |
 | UC-VOL-cancel-shift, started | unit | Shift start ≤ fixed clock's now: `409 SHIFT_STARTED`, row unchanged |
+| UC-VOL-cancel-shift, pending | integration | Cancelling a `PENDING` sign-up before start: `200`, row `CANCELLED`, slot reopens |
 | UC-VOL-cancel-shift, unknown outcome | unit (front end) | The `DELETE`'s response is lost and the schedule no longer lists the shift: shows "Cancelled", not the 6a1 failure |
 | UC-VOL-cancel-shift, no notification | integration | A successful cancel sends and queues no notification (`OI-7`) |
-| UC-VOL-view-schedule main | integration | Lists only the volunteer's `ACTIVE` assignments whose shift has not ended, ordered by start, with location address |
+| UC-VOL-view-schedule main | integration | Lists only the volunteer's `ACTIVE` and `PENDING` assignments whose shift has not ended, ordered by start, with location address and `status` |
+| UC-VOL-view-schedule, pending hours | unit | A `PENDING` 3-hour shift, ended or upcoming, adds to neither `finishedHours` nor `plannedHours` |
+| Approval hand-off, approve | integration | `confirmPending` turns all of the person's `PENDING` rows `ACTIVE` in ADM's transaction; held counts unchanged; `isActive` now true |
+| Approval hand-off, deny | integration | `denyPending` turns that one `PENDING` row `DENIED`: its open slots increase by one, the person's other `PENDING` rows and account status are unchanged |
+| Approval hand-off, failure and repeat | integration | A failed commit leaves the account status and every row unchanged (4a). Repeating either call changes nothing (4b) |
+| Reminder recheck | unit | `isActive` is false for a `PENDING` assignment, so no shift reminder goes to an unapproved person |
 | UC-VOL-view-schedule 2a | integration | No upcoming shifts: `200`, empty list, `finishedHours` still returned, `plannedHours` is 0 |
 | UC-VOL-view-schedule, hours | unit | With a fixed clock: two ended 3-hour shifts and one upcoming 3-hour shift give `finishedHours` 6 and `plannedHours` 3. A cancelled shift, ended or upcoming, adds to neither |
 | UC-VOL-view-schedule, display time | unit | A shift stored as 19:00 UTC shows as 2:00 p.m. on an event date in CDT (§8.2.2) |
@@ -393,6 +455,7 @@ _[One row per flow: the main success scenario and **every** extension of every u
 _[Designing an area against real code is when the architecture's guesses meet reality. If this design needs a component the map does not have, moves a responsibility, or adds a dependency, **change [the architecture-of-record](architectural-design.md) in the same pull request** and list each change here in one line. If nothing changed, write "None". A design that silently disagrees with the architecture leaves two maps, and the agent will follow whichever it reads last.]_
 
 - [§5.2](architectural-design.md#52-use-case-areas-and-components), `VOL` row: *Depends on* changed from "Administration, Authentication, Notifications" to "Administration, Location Info, Authentication". VOL calls no notification code (`OI-7`). Notifications depends on VOL, not the reverse. Location names and addresses come from Location Info.
+- [§5.2](architectural-design.md#52-use-case-areas-and-components), `ADM` row: *Responsibility* gains approving new volunteers and denying their sign-ups (`UC-ADM-review-volunteer`). VOL already sat in ADM's *Depends on*.
 
 ## Open questions & risks
 
@@ -409,9 +472,11 @@ _[What this design could not settle and who can, and what could go wrong that yo
 
 **Coordination with other areas** (contract, not client):
 
-- **ADM (Ananye):** `ShiftService.findSignupCandidates`, `findById`, `lockForAssignment` as described in Components, returning start and end as UTC instants converted from `America/Chicago`. ADM's `UC-ADM-manage-shifts` 6a also has to decide what happens to `ACTIVE` assignments when a shift is edited below its active count or removed. VOL does not handle this; it only reads `required_count`. Whatever ADM decides, it must not leave active count > required count without saying so.
+- **ADM (Ananye):** `ShiftService.findSignupCandidates`, `findById`, `lockForAssignment` as described in Components, returning start and end as UTC instants converted from `America/Chicago`. `required_count` starts from the location's count set at event setup and may be changed per shift. `UC-ADM-review-volunteer` is ADM's, calling `confirmPending` and `denyPending` in its own transaction (see Approval hand-off). ADM's `UC-ADM-manage-shifts` 6a also has to decide what happens to held assignments when a shift is edited below its held count or removed. VOL does not handle this; it only reads `required_count`. Whatever ADM decides, it must not leave held count > required count without saying so.
+- **Authentication:** the account gains the volunteer status (`NONE` or `APPROVED`), exposed through `CurrentUser.volunteerStatus()` and written only by ADM's approval.
 - **Notifications / `FR-NOTIFY-current-state`:** the reminder rechecks with `AssignmentQueryService.isActive` before sending.
-- **IDV:** architecture §5.2 makes "registered volunteer" a route to shopping eligibility. VOL exposes nothing for that yet, and any signed-in account can sign up for a shift. IDV's design defines "registered volunteer" and adds any `AssignmentQueryService` method it needs. Holding a shift alone should not be read as proof of `BR-shopper-tcu-affiliation`.
+- **Notifications / `UC-ADM-review-volunteer`:** ADM's review notifies the person of an approval or a denied sign-up after its transaction commits, through the Notifications component. VOL sends nothing. If the notification fails, the decision stands and the administrator sees the failure (`FR-NOTIFY-preserve-business-state`).
+- **IDV:** architecture §5.2 makes "registered volunteer" a route to shopping eligibility. The natural reading is now volunteer status `APPROVED`, which is on the account, not in VOL. A `PENDING` sign-up alone is not proof of anything. IDV's design confirms this against `BR-shopper-tcu-affiliation`.
 - **Team-wide:** the error envelope in architecture §8.2.1/8.2.3 is still provisional. VOL fixes only the codes. The team should fix the envelope once, before the first endpoint is built.
 
 **Risks accepted:**

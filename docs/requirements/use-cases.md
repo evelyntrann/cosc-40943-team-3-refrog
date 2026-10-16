@@ -119,7 +119,7 @@ _Data fields are specified as a table:_
 | `VOL` | Volunteer scheduling, from `FEAT-volunteer-scheduling` | `UC-VOL-signup`, `UC-VOL-cancel-shift`, `UC-VOL-view-schedule` |
 | `IDV` | Identity verification, from `FEAT-identity-verification` | `UC-IDV-verify-affiliation` |
 | `LOC` | Location info, from `FEAT-location-info` | `UC-LOC-view-locations` |
-| `ADM` | Administration, from `FEAT-adminstration` | `UC-ADM-view-dashboard`, `UC-ADM-manage-shifts`, `UC-ADM-notify-volunteers` |
+| `ADM` | Administration, from `FEAT-adminstration` | `UC-ADM-view-dashboard`, `UC-ADM-manage-shifts`, `UC-ADM-notify-volunteers`, `UC-ADM-review-volunteer` |
 | `ABU` | Shopping-abuse monitoring, from `FEAT-shopping-monitoring` | `UC-ABU-review-alert` |
 | `SHP` | Shopping, from `FEAT-shopping` | `UC-SHP-log-item-taken` |
 | `DON` | Donation, from `FEAT-donation` | `UC-DON-log-donation` |
@@ -148,8 +148,8 @@ A note on `UC-VOL-claim-open-shift`: an earlier draft of this list had it as a s
 
 **Postconditions:**
 
-- POST-1. The volunteer is added to the shift's assigned list.
-- POST-2. If the shift has now reached its required volunteer count, it no longer appears as open to other volunteers.
+- POST-1. The volunteer is added to the shift's assigned list, as pending approval if an administrator has not yet approved them (5c).
+- POST-2. If the shift's approved and pending sign-ups now reach its required volunteer count, it no longer appears as open to other volunteers.
 
 **Main Success Scenario:**
 
@@ -172,12 +172,18 @@ A note on `UC-VOL-claim-open-shift`: an earlier draft of this list had it as a s
 - **4b. The volunteer is already assigned to this shift:**
     - 4b1. The system informs the volunteer they are already signed up.
     - 4b2. Use case ends.
+- **4c. An administrator denied this volunteer's earlier sign-up for this same shift (`UC-ADM-review-volunteer` 3a):**
+    - 4c1. The system informs the volunteer they cannot sign up for this shift. Their other shifts are not affected.
+    - 4c2. The volunteer returns to step 2.
 - **5a. The assignment cannot be saved (e.g., a network or server failure):**
     - 5a1. The system informs the volunteer the sign-up did not complete and that no assignment was made.
     - 5a2. The volunteer may retry from step 3.
 - **5b. The volunteer retries after step 5a, or submits twice in quick succession:**
     - 5b1. The system recognizes the shift is already assigned to this volunteer from the prior attempt and does not create a second assignment or occupy a second slot.
     - 5b2. The system confirms the existing sign-up. Use case ends.
+- **5c. An administrator has not yet approved this person as a volunteer (their first sign-up, or any sign-up before approval):**
+    - 5c1. The system records the assignment as pending approval. A pending assignment holds the slot exactly like an approved one.
+    - 5c2. The system confirms the sign-up and tells the volunteer it is awaiting administrator approval (`UC-ADM-review-volunteer`). Use case ends.
 
 **Priority:** High — the client named volunteer sign-up as the first feature needed, since recruitment starts before shopping or donation activity does.
 **Frequency of Use:** High during the roughly one-to-one-and-a-half-month recruitment window before each event (`AS-seasonal-readiness`); low otherwise.
@@ -194,7 +200,7 @@ A note on `UC-VOL-claim-open-shift`: an earlier draft of this list had it as a s
 A failed save leaves no assignment recorded (fails cleanly, no partial state). A retry of the same sign-up, whether user-initiated or a duplicate submission, must not create two assignments for the same volunteer on the same shift or double-count against the shift's capacity.
 
 **Related Use Cases:** `UC-VOL-cancel-shift`: Cancel a signed-up shift; `UC-VOL-view-schedule`: View assigned shifts and hours; `UC-ADM-manage-shifts`: Create and configure volunteer shifts
-**Assumptions:** Sign-in is via Google Sign-In — the team's working decision (resolves `OI-17`), not yet confirmed with the client. Distinct from `OI-10` (resolved), which settled TCU-affiliation verification specifically, not general sign-in.
+**Assumptions:** Sign-in is via Google Sign-In — the team's working decision (resolves `OI-17`), not yet confirmed with the client. Distinct from `OI-10` (resolved), which settled TCU-affiliation verification specifically, not general sign-in. Everyone signs in, volunteers included; a signed-in account becomes a volunteer only when an administrator approves it (team discussion, 2026-10-16). The volunteer claims first and is approved after, so a first-time volunteer can still claim a shift without waiting (`USE-volunteer-signup-completion`).
 **Open Issues:** none.
 
 ---
@@ -212,7 +218,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 **Preconditions:**
 
 - PRE-1. The volunteer is signed in.
-- PRE-2. The volunteer is currently assigned to the shift being cancelled.
+- PRE-2. The volunteer is currently assigned to the shift being cancelled, approved or pending approval.
 
 **Postconditions:**
 
@@ -273,7 +279,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 1. The volunteer indicates they want to view their schedule.
 2. The system retrieves the shifts assigned to the volunteer.
-3. The system displays the volunteer's upcoming shifts (location, date, time) and total hours.
+3. The system displays the volunteer's upcoming shifts (location, date, time), marking any still awaiting administrator approval, and their hours: finished hours from approved shifts that have ended, and planned hours from approved shifts still to come.
 4. Use case ends.
 
 **Extensions:**
@@ -286,7 +292,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 **Frequency of Use:** Frequent during event week; occasional during recruitment.
 **Business Rules:** none directly; displays data governed by `BR-volunteer-assignment`.
 
-**Associated Information:** Reuses the shift fields defined in `UC-VOL-signup`. "Hours" are derived from shift assignments; see Open Issues.
+**Associated Information:** Reuses the shift fields defined in `UC-VOL-signup`. "Hours" are derived from approved shift assignments, and a shift awaiting approval counts toward neither number; see Open Issues.
 
 **Related Use Cases:** `UC-VOL-signup`: Sign up for a volunteer shift; `UC-VOL-cancel-shift`: Cancel a signed-up shift
 **Assumptions:** Hours are calculated from scheduled shift length rather than a separate check-in/check-out action — a team decision, deprioritized as not blocking the current design, not yet confirmed with the client.
@@ -507,7 +513,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 |---|---|---|---|---|
 | location | Reference | Required; must reference an active ReFrog location | Visible to any signed-in volunteer once created | Donation Location |
 | date/time | Date/time | Required; within the event's operating window | Visible to any signed-in volunteer once created | — |
-| required volunteer count | Integer | Required; set per location — confirmed 2026-10-02 this varies (e.g., King Family Commons needs 3, most locations need 2), not a single fixed minimum | Editable only by administrators | — |
+| required volunteer count | Integer | Required; set per location — confirmed 2026-10-02 this varies (e.g., King Family Commons needs 3, most locations need 2), not a single fixed minimum. The administrator sets each location's count once when setting up the event; every shift created at that location starts with it, and the administrator may change it on a single shift (team discussion, 2026-10-16). It is the shift's maximum: approved and pending sign-ups together never exceed it | Editable only by administrators | — |
 | operating days | Set of weekdays | Required; set per location — confirmed 2026-10-02 this also varies (some locations open Monday–Tuesday only, others Monday–Saturday) | Editable only by administrators | — |
 
 **Related Use Cases:** `UC-VOL-signup`: Sign up for a volunteer shift; `UC-ADM-view-dashboard`; `UC-ADM-notify-volunteers`: Notify volunteers of open shifts
@@ -558,6 +564,73 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 **Related Use Cases:** `UC-VOL-cancel-shift`: Cancel a signed-up shift; `UC-VOL-signup`: Sign up for a volunteer shift
 **Assumptions:** none.
 **Open Issues:** none — `OI-7` is resolved. The exact notification delivery channel is a separate, smaller open item tracked in the architecture document, not in this use case.
+
+---
+
+### UC-ADM-review-volunteer: Approve or deny a new volunteer
+
+**UC ID and Name:** `UC-ADM-review-volunteer`: Approve or deny a new volunteer
+**Created By:** Evelyn Tran
+**Date Created:** 2026-10-16
+**Primary Actor:** Administrator
+**Secondary Actors:** Volunteer (receives a notification of each decision)
+**Trigger:** A signed-in person who is not yet an approved volunteer has signed up for a shift (`UC-VOL-signup` 5c).
+**Description:** An administrator reviews a new volunteer's pending sign-ups. **Approval is once per person:** it gives the person the Volunteer role and confirms all their pending sign-ups, and from then on their sign-ups are confirmed without review. **Denial is per sign-up:** it denies one pending sign-up, so its slot reopens and the person cannot sign up for that shift again. Their other sign-ups, in this event or later ones, are not affected. The person is notified of each decision. This comes from a team discussion on 2026-10-16.
+
+**Preconditions:**
+
+- PRE-1. The administrator is signed in with administrator privileges.
+
+**Postconditions:**
+
+- POST-1. Approved: the person holds the Volunteer role, and every sign-up they had pending is confirmed. It still occupies the same slot.
+- POST-2. Denied: that one sign-up is recorded as denied, its slot reappears as open, and the person cannot sign up for that shift again. Their other sign-ups and their volunteer status are unchanged.
+- POST-3. The person has been notified of the decision, or the administrator can see that the notification failed.
+
+**Main Success Scenario:**
+
+1. The administrator indicates they want to review new volunteers.
+2. The system displays each person awaiting approval with their name, email, and pending shifts.
+3. The administrator approves a person.
+4. The system gives the person the Volunteer role and confirms their pending sign-ups, together, as one change.
+5. The system notifies the person that they are approved.
+6. The system confirms the approval to the administrator.
+7. Use case ends.
+
+**Extensions:**
+
+- **2a. Nobody is awaiting approval:**
+    - 2a1. The system displays that there is nobody to review.
+    - 2a2. Use case ends.
+- **3a. The administrator denies one of the person's pending sign-ups:**
+    - 3a1. The system records that sign-up as denied, and its slot reopens.
+    - 3a2. The system notifies the person that their sign-up for that shift was denied.
+    - 3a3. The system confirms the denial to the administrator. If the person has other pending sign-ups, they are still awaiting approval; otherwise the use case ends.
+- **3b. The person cancelled all their pending sign-ups before the administrator decided:**
+    - 3b1. The administrator may still approve the person; the approval is recorded and there are no sign-ups to change.
+- **4a. The change cannot be saved (e.g., a network or server failure):**
+    - 4a1. The system informs the administrator the decision was not recorded; the person and their sign-ups are unchanged.
+    - 4a2. The administrator may retry from step 3.
+- **4b. The same decision is submitted twice (duplicate submission):**
+    - 4b1. The system records it once, notifies the person once, and confirms it again (`FR-SAVE-duplicate-submission`).
+- **5a. The notification cannot be sent (e.g., the delivery channel is unavailable):**
+    - 5a1. The decision stays recorded, and the system shows the administrator that the notification did not go out (`FR-NOTIFY-preserve-business-state`).
+    - 5a2. Use case resumes at step 6.
+
+**Priority:** High — once this exists, no new volunteer's sign-up is confirmed until an administrator acts.
+**Frequency of Use:** Once per new volunteer, concentrated in the recruitment window (`AS-seasonal-readiness`).
+**Business Rules:** `BR-volunteer-assignment`
+
+**Associated Information:**
+
+| Property name | Data type | Validation rule | Security or access concerns | Glossary reference |
+|---|---|---|---|---|
+| volunteer status | Enum | Not yet approved, or approved; set only by this use case | Visible to the person and administrators; editable only by administrators | Volunteer |
+| sign-up decision | Enum | Pending, approved, or denied, per sign-up; a denied sign-up is final for that shift | Visible to the person and administrators; editable only by administrators | — |
+
+**Related Use Cases:** `UC-VOL-signup`: Sign up for a volunteer shift; `UC-VOL-view-schedule`: View assigned shifts and hours; `UC-ADM-notify-volunteers`: Notify volunteers of open shifts
+**Assumptions:** The decision notification goes only to the person decided on, once per decision, so it does not add to the over-notification Wendy wants to avoid (`OI-7`). The delivery channel is the same undecided one as `UC-ADM-notify-volunteers`.
+**Open Issues:** none.
 
 ---
 
