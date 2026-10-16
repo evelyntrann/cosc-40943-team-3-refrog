@@ -208,13 +208,13 @@ sequenceDiagram
     UI->>C: Request eligibility (step 2)
     C->>A: Require signed-in account (PRE-1)
     A-->>C: Authenticated account (PRE-1)
-    C->>SV: Read eligibility for account (step 2; BR-shopper-verification)
+    C->>SV: Read eligibility for account (step 2, BR-shopper-verification)
     SV->>R: Read saved verification (step 2)
     R-->>SV: Not email-verified (step 2)
     Note over SV: Volunteer status check shown in alternative-flow diagram
     SV-->>C: Not yet eligible (step 2)
     C-->>UI: Show TCU email form (step 3)
-    loop Until an allowed TCU email is submitted (step 3; extension 3a)
+    loop Until an allowed TCU email is submitted (step 3, extension 3a)
         S->>UI: Enter TCU email (step 3)
         UI->>C: Request code for email (steps 3-4)
         C->>SV: Validate email for authenticated account (steps 3-4)
@@ -231,20 +231,20 @@ sequenceDiagram
             C-->>UI: Show code entry (step 5)
         end
     end
-    loop Until a valid code is accepted or shopper leaves (steps 5-6; extension 5a)
+    loop Until a valid code is accepted or shopper leaves (steps 5-6, extension 5a)
         S->>UI: Enter code (step 5)
         UI->>C: Submit code (steps 5-6)
         C->>SV: Verify for authenticated account (step 6)
-        SV->>R: Check email verification request and expiry; atomically consume and mark verified if valid (step 6)
-        R-->>SV: Verification result (step 6; 5a)
-        alt Code is incorrect, expired, or already consumed (single-use rule; 5a)
+        SV->>R: Check email verification request and expiry, atomically consume and mark verified if valid (step 6)
+        R-->>SV: Verification result (step 6, 5a)
+        alt Code is incorrect, expired, or already consumed (single-use rule, 5a)
             SV-->>C: Reject code (5a1)
             C-->>UI: Show correction and resend options (5a1)
             UI-->>S: Retry code or request resend (5a2)
             opt Shopper requests resend (5a2)
                 S->>UI: Request another code (5a2)
                 UI->>C: Request code for account email (5a2)
-                C->>SV: Repeat code-request flow (5a2; step 4)
+                C->>SV: Repeat code-request flow (5a2, step 4)
                 Note over SV,E: Repeat step 4 email verification request creation and email delivery
             end
         else Code is valid and verified status is persisted
@@ -271,14 +271,14 @@ sequenceDiagram
     UI->>C: Request eligibility (step 2)
     C->>A: Require signed-in account (PRE-1)
     A-->>C: Authenticated account (PRE-1)
-    C->>SV: Read account eligibility (step 2; BR-shopper-verification)
+    C->>SV: Read account eligibility (step 2, BR-shopper-verification)
     SV->>R: Read saved email verification (step 2)
     R-->>SV: Saved verification status (step 2)
     alt TCU email was already verified (2a)
         SV-->>C: Eligible through verified TCU email (2a1)
-        C-->>UI: Display saved confirmation; skip email/code entry (2a1)
+        C-->>UI: Display saved confirmation, skip email/code entry (2a1)
         UI-->>S: Confirmation available (2a1)
-        S->>V: Show confirmation (2a2; step 8)
+        S->>V: Show confirmation (2a2, step 8)
     else No saved TCU email verification
         SV->>A: Check current volunteer role for authenticated account (BR-shopper-verification)
         A-->>SV: Administrator-granted volunteer role present or absent (BR-shopper-verification)
@@ -286,10 +286,10 @@ sequenceDiagram
             SV-->>C: Eligible through volunteer status (BR-shopper-verification)
             C-->>UI: Display volunteer eligibility confirmation (BR-shopper-verification)
             UI-->>S: No TCU email/code required (BR-shopper-verification)
-            S->>V: Show eligibility confirmation (BR-shopper-verification; step 8)
+            S->>V: Show eligibility confirmation (BR-shopper-verification, step 8)
             Note over SV,R: Do not change email verification state
         else Not a recognized volunteer
-            SV-->>C: Not yet eligible; offer email verification (steps 2-3)
+            SV-->>C: Not yet eligible, offer email verification (steps 2-3)
             C-->>UI: Continue main email verification flow (step 3)
         end
     end
@@ -304,7 +304,7 @@ sequenceDiagram
     Note over S,V: Shopper has no recognized volunteer status and cannot access TCU email (5b)
     S->>V: Request in-person verification (5b)
     V->>S: Perform existing visual ID check (5b1)
-    Note over S,V: App verification flow ends; no account email-verification update (5b2)
+    Note over S,V: App verification flow ends, no account email-verification update (5b2)
 ```
 
 The visual ID fallback does not define a server-side override for submitting shopping records; digital access remains unresolved under `OI-19`. Email delivery and persistence failure behavior is specified in API contract and Data model below. Numeric resend/attempt limits follow the approved policy below; no diagram implies verification success after a required operation fails.
