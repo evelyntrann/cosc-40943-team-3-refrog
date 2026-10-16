@@ -264,10 +264,10 @@ _[Check before Checkpoint 1: every area in your use case file appears in the fir
 
 | Use case area | Component | Responsibility | Depends on | Status |
 |---|---|---|---|---|
-| `VOL` | Volunteer Scheduling | Owns a volunteer's shift sign-ups, cancellations, and their own schedule and hours | Administration, Authentication, Notifications | provisional |
+| `VOL` | Volunteer Scheduling | Owns a volunteer's shift sign-ups, cancellations, and their own schedule and hours | Administration, Location Info, Authentication | provisional |
 | `IDV` | Identity Verification | Owns determining whether a signed-in shopper is eligible to shop — TCU-affiliated (confirmed 2026-10-02 via a one-time code sent to a TCU email, not a sign-in domain check) or a registered volunteer | Authentication, Volunteer Scheduling, Email delivery channel | provisional |
 | `LOC` | Location Info | Owns the list of active ReFrog locations, hours, and event info shown to every participant | Administration | provisional |
-| `ADM` | Administration | Owns shift creation and configuration, manually triggering a notification to volunteers about open shifts (confirmed 2026-10-02, not an automatic alert), and the cross-location dashboard of donation, shopping, and volunteer-coverage activity | Authentication, Volunteer Scheduling, Shopping, Donation, Shopping-Abuse Monitoring, Email delivery channel | provisional |
+| `ADM` | Administration | Owns shift creation and configuration, approving new volunteers and denying their sign-ups (`UC-ADM-review-volunteer`), manually triggering a notification to volunteers about open shifts (confirmed 2026-10-02, not an automatic alert), and the cross-location dashboard of donation, shopping, and volunteer-coverage activity | Authentication, Volunteer Scheduling, Shopping, Donation, Shopping-Abuse Monitoring, Email delivery channel | provisional |
 | `ABU` | Shopping-Abuse Monitoring | Owns flagging and administrator review of potentially-excessive shopping activity | Shopping, Authentication | provisional |
 | `SHP` | Shopping | Owns recording what a shopper takes during a visit | Identity Verification, Administration | provisional |
 | `DON` | Donation | Owns recording what a donor drops off at a location | Administration | provisional |
