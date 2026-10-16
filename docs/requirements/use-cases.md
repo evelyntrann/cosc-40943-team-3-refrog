@@ -116,10 +116,10 @@ _Data fields are specified as a table:_
 
 | Area code | Feature area | Use cases |
 |---|---|---|
-| `VOL` | Volunteer scheduling, from `FEAT-volunteer-scheduling` | `UC-VOL-signup`, `UC-VOL-cancel-shift`, `UC-VOL-view-schedule` |
+| `VOL` | Volunteer scheduling, from `FEAT-volunteer-scheduling` | `UC-VOL-signup`, `UC-VOL-cancel-shift`, `UC-VOL-view-schedule`, `UC-VOL-request-access` |
 | `IDV` | Identity verification, from `FEAT-identity-verification` | `UC-IDV-verify-affiliation` |
 | `LOC` | Location info, from `FEAT-location-info` | `UC-LOC-view-locations` |
-| `ADM` | Administration, from `FEAT-adminstration` | `UC-ADM-view-dashboard`, `UC-ADM-manage-shifts`, `UC-ADM-notify-volunteers` |
+| `ADM` | Administration, from `FEAT-adminstration` | `UC-ADM-view-dashboard`, `UC-ADM-manage-shifts`, `UC-ADM-notify-volunteers`, `UC-ADM-review-volunteer-request`, `UC-ADM-grant-volunteer-access`, `UC-ADM-remove-volunteer-access` |
 | `ABU` | Shopping-abuse monitoring, from `FEAT-shopping-monitoring` | `UC-ABU-review-alert` |
 | `SHP` | Shopping, from `FEAT-shopping` | `UC-SHP-log-item-taken` |
 | `DON` | Donation, from `FEAT-donation` | `UC-DON-log-donation` |
@@ -127,6 +127,8 @@ _Data fields are specified as a table:_
 A note on `UC-VOL-claim-open-shift`: an earlier draft of this list had it as a separate use case from `UC-VOL-signup`. It was folded in below — claiming a shift that opened from a cancellation and signing up for a shift nobody has taken yet are the same actor/system dialogue; only the reason the shift is open differs, and the system does not need to treat them differently.
 
 ---
+
+**Volunteer role decision (2026-10-16):** Team decision with Alexa Mercado: administrators approve volunteer requests or grant access manually by verified sign-in email. Approval creates the volunteer role; pending requests do not. A signed-in role holder may shop without TCU email verification. This is separate from shift assignment; whether role approval is required before shift signup remains `OI-18`.
 
 ## 4. Use Cases
 
@@ -294,6 +296,46 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 ---
 
+### UC-VOL-request-access: Request volunteer access
+
+**UC ID and Name:** `UC-VOL-request-access`: Request volunteer access
+**Created By:** Alexa Mercado
+**Date Created:** 2026-10-16
+**Primary Actor:** Signed-in user
+**Secondary Actors:** Administrator (reviews separately)
+**Trigger:** The user selects **Become a volunteer**.
+**Description:** Request the administrator-granted volunteer role. Source: team decision with Alexa Mercado, not a recorded client approval.
+
+**Preconditions:**
+- PRE-1. The user is signed in.
+
+**Postconditions:**
+- POST-1. A pending request is recorded for the authenticated account; no volunteer role is granted by requesting.
+
+**Main Success Scenario:**
+1. The user selects Become a volunteer.
+2. The system checks the account's role and existing request.
+3. The system records a pending request for that account.
+4. The system displays Volunteer access pending approval.
+5. Use case ends.
+
+**Extensions:**
+- **2a. The account already has the volunteer role:** Display existing volunteer access; use case ends.
+- **2b. A pending request already exists:** Return its status without a duplicate; continue at step 4.
+- **2c. A prior request was declined for the current annual event:** Do not create another request for the same event or grant permissions. Explain that the user may request again for the next annual event, or Wendy may manually grant access through `UC-ADM-grant-volunteer-access`.
+- **2d. A prior request was declined for a previous annual event:** Allow a new request for the next annual event; continue at step 3. The new request remains pending until administrator approval.
+- **2e. Access was removed or expired:** Do not restore privileges through request submission alone; use the administrator renewal workflow.
+- **3a. Saving fails:** Report that the request was not confirmed, preserve the previous state, and allow retry. A retry after an actual successful write returns the existing request.
+
+**Priority:** High for the approved-volunteer access workflow.
+**Frequency of Use:** Once per prospective volunteer, with possible retries.
+**Business Rules:** `BR-volunteer-role-approval`
+**Associated Information:** Account identity comes from sign-in, never a user-selected target account. Store request status and timestamps; only the requester and administrators may view the request. Failed writes do not grant access.
+**Related Use Cases:** `UC-ADM-review-volunteer-request`, `UC-IDV-verify-affiliation`
+**Assumptions:** Approval grants a role, not a shift assignment.
+**Policy:** Declined requests may be resubmitted for the next annual event; Wendy may manually approve earlier. See `BR-volunteer-request-resubmission`. Shift approval belongs to the scheduling owner.
+
+---
 ## Area: Identity Verification (`IDV`)
 
 ### UC-IDV-verify-affiliation: Verify a shopper's TCU affiliation before shopping
@@ -312,17 +354,17 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 **Postconditions:**
 
-- POST-1. The shopper's TCU affiliation is verified (if not already) and the shopper is permitted to shop, enabling `UC-SHP-log-item-taken`.
+- POST-1. After the current account-restriction check succeeds, the signed-in shopper is eligible through verified TCU email or an active administrator-granted volunteer role, enabling `UC-SHP-log-item-taken`. Role-based eligibility does not mark TCU email as verified; restrictions take precedence under `FR-AUTH-volunteer-lifecycle`.
 
 **Main Success Scenario:**
 
 1. The shopper indicates they want to shop.
-2. The system checks whether the shopper has already completed TCU email verification.
+2. The system checks current trusted account restrictions first, then determines eligibility from saved TCU email verification or an active administrator-granted volunteer role. Either qualifying path suffices; see `FR-AUTH-shopping-eligibility`.
 3. The shopper enters their TCU email address on their profile.
 4. The system sends a one-time code to that email address.
 5. The shopper enters the code.
 6. The system verifies the code and marks the shopper as TCU-affiliated.
-7. The system displays a confirmation the shopper can show a volunteer.
+7. The system displays “TCU email verified”, which the shopper can show a volunteer.
 8. The shopper shows the confirmation to the volunteer at the location for a quick visual check, consistent with `BR-shopper-verification`.
 9. Use case ends.
 
@@ -331,19 +373,28 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 - **2a. The shopper has already verified on a previous visit:**
     - 2a1. The system skips steps 3–6 and displays the existing verified confirmation.
     - 2a2. Use case continues at step 8.
+- **2b. The signed-in account has an administrator-granted volunteer role:**
+    - 2b1. The account displays its current role as “Volunteer” and the system skips steps 3-6, whether or not the volunteer has a TCU email. If TCU email is also verified, its verification status is displayed separately.
+    - 2b2. Use case continues at step 8; email-verification state is unchanged.
+- **2c. The account has revoked or expired volunteer access:**
+    - 2c1. The account view shows “Volunteer access inactive—administrator review required”; the system denies shopping access despite retained TCU email verification.
+    - 2c2. Use case ends without restoring participation permissions.
+- **2d. Required current restriction or eligibility state is unavailable:**
+    - 2d1. The system reports “Unable to verify access—try again”, preserves saved verification and offers retry without granting shopping access.
+    - 2d2. Use case resumes at step 2 on retry.
 - **3a. The entered email is not a TCU email address:**
     - 3a1. The system rejects the entry and asks the shopper to enter a TCU email.
     - 3a2. Use case resumes at step 3.
 - **5a. The entered code is incorrect or expired:**
     - 5a1. The system rejects the code and offers to resend it.
     - 5a2. Use case resumes at step 4 or step 5.
-- **5b. The shopper cannot access a TCU email at all:**
+- **5b. The shopper has no approved volunteer role and cannot access a TCU email:**
     - 5b1. The volunteer falls back to the current visual ID check (`BR-shopper-verification`) rather than the app.
     - 5b2. Use case ends.
 
 **Priority:** High — named by the client alongside volunteer sign-up as a top priority.
 **Frequency of Use:** The email-code check happens once per shopper; the confirmation display happens every shopping visit, thousands per event.
-**Business Rules:** `BR-shopper-tcu-affiliation`, `BR-shopper-verification`
+**Business Rules:** `BR-shopper-tcu-affiliation`, `BR-shopper-verification`, `BR-volunteer-role-approval`, `BR-volunteer-role-lifecycle`
 
 **Associated Information:**
 
@@ -352,9 +403,9 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 | TCU email address | String | Required; must end in the TCU email domain | Visible only to the shopper and administrators | TCU ID |
 | verification code | String | Required; time-limited, single-use | Never logged in plain form after use | — |
 
-**Related Use Cases:** `UC-SHP-log-item-taken`: Record items taken while shopping
+**Related Use Cases:** `UC-SHP-log-item-taken`: Record items taken while shopping; `UC-VOL-request-access`; `UC-ADM-review-volunteer-request`; `UC-ADM-grant-volunteer-access`; `UC-ADM-remove-volunteer-access`
 **Assumptions:** Verification persists across visits once completed, rather than being repeated every time — not explicitly confirmed with the client, but implied by "that would help a lot" language around keeping the app simple for repeat shoppers.
-**Open Issues:** none — `OI-10` is resolved. Whether the code is delivered only by email or could also use a phone-displayed indicator (mentioned once by the client as an alternative) is a minor implementation detail, not a blocking question.
+**Open Issues:** `OI-10` is resolved. `OI-19` remains open: the existing visual-ID fallback does not yet specify how a successful physical check grants digital shopping access. Do not infer a digital override.
 
 ---
 
@@ -561,6 +612,120 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 ---
 
+### UC-ADM-review-volunteer-request: Approve or decline volunteer access
+
+**UC ID and Name:** `UC-ADM-review-volunteer-request`: Approve or decline volunteer access
+**Created By:** Alexa Mercado with Codex assistance
+**Date Created:** 2026-10-16
+**Primary Actor:** Administrator
+**Secondary Actors:** Requesting user
+**Trigger:** An administrator opens volunteer access requests.
+**Description:** Decide a pending request; approval grants the volunteer role. Source: team decision with Alexa Mercado, not a recorded client approval.
+**Preconditions:**
+- PRE-1. The administrator is signed in with administrator privileges.
+**Postconditions:**
+- POST-1. The decision is stored; an approval grants the role and a decline does not.
+- POST-2. The administrator, time, and action are recorded for auditing.
+**Main Success Scenario:**
+1. The administrator opens pending requests.
+2. The system checks privileges and displays the requests.
+3. The administrator selects a request.
+4. The system displays its account and current status.
+5. The administrator approves or declines.
+6. The system saves the decision, any role grant, and the audit event as one complete operation.
+7. The system confirms the resulting request and role status.
+**Extensions:**
+- **2a. User is not an administrator:** Deny access without returning requests; use case ends.
+- **2b. No pending requests:** Display an empty list; use case ends.
+- **4a. Request is missing or no longer pending:** Display the current result or not-found response; do not overwrite a prior decision.
+- **5a. Administrator cancels:** Make no changes; use case ends.
+- **6a. Persistence fails:** Report failure and leave request and role state unchanged; permit retry.
+- **6b. Another administrator decided first or the request is submitted twice:** Return the saved decision, refuse a conflicting change, and do not duplicate the grant.
+**Priority:** High for volunteer access approval.
+**Frequency of Use:** During volunteer recruitment.
+**Business Rules:** `BR-volunteer-role-approval`, `BR-shopper-verification`
+**Associated Information:** Only administrators can decide requests. Pending and declined requests convey no role. Approval does not assign a shift or set email-verification state.
+**Related Use Cases:** `UC-VOL-request-access`, `UC-ADM-remove-volunteer-access`, `UC-IDV-verify-affiliation`
+**Assumptions:** No approval notification channel is added by this decision; users can see request status in their account.
+**Open Issues:** `OI-18`.
+
+---
+
+### UC-ADM-grant-volunteer-access: Add a volunteer by email
+
+**UC ID and Name:** `UC-ADM-grant-volunteer-access`: Add a volunteer by email
+**Created By:** Alexa Mercado
+**Date Created:** 2026-10-16
+**Primary Actor:** Administrator, including Wendy
+**Secondary Actors:** Volunteer; sign-in provider
+**Trigger:** An administrator chooses to add a volunteer directly.
+**Description:** Grant access without a user request by matching a verified sign-in email. Source: team decision with Alexa Mercado, not a recorded client approval.
+**Preconditions:**
+- PRE-1. The administrator is signed in with administrator privileges.
+**Postconditions:**
+- POST-1. The matching account has the volunteer role, or an email approval is pending verified account sign-in.
+- POST-2. The administrator action is recorded for auditing.
+**Main Success Scenario:**
+1. The administrator selects Add volunteer by email.
+2. The system verifies administrator privileges and asks for an email.
+3. The administrator enters the email and confirms.
+4. The system validates it and looks for an account with the matching verified sign-in email.
+5. The system grants the role to the matching account and records the approval and audit event.
+6. The system confirms volunteer access was granted.
+**Extensions:**
+- **2a. User lacks privileges:** Deny access; use case ends.
+- **3a. Administrator cancels:** Make no changes; use case ends.
+- **4a. Email is invalid:** Request correction; resume step 3.
+- **4b. No matching account exists:** Store a pending email approval and audit event; display that access awaits sign-in. On later sign-in, apply the unrevoked approval only when the provider verifies the matching email; store the role and claimed approval atomically. A different or unverified email cannot claim it.
+- **4c. More than one account matches:** Do not grant access; report that account resolution is required.
+- **5a. Role or pending approval already exists:** Return the existing state without creating a duplicate.
+- **5b. Saving fails, including during later approval claim:** Report failure; do not confirm a grant or claim that did not persist; allow safe retry.
+**Priority:** High for administrator-directed volunteer access.
+**Frequency of Use:** During recruitment and volunteer onboarding.
+**Business Rules:** `BR-volunteer-role-approval`
+**Associated Information:** A typed profile email or TCU affiliation email is insufficient to claim a manual grant; match provider-verified sign-in email. Pending approval grants no access. No account credentials, invitation message, or shift assignment are created by this use case.
+**Related Use Cases:** `UC-ADM-remove-volunteer-access`, `UC-IDV-verify-affiliation`
+**Assumptions:** General sign-in remains the existing authentication flow.
+**Role lifecycle:** At the configured annual event end, volunteer privileges expire. Each new annual event requires administrator review and approval before renewal; access does not renew automatically. Email changes on the same account preserve an active role. See `BR-volunteer-role-lifecycle`.
+**Open Issues:** Remaining policies in partially resolved `OI-18`; shift approval and assignments are outside this update.
+
+---
+
+### UC-ADM-remove-volunteer-access: Remove volunteer access
+
+**UC ID and Name:** `UC-ADM-remove-volunteer-access`: Remove volunteer access
+**Created By:** Alexa Mercado
+**Date Created:** 2026-10-16
+**Primary Actor:** Administrator
+**Secondary Actors:** Affected user
+**Trigger:** An administrator decides a role or pending email approval should be removed.
+**Description:** Revoke volunteer access and restrict the account to general information; retained TCU email verification does not permit participation. Source: team decision with Alexa Mercado, not a recorded client approval.
+**Preconditions:**
+- PRE-1. The administrator is signed in with administrator privileges.
+**Postconditions:**
+- POST-1. The role or pending approval is revoked and older pending grants cannot restore it on sign-in.
+- POST-2. The administrator action is audited; the account has general-information access only even if TCU email verification is retained.
+**Main Success Scenario:**
+1. The administrator selects an account or pending email approval.
+2. The system verifies privileges and displays the current access state.
+3. The administrator confirms removal.
+4. The system removes the role or revokes the pending approval, invalidates older pending grants and requests, records the account restriction where an account exists, clears active assignments and releases occupied capacity, and records the audit event atomically.
+5. The system confirms removal. Subsequent protected checks enforce general-information-only access, including for existing sessions.
+**Extensions:**
+- **2a. Caller lacks privileges:** Deny access; use case ends.
+- **2b. Target does not exist:** Report not found; make no changes.
+- **3a. Administrator cancels:** Make no changes; use case ends.
+- **4a. Access was already removed:** Confirm the existing state without further effect.
+- **4b. Persistence fails:** Preserve prior state and report failure; permit retry.
+**Priority:** High for role integrity.
+**Frequency of Use:** Occasional corrections or volunteer status changes.
+**Business Rules:** `BR-volunteer-role-approval`, `BR-shopper-verification`
+**Associated Information:** Role removal places the account in general-information-only access, even if it retains previously verified TCU email; administrator renewal is required to restore volunteer privileges. Shift cancellation alone never removes the role. Role removal clears active assignments and their occupied capacity; historical records follow retention policy. Shift approval remains with the scheduling owner.
+**Related Use Cases:** `UC-ADM-review-volunteer-request`, `UC-ADM-grant-volunteer-access`, `UC-IDV-verify-affiliation`
+**Assumptions:** Any later role grant requires a new explicit administrator decision.
+**Open Issues:** `OI-18`.
+
+---
 ## Area: Shopping-Abuse Monitoring (`ABU`)
 
 ### UC-ABU-review-alert: Review and act on a potential shopping-abuse alert
@@ -627,7 +792,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 **Preconditions:**
 
-- PRE-1. The shopper's TCU affiliation has been verified for this visit (`UC-IDV-verify-affiliation`).
+- PRE-1. The shopper is signed in and has either persisted TCU email verification or an administrator-granted volunteer role, as checked by `UC-IDV-verify-affiliation`.
 
 **Postconditions:**
 

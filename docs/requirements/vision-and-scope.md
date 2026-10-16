@@ -469,10 +469,10 @@ _Examples:_
 - _`FEAT-performance-tracking`: Submit and review weekly activity reports and peer evaluations._
 - _`FEAT-grade-generation`: Generate weekly activity report and peer evaluation grades for an entire section._
 
-- _`FEAT-volunteer-scheduling`: Manage volunteer sign up, cancellations, view hours_
-- _`FEAT-identity-verification`: verify tcu affiliation for shoppers that are students/faculty/staff_
+- _`FEAT-volunteer-scheduling`: Manage volunteer sign up, cancellations, view hours, and requests for administrator-approved volunteer access_
+- _`FEAT-identity-verification`: Verify shopping eligibility through TCU email verification or an administrator-granted volunteer role_
 - _`FEAT-location-info`: view donation location,hours, and general information_
-- _`FEAT-adminstration`: Admin can view dashboards about event data._
+- _`FEAT-adminstration`: Administrators can view event dashboards, approve or decline volunteer access requests, grant volunteer access manually by verified sign-in email, and remove volunteer access._
 - _`FEAT-shopping-monitoring`: Admins receive alerts about potential shopping abuse_
 **- _`FEAT-shopping`: volunteers/shoppers add items that were shopped._
 - _`FEAT-donation`: Donators add items that were donated at each location._
