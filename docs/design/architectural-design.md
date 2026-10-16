@@ -124,7 +124,7 @@ C4Context
     Rel(shopper, refrog, "Submits shopping forms after affiliation is confirmed")
     Rel(visitor, refrog, "Views event info, locations, hours")
     Rel(refrog, authprovider, "Authenticates users")
-    Rel(refrog, notification, "Sends a TCU email verification code; sends shift reminders and staffing alerts")
+    Rel(refrog, notification, "Sends a TCU email verification code; sends shift reminders and administrator-triggered notifications")
 ```
 
 ### Boundary-crossing relationships

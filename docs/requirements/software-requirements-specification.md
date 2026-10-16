@@ -206,7 +206,7 @@ Scoped deliberately below MVP scale: ReFrog is run by three non-technical founde
 
 **`FR-AUTH-enforce-permissions`**
 
-When a user requests volunteer scheduling data, shopping activity, or an administrator function, the system shall verify the user is signed in and, for administrator functions, is recognized as one of the three ReFrog administrators, before returning or changing any protected data. Donation logging is excluded from this requirement until `OI-4` (whether it requires sign-in at all) is resolved.
+When a user requests volunteer scheduling data, shopping activity, or an administrator function, the system shall verify the user is signed in and, for administrator functions, is recognized as one of the three ReFrog administrators, before returning or changing any protected data. Donation logging is excluded from this requirement: it does not require sign-in (`OI-4`, resolved 2026-10-02).
 
 **Verification:** Request the administrator dashboard while signed in as a volunteer. The request is denied and no administrator data is returned. Request a volunteer's own shift assignments while signed out. The request is denied.
 
