@@ -44,6 +44,7 @@ _Within one use case, `PRE-1`, `POST-1`, and the step numbers are local and may 
 | Date | Version | Description | Author |
 |---|---|---|---|
 | 2026-09-23 | 0.1 | Initial use cases derived from the vision and scope feature list and the first client meeting | Evelyn Tran |
+| 2026-10-16 | 0.2 | `UC-SHP-log-item-taken`: category is now required, one per item taken (was optional extension 2a); added extension 3b | Alfonsotomax |
 
 ---
 
@@ -869,25 +870,25 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 **Postconditions:**
 
-- POST-1. The shopping visit (location, date, item count) is recorded.
+- POST-1. The shopping visit (location, date, item count, and the category of each item) is recorded.
 
 **Main Success Scenario:**
 
 1. The shopper indicates they are finished selecting items.
-2. The system asks the shopper to enter the number of items taken.
-3. The shopper enters the count and confirms.
+2. The system asks the shopper to enter the number of items taken and to select a category for each item, from the same fixed category set used for donations (confirmed 2026-10-02, matching `UC-DON-log-donation`'s extension 2a).
+3. The shopper enters the count, selects a category for each item, and confirms.
 4. The system records the shopping visit.
 5. The system confirms the entry to the shopper.
 6. Use case ends.
 
 **Extensions:**
 
-- **2a. The shopper selects a category for the items taken:**
-    - 2a1. The system offers the same fixed category set used for donations (confirmed 2026-10-02, matching `UC-DON-log-donation`'s extension 2a), so the two sides of the program use consistent categories.
-    - 2a2. Use case continues at step 3.
 - **3a. The shopper enters an invalid count (negative, non-numeric, or zero):**
     - 3a1. The system rejects the entry and asks the shopper to correct it.
     - 3a2. Use case resumes at step 2.
+- **3b. The shopper does not select a category for every item:**
+    - 3b1. The system rejects the entry, indicates which items are missing a category, and keeps the values already entered.
+    - 3b2. Use case resumes at step 3.
 - **4a. The entry cannot be saved (for example, a connectivity issue at an outdoor location):**
     - 4a1. The system informs the shopper the entry could not be saved and offers to retry.
     - 4a2. Use case resumes at step 3, or the shopper reports the count to a volunteer as a fallback.
@@ -905,12 +906,12 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 |---|---|---|---|---|
 | location | Reference | Required; must reference an active ReFrog location | Visible to administrators | Donation Location |
 | item count | Integer | Required; positive whole number | Visible to administrators | Item |
-| category | Enum, same fixed set as `UC-DON-log-donation` | Optional | Visible to administrators | Item |
+| category | Enum, same fixed set as `UC-DON-log-donation` | Required; one category per item taken, so the number of categories equals the item count (repeats allowed) | Visible to administrators | Item |
 
 A failed save leaves no visit recorded. A retry of the same submission, whether user-initiated or a duplicate, must not record the same visit twice.
 
 **Related Use Cases:** `UC-IDV-verify-affiliation`, `UC-ADM-view-dashboard`, `UC-ABU-review-alert`
-**Assumptions:** Items are counted in aggregate, not itemized individually, consistent with current practice. Confirmed 2026-10-02 that the shopper self-reports this (not a volunteer on their behalf), resolving `OI-13`.
+**Assumptions:** Items are counted, not described individually: the shopper gives a count and a category for each item, with no item names or descriptions. Category became required by team decision on 2026-10-16 (previously optional extension 2a). Confirmed 2026-10-02 that the shopper self-reports this (not a volunteer on their behalf), resolving `OI-13`.
 **Open Issues:** none beyond `OI-11`, already tracked under `UC-ABU-review-alert`.
 
 ---
