@@ -31,7 +31,7 @@ _Within one use case, `PRE-1`, `POST-1`, and the step numbers are local and may 
 |---|---|---|
 | `VOL` | Volunteer scheduling | `FEAT-volunteer-scheduling`, `FEAT-volunteer-notification` |
 | `IDV` | Identity verification | `FEAT-identity-verification` |
-| `LOC` | Location info | `FEAT-location-info` |
+| `INF` | Event & location information | `FEAT-event-info` (formerly `FEAT-location-info`) |
 | `ADM` | Administration | `FEAT-adminstration` |
 | `ABU` | Shopping-abuse monitoring | `FEAT-shopping-monitoring` |
 | `SHP` | Shopping | `FEAT-shopping` |
@@ -55,7 +55,7 @@ This document specifies the goals a donor, shopper, volunteer, or administrator 
 
 ### 1.2 Scope
 
-This document covers the feature areas listed above: `FEAT-volunteer-scheduling`, `FEAT-volunteer-notification`, `FEAT-identity-verification`, `FEAT-location-info`, `FEAT-adminstration`, `FEAT-shopping-monitoring`, `FEAT-shopping`, and `FEAT-donation`.
+This document covers the feature areas listed above: `FEAT-volunteer-scheduling`, `FEAT-volunteer-notification`, `FEAT-identity-verification`, `FEAT-event-info` (formerly `FEAT-location-info`), `FEAT-adminstration`, `FEAT-shopping-monitoring`, `FEAT-shopping`, and `FEAT-donation`.
 
 `FEAT-donation-partners` is explicitly **not** covered here — confirmed 2026-10-02 (`OI-3`, resolved) that donation partners get no app access at all; pickups stay coordinated through administrators.
 
@@ -118,7 +118,7 @@ _Data fields are specified as a table:_
 |---|---|---|
 | `VOL` | Volunteer scheduling, from `FEAT-volunteer-scheduling` | `UC-VOL-signup`, `UC-VOL-cancel-shift`, `UC-VOL-view-schedule` |
 | `IDV` | Identity verification, from `FEAT-identity-verification` | `UC-IDV-verify-affiliation` |
-| `LOC` | Location info, from `FEAT-location-info` | `UC-LOC-view-locations` |
+| `INF` | Event & location information, from `FEAT-event-info` | `UC-INF-view-event-info`, `UC-INF-view-locations`, `UC-INF-view-role-guides` |
 | `ADM` | Administration, from `FEAT-adminstration` | `UC-ADM-view-dashboard`, `UC-ADM-manage-shifts`, `UC-ADM-notify-volunteers` |
 | `ABU` | Shopping-abuse monitoring, from `FEAT-shopping-monitoring` | `UC-ABU-review-alert` |
 | `SHP` | Shopping, from `FEAT-shopping` | `UC-SHP-log-item-taken` |
@@ -358,50 +358,157 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 ---
 
-## Area: Location Info (`LOC`)
+## Area: Event & Location Information (`INF`)
 
-### UC-LOC-view-locations: View donation site locations, hours, and event info
+### UC-INF-view-event-info: View overall event dates and general information
 
-**UC ID and Name:** `UC-LOC-view-locations`: View donation site locations, hours, and event info
-**Created By:** Evelyn Tran
-**Date Created:** 2026-09-23
-**Primary Actor:** App user (donor, shopper, or volunteer)
+**UC ID and Name:** `UC-INF-view-event-info`: View overall event dates and general information
+**Created By:** Evelyn Tran (updated by Team 03)
+**Date Created:** 2026-10-16
+**Primary Actor:** App user (visitor, donor, shopper, or volunteer)
 **Secondary Actors:** none
-**Trigger:** A user wants to know where ReFrog locations are, when they're open, or other event details.
-**Description:** A user views ReFrog's active locations and hours so they know where and when to go. This is written as one use case for all three actor types rather than three near-identical ones, since the system's behavior does not depend on which of the three is asking.
+**Trigger:** A user navigates to the app landing or overview page.
+**Description:** A user views high-level event dates, overall operational windows (finals week schedule), and a concise summary of what ReFrog is and how it diverts move-out waste. Prioritizes active event timing over lengthy historical narrative.
 
-**Preconditions:** none — this information is public today (the ReFrog website), and nothing in the client meeting indicated it should require sign-in.
+**Preconditions:** none — public information, accessible without signing in.
 
 **Postconditions:**
 
-- POST-1. The current locations, hours, and event info are displayed.
+- POST-1. The active event schedule and high-level event overview are displayed.
 
 **Main Success Scenario:**
 
-1. The user indicates they want to view ReFrog locations.
-2. The system retrieves the active locations and hours for the current event.
-3. The system displays each location's address or map, hours, and any relevant notes.
+1. The user indicates they want to view event overview information.
+2. The system retrieves active move-out dates, overall operating hours, and general event description.
+3. The system displays the event dates, campus-wide announcement notes, and a high-level overview.
 4. Use case ends.
 
 **Extensions:**
 
-- **2a. No event is currently active or scheduled:**
-    - 2a1. The system informs the user that no ReFrog event is currently scheduled.
+- **2a. No active event is configured:**
+    - 2a1. The system displays general off-season text explaining ReFrog's purpose and notes that dates for the upcoming move-out are pending.
     - 2a2. Use case ends.
 
-**Priority:** High — named directly among the client's top priorities.
-**Frequency of Use:** Very frequent; likely checked by nearly every participant.
+**Priority:** High
+**Frequency of Use:** Very frequent; default landing view for new or unauthenticated visitors.
 **Business Rules:** `BR-event-schedule`
 
 **Associated Information:**
 
 | Property name | Data type | Validation rule | Security or access concerns | Glossary reference |
 |---|---|---|---|---|
-| location name/address | String | Required | Public | Donation Location |
-| hours | Time range | Required | Public | — |
+| event dates | Date range | Required | Public | ReFrogEvent |
+| daily operating hours | Time range / Text | Required | Public | — |
+| overview summary | Rich text | Required | Public | — |
 
-**Related Use Cases:** `UC-DON-log-donation`, `UC-SHP-log-item-taken`, `UC-VOL-signup` — each references a location shown here.
-**Assumptions:** Viewing location info does not require signing in.
+**Related Use Cases:** `UC-INF-view-locations`, `UC-INF-view-role-guides`
+**Assumptions:** Viewing general event info does not require sign-in.
+**Open Issues:** none
+
+---
+
+### UC-INF-view-locations: View site locations, hours, map pins, and infographics
+
+**UC ID and Name:** `UC-INF-view-locations`: View site locations, hours, map pins, and infographics
+**Created By:** Evelyn Tran (updated by Team 03)
+**Date Created:** 2026-09-23
+**Primary Actor:** App user (donor, shopper, or volunteer)
+**Secondary Actors:** none
+**Trigger:** A user wants to find where ReFrog pods are located, check individual site hours, view external map pins, or consult visual guide infographics.
+**Description:** A user views ReFrog's active physical sites for the current move-out event. Because location configurations change year-to-year and have varying daily hours (e.g., King Family Commons open Mon–Sat vs Greek Village Mon–Tue), this screen presents per-site details, interactive map navigation links (Apple/Google Maps pins), and optional infographic/site map assets uploaded by organizers.
+
+**Preconditions:** none — public information, accessible without signing in.
+
+**Postconditions:**
+
+- POST-1. Active locations, operational hours per site, map pin links, and available site infographics are displayed.
+
+**Main Success Scenario:**
+
+1. The user indicates they want to view ReFrog locations and site details.
+2. The system retrieves the list of active locations for the current event, including site name, address/description, operating days, daily hours, map pin coordinates/links, and any associated infographic image URLs.
+3. The system displays the locations in a responsive list or card view, offering:
+    - Direct links to open coordinates in the user's native map application (Google Maps / Apple Maps).
+    - An expandable visual site map / infographic (if provided).
+4. The user may select an individual location to see specific pod notes, access instructions, and accepted item categories.
+5. Use case ends.
+
+**Extensions:**
+
+- **2a. No locations are active or configured:**
+    - 2a1. The system displays a message stating that location assignments for the current event are being finalized.
+    - 2a2. Use case ends.
+- **3a. The user opens the external map pin:**
+    - 3a1. The system launches the map URL using a standard universal map link (`https://maps.google.com/?q=lat,lng`).
+    - 3a2. Use case continues.
+
+**Priority:** High — essential for physical logistics during move-out week.
+**Frequency of Use:** Very frequent; referenced repeatedly by participants navigating campus pods.
+**Business Rules:** `BR-event-schedule`, `BR-event-in-person`
+
+**Associated Information:**
+
+| Property name | Data type | Validation rule | Security or access concerns | Glossary reference |
+|---|---|---|---|---|
+| location name | String | Required | Public | Donation Location |
+| address / description | String | Required | Public | — |
+| operating days & hours | String / Structured | Required (varies by site) | Public | — |
+| map pin link / coordinates | Geo URL / lat-lng | Optional | Public | — |
+| infographic / map image URL | URI | Optional | Public | — |
+
+**Related Use Cases:** `UC-INF-view-event-info`, `UC-INF-view-role-guides`, `UC-DON-log-donation`, `UC-SHP-log-item-taken`, `UC-VOL-signup`
+**Assumptions:** Accessible without sign-in on both mobile and desktop browsers.
+**Open Issues:** none
+
+---
+
+### UC-INF-view-role-guides: View participation guidelines for donors, shoppers, and volunteers
+
+**UC ID and Name:** `UC-INF-view-role-guides`: View participation guidelines for donors, shoppers, and volunteers
+**Created By:** Team 03
+**Date Created:** 2026-10-16
+**Primary Actor:** App user (donor, shopper, or volunteer)
+**Secondary Actors:** none
+**Trigger:** A user wants specific instructions on how to participate in a given role (donating items, shopping, or volunteering).
+**Description:** A user selects and views concise, role-specific guidelines:
+- **Donor Guide:** What items are accepted, drop-off expectations, anonymous/no-login drop-off flow, and pod etiquette.
+- **Shopper Guide:** Free shopping policy, TCU affiliation requirements (email code verification), shopping etiquette, and item logging.
+- **Volunteer Guide:** Shift check-in expectations, basic on-site duties, and communication protocols.
+
+**Preconditions:** none — public information, accessible without signing in.
+
+**Postconditions:**
+
+- POST-1. The selected role-specific guidance is displayed clearly to the user.
+
+**Main Success Scenario:**
+
+1. The user indicates they want to view participation guidelines.
+2. The system presents available role tabs: "For Donors", "For Shoppers", and "For Volunteers".
+3. The user selects a role tab (or defaults to Donor).
+4. The system retrieves and displays the concise guidance steps, rules, and FAQs for that specific role.
+5. Use case ends.
+
+**Extensions:**
+
+- **4a. The user switches to a different role tab:**
+    - 4a1. The system displays the guidelines for the newly selected role without reloading the page.
+    - 4a2. Use case continues at step 4.
+
+**Priority:** High — prevents participant confusion and sets clear expectations before users arrive at physical pods.
+**Frequency of Use:** Frequent; read by students, parents, and volunteers leading up to and during finals week.
+**Business Rules:** `BR-shopper-tcu-affiliation`, `BR-free-shopping`, `BR-donation-ease`, `BR-location-staffing`
+
+**Associated Information:**
+
+| Property name | Data type | Validation rule | Security or access concerns | Glossary reference |
+|---|---|---|---|---|
+| role identifier | Enum | One of `DONOR`, `SHOPPER`, `VOLUNTEER` | Public | Donator, Shopper, Volunteer |
+| instructional steps | List of Strings | Required | Public | — |
+| role business rules summary | Rich text | Required | Public | — |
+
+**Related Use Cases:** `UC-INF-view-event-info`, `UC-INF-view-locations`, `UC-DON-log-donation`, `UC-SHP-log-item-taken`, `UC-VOL-signup`
+**Assumptions:** Accessible publicly without authentication.
 **Open Issues:** none
 
 ---
@@ -733,7 +840,7 @@ A failed save leaves no visit recorded. A retry of the same submission, whether 
 
 A failed save leaves no donation recorded. A retry of the same submission, whether donor-initiated or a duplicate, must not record the same donation twice.
 
-**Related Use Cases:** `UC-LOC-view-locations`, `UC-ADM-view-dashboard`
+**Related Use Cases:** `UC-INF-view-locations`, `UC-INF-view-role-guides`, `UC-ADM-view-dashboard`
 **Assumptions:** none.
 **Open Issues:** none — `OI-4` is resolved. The exact final category list is not yet finalized with the client, but the shape (5–6 fixed options) is confirmed.
 
