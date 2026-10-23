@@ -25,7 +25,7 @@ ReFrog: a phone-first progressive web app for TCU's finals-week move-out donatio
 - One deployable: PWA front end and application modules ship together, one database (architecture §9.2 `KD-deployment-shape`).
 - Technology stack: **not yet chosen** — do not pick a language, framework, or database on your own (architecture §5.1, §8.2.4). Update this line when the team decides.
 - Hosting: **unresolved**, TCU IT vs. paid (`OI-15`); keep hosting specifics out of code.
-- Sign-in: Google Sign-In is the working candidate (`OI-17`); it proves identity only, never TCU affiliation (architecture §8.1).
+- Sign-in: the initial release uses ReFrog-managed account credentials (`OI-17`); Google Sign-In is out of scope and may be considered later only as an optional convenience. A ReFrog sign-in proves account identity only, never TCU affiliation (architecture §8.1).
 - TCU affiliation is proven only by the email one-time code (`UC-IDV-verify-affiliation`, `OI-10`).
 - Donors do not sign in (`OI-4`); donation partners get no app access (`OI-3`).
 - Email goes through one shared delivery adapter; the provider is not chosen — code against the adapter (architecture §3, §5.1).

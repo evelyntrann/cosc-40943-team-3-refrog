@@ -182,7 +182,7 @@ A signed-in user's request for the volunteer role. It is pending until an admini
 
 ### Pending Volunteer Email Approval
 
-An administrator's manual approval for an email address that has no matching verified sign-in account yet. It grants no access until the person authenticates with the matching provider-verified sign-in email. It is not an invitation, account creation, or shift assignment.
+An administrator's manual approval for an email address that has no matching verified ReFrog account yet. It grants no access until the person authenticates with the matching ReFrog account's verified sign-in email. It is not an invitation, account creation, or shift assignment.
 
 ### Volunteer Role Lifecycle
 

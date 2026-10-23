@@ -203,7 +203,7 @@ A note on `UC-VOL-claim-open-shift`: an earlier draft of this list had it as a s
 A failed save leaves no assignment recorded (fails cleanly, no partial state). A retry of the same sign-up, whether user-initiated or a duplicate submission, must not create two assignments for the same volunteer on the same shift or double-count against the shift's capacity.
 
 **Related Use Cases:** `UC-VOL-cancel-shift`: Cancel a signed-up shift; `UC-VOL-view-schedule`: View assigned shifts and hours; `UC-ADM-manage-shifts`: Create and configure volunteer shifts
-**Assumptions:** Sign-in is via Google Sign-In — the team's working decision (resolves `OI-17`), not yet confirmed with the client. Distinct from `OI-10` (resolved), which settled TCU-affiliation verification specifically, not general sign-in. Everyone signs in, volunteers included; a signed-in account becomes a volunteer only when an administrator approves it (team discussion, 2026-10-16). The volunteer claims first and is approved after, so a first-time volunteer can still claim a shift without waiting (`USE-volunteer-signup-completion`).
+**Assumptions:** Sign-in uses ReFrog-managed account credentials for the initial release (resolves `OI-17`). Google Sign-In is out of scope and may be considered later only as an optional convenience. Distinct from `OI-10` (resolved), which settled TCU-affiliation verification specifically, not general sign-in. Everyone signs in, volunteers included; a signed-in account becomes a volunteer only when an administrator approves it (team discussion, 2026-10-16). The volunteer claims first and is approved after, so a first-time volunteer can still claim a shift without waiting (`USE-volunteer-signup-completion`).
 **Open Issues:** none.
 
 ---
@@ -838,7 +838,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 **Created By:** Alexa Mercado
 **Date Created:** 2026-10-16
 **Primary Actor:** Administrator, including Wendy
-**Secondary Actors:** Volunteer; sign-in provider
+**Secondary Actors:** Volunteer
 **Trigger:** An administrator chooses to add a volunteer directly.
 **Description:** Grant access without a user request by matching a verified sign-in email. Source: team decision with Alexa Mercado, not a recorded client approval.
 **Preconditions:**
@@ -857,14 +857,14 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 - **2a. User lacks privileges:** Deny access; use case ends.
 - **3a. Administrator cancels:** Make no changes; use case ends.
 - **4a. Email is invalid:** Request correction; resume step 3.
-- **4b. No matching account exists:** Store a pending email approval and audit event; display that access awaits sign-in. On later sign-in, apply the unrevoked approval only when the provider verifies the matching email; store the role and claimed approval atomically. A different or unverified email cannot claim it.
+- **4b. No matching account exists:** Store a pending email approval and audit event; display that access awaits sign-in. On later sign-in, apply the unrevoked approval only when the matching email is verified for the ReFrog account; store the role and claimed approval atomically. A different or unverified email cannot claim it.
 - **4c. More than one account matches:** Do not grant access; report that account resolution is required.
 - **5a. Role or pending approval already exists:** Return the existing state without creating a duplicate.
 - **5b. Saving fails, including during later approval claim:** Report failure; do not confirm a grant or claim that did not persist; allow safe retry.
 **Priority:** High for administrator-directed volunteer access.
 **Frequency of Use:** During recruitment and volunteer onboarding.
 **Business Rules:** `BR-volunteer-role-approval`
-**Associated Information:** A typed profile email or TCU affiliation email is insufficient to claim a manual grant; match provider-verified sign-in email. Pending approval grants no access. No account credentials, invitation message, or shift assignment are created by this use case.
+**Associated Information:** A typed profile email or TCU affiliation email is insufficient to claim a manual grant; match the ReFrog account's verified sign-in email. Pending approval grants no access. No account credentials, invitation message, or shift assignment are created by this use case.
 **Related Use Cases:** `UC-ADM-remove-volunteer-access`, `UC-IDV-verify-affiliation`
 **Assumptions:** General sign-in remains the existing authentication flow.
 **Role lifecycle:** At the configured annual event end, volunteer privileges expire. Each new annual event requires administrator review and approval before renewal; access does not renew automatically. Email changes on the same account preserve an active role. See `BR-volunteer-role-lifecycle`.

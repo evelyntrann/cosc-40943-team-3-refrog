@@ -204,6 +204,12 @@ Scoped deliberately below MVP scale: ReFrog is run by three non-technical founde
 
 #### 5.2.1 Authorization and access
 
+**`FR-AUTH-account-credentials`**
+
+For the initial release, the system shall authenticate registered users with ReFrog-managed account credentials. Google Sign-In is out of scope and no initial-release workflow shall require it. A later Google Sign-In option, if separately approved, shall be an optional convenience rather than a replacement for ReFrog accounts. General ReFrog sign-in establishes account identity only and shall not establish TCU affiliation. Donation logging remains available without sign-in under `OI-4`. The exact credential, recovery, and session mechanisms remain to be specified before Authentication is implemented and shall not be invented by an implementation task.
+
+**Verification:** Create and sign in to a ReFrog account with valid credentials; confirm invalid credentials are rejected and that no Google Sign-In dependency or required Google sign-in path exists. Confirm signing in does not mark the account TCU-affiliated, and confirm a donor can still submit a donation while signed out.
+
 **`FR-AUTH-enforce-permissions`**
 
 When a user requests volunteer scheduling data, shopping activity, or an administrator function, the system shall verify the user is signed in and, for administrator functions, is recognized as one of the three ReFrog administrators, before returning or changing any protected data. Donation logging is excluded from this requirement: it does not require sign-in (`OI-4`, resolved 2026-10-02).
@@ -212,13 +218,13 @@ When a user requests volunteer scheduling data, shopping activity, or an adminis
 
 **`FR-AUTH-affiliation-from-signin`**
 
-Confirmed with the client 2026-10-02 (resolves `OI-10`): the system shall verify a shopper's TCU affiliation by sending a one-time code to a TCU email address the shopper provides, and shall persist that verified status on their account rather than repeating the check on every visit, consistent with `UC-IDV-verify-affiliation`. This replaces an earlier draft of this requirement that assumed affiliation could be derived directly from a sign-in provider's email domain — that depended on TCU's email running on the same provider used for sign-in, which was never confirmed and is not what the client chose.
+Confirmed with the client 2026-10-02 (resolves `OI-10`): the system shall verify a shopper's TCU affiliation by sending a one-time code to a TCU email address the shopper provides, and shall persist that verified status on their account rather than repeating the check on every visit, consistent with `UC-IDV-verify-affiliation`. General ReFrog account sign-in is separate from this check and does not establish TCU affiliation.
 
 **Verification:** Enter a TCU email, receive and submit the code, and confirm affiliation shows verified. Sign out and back in, and confirm the verified status persists without repeating the email-code step.
 
 **`FR-AUTH-volunteer-role`**
 
-Only an authorized administrator shall grant or remove the volunteer role. A signed-in user may request approval through `UC-VOL-request-access`; a pending or declined request shall grant no volunteer permissions. Administrators may also approve a volunteer by email through `UC-ADM-grant-volunteer-access`; an unclaimed approval shall grant no access until matched to the account's provider-verified sign-in email. Role grants and removals shall be audited, and protected checks shall use current role state. Cancelling a shift shall not itself revoke the role.
+Only an authorized administrator shall grant or remove the volunteer role. A signed-in user may request approval through `UC-VOL-request-access`; a pending or declined request shall grant no volunteer permissions. Administrators may also approve a volunteer by email through `UC-ADM-grant-volunteer-access`; an unclaimed approval shall grant no access until matched to the ReFrog account's verified sign-in email. Role grants and removals shall be audited, and protected checks shall use current role state. Cancelling a shift shall not itself revoke the role.
 
 **Verification:** Confirm self-requesting does not grant access, approval does, an ordinary user cannot grant roles, only a verified matching sign-in email claims a manual approval, and removal prevents an existing session or old pending approval from restoring volunteer-based access.
 
@@ -762,7 +768,7 @@ _Example: `SEC-authentication`: The system shall authenticate every request to a
 - `SEC-administrator-review`: The system shall restrict access to suspected shopping-abuse information to authorized ReFrog administrators, consistent with `BR-shopping-abuse-review`.
 - `SEC-transport-encryption`: The system shall encrypt network communication containing authentication credentials, affiliation information, or participant records by using HTTPS.
 - `SEC-audit-log`: The system shall record successful and unsuccessful administrator authentication attempts and administrator changes to event, schedule, and participant records.
-- `SEC-authentication-provider`: Before accepting digital shopping activity, the system shall require a signed-in account with either verified control of a TCU-issued email address or an administrator-granted volunteer role. General sign-in email alone shall not establish TCU affiliation; role eligibility shall not imply email verification.
+- `SEC-authentication-provider`: The initial release shall authenticate registered users with ReFrog-managed account credentials and shall not require or implement Google Sign-In. Before accepting digital shopping activity, the system shall require a signed-in account with either verified control of a TCU-issued email address or an administrator-granted volunteer role. General ReFrog account sign-in alone shall not establish TCU affiliation; role eligibility shall not imply email verification.
 - `SEC-session-expiration`: The system shall expire an administrator session after the team-approved period of inactivity.
 
 ### 9.4 Safety
