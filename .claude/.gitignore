@@ -1,0 +1,4 @@
+
+# For multi-agent workflows, specify in a worktrees directory
+# to ensure agents do not overlap work.
+.claude/worktrees/
