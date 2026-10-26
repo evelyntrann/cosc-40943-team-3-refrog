@@ -38,7 +38,7 @@ _Example, from the Cafeteria Ordering System:_
 
 _Ordering takes a patron's meal order from menu selection to a confirmed, payroll-charged order. It is the `ORD` area of the API ([containers](architectural-design.md#51-containers), [use case areas](architectural-design.md#52-use-case-areas-and-components)), reads the day's menu from `menu`, and asks the Payroll System to authorize the deduction before an order is stored (`DE-payroll-integration`).]_
 
-The IDV area lives in the Application's Identity Verification component, with its interface on the PWA account profile page ([containers](architectural-design.md#51-containers), [components](architectural-design.md#52-use-case-areas-and-components)). Authentication identifies the signed-in account, and IDV determines shopping eligibility from either persisted TCU email verification or an administrator-granted volunteer role supplied by Authentication. Volunteers may also be TCU students, faculty, or staff with TCU email addresses; either eligibility path is sufficient, and volunteers without a TCU email can shop through their recognized volunteer status alone (`BR-shopper-tcu-affiliation`). For the email path, IDV sends a one-time code through the external email delivery channel, validates the submitted code on the server, and stores verified affiliation against the account in the Database for later visits. The profile displays the resulting eligibility confirmation for a volunteer to observe, and Shopping checks eligibility through the IDV service. The server reads the current volunteer role from trusted account records through Authentication rather than browser input, and volunteer eligibility does not mark an account as TCU-email-verified. A shopper who has neither recognized volunteer status nor access to TCU email uses the existing visual ID fallback with an on-site volunteer outside the application; that fallback does not itself update the account's email verification state.
+The IDV area lives in the Application's Identity Verification component, with its interface on the PWA account profile page ([containers](architectural-design.md#51-containers), [components](architectural-design.md#52-use-case-areas-and-components)). Authentication identifies the signed-in account, and IDV determines shopping eligibility from either persisted TCU email verification or an administrator-granted volunteer role supplied by Authentication. Volunteers may also be TCU students, faculty, or staff with TCU email addresses; either eligibility path is sufficient, and volunteers without a TCU email can shop through their recognized volunteer status alone (`BR-shopper-tcu-affiliation`). For the email path, IDV sends a one-time code through the external email delivery channel, validates the submitted code on the server, and stores verified affiliation against the account in the Database for later visits. The profile displays the resulting eligibility confirmation for a volunteer to observe, and Shopping checks eligibility through the IDV service. The server reads the current volunteer role from trusted account records through Authentication rather than browser input, and volunteer eligibility does not mark an account as TCU-email-verified. Shopping requires verified TCU email or a current administrator-approved volunteer role, subject to existing volunteer lifecycle restrictions. In-person visual ID checks are not an option and cannot grant shopping access (`OI-19`, resolved by Wendy Macias, reported by Alexa Mercado on 2026-10-26).
 
 ## Components & classes
 
@@ -133,7 +133,7 @@ classDiagram
 - `Authentication` (planned shared dependency; file path pending): identifies the signed-in account and supplies its current administrator-granted roles. IDV uses this contract rather than implementing Google Sign-In or managing role assignments itself. This revises the dependency currently recorded in architecture section 5.2.
 
 
-These components follow the shared time, validation, persistence, and error conventions in architecture section 8.2. The visual ID fallback remains outside the application. For volunteer eligibility, the service checks the signed-in account for the volunteer role through Authentication; it does not mark that account as TCU-email-verified.
+These components follow the shared time, validation, persistence, and error conventions in architecture section 8.2. Shopping requires verified TCU email or a current administrator-approved volunteer role, subject to existing volunteer lifecycle restrictions. In-person visual ID checks are not an option and cannot grant shopping access (`OI-19`, resolved by Wendy Macias, reported by Alexa Mercado on 2026-10-26). For volunteer eligibility, the service checks the signed-in account for the volunteer role through Authentication; it does not mark that account as TCU-email-verified.
 
 ## Sequence
 
@@ -295,19 +295,18 @@ sequenceDiagram
     end
 ```
 
-#### Visual ID fallback
+#### No eligible shopping path
 
 ```mermaid
 sequenceDiagram
     actor S as Shopper
-    actor V as On-site volunteer
-    Note over S,V: Shopper has no recognized volunteer status and cannot access TCU email (5b)
-    S->>V: Request in-person verification (5b)
-    V->>S: Perform existing visual ID check (5b1)
-    Note over S,V: App verification flow ends, no account email-verification update (5b2)
+    participant P as AffiliationProfileView
+    Note over S,P: No approved volunteer role and no access to TCU email (5b)
+    P-->>S: Deny shopping and explain the two eligibility paths (5b1)
+    Note over S,P: Flow ends without eligibility or verification changes (5b2)
 ```
 
-The visual ID fallback does not define a server-side override for submitting shopping records; digital access remains unresolved under `OI-19`. Email delivery and persistence failure behavior is specified in API contract and Data model below. Numeric resend/attempt limits follow the approved policy below; no diagram implies verification success after a required operation fails.
+Shopping requires verified TCU email or a current administrator-approved volunteer role, subject to existing volunteer lifecycle restrictions. In-person visual ID checks are not an option and cannot grant shopping access (`OI-19`, resolved by Wendy Macias, reported by Alexa Mercado on 2026-10-26). Email delivery and persistence failures follow the API contract and Data model below.
 
 ## API contract
 
@@ -332,7 +331,7 @@ These endpoint names and status codes are proposed contracts for team review und
 | Resend via `POST /api/idv/code-requests` | Same authorization as initial request | TCU email address and new send-action request identifier | Same accepted result; supersedes the previous email verification request | 5a2 returns to step 4. Apply approved limits and duplicate-action handling below; do not add automatic resend loops. |
 | `AffiliationService.getShoppingEligibility(accountId)` | Trusted Shopping server operation using authenticated account identity | Account identity from trusted caller context | Current eligibility after restriction check, then verified-email or active-role check | State lookup failure denies the protected operation with a service-unavailable result; no browser display or old session role claim substitutes for the check. |
 
-There is no in-app visual-ID override endpoint in this draft. Extension 5b ends outside the app, and `OI-19` must be resolved before digital access based on a visual check is designed. Volunteer requests, grants, removals, yearly renewal, and assignment cleanup are not IDV endpoints.
+There is no visual-ID override endpoint. Extension 5b denies shopping access under resolved `OI-19`. Volunteer requests, grants, removals, yearly renewal, and assignment cleanup are not IDV endpoints.
 
 ## Key decisions
 
@@ -386,7 +385,7 @@ The following implementation choices are proposed for review; the eligibility an
 
 **Protect low-entropy codes at rest.** Generate codes with a cryptographically secure generator and store a keyed verifier bound to the account and email verification request, with the key in the deployment secret store. Rejected: plaintext storage or a plain unsalted hash, because short codes can be recovered by enumeration after a database leak. Never log codes or expose them through the status endpoint. Code lifetime, length, and request/attempt limits follow the approved policy below.
 
-**Do not turn a visual check into a digital override.** Preserve the existing in-person fallback and defer its application-access behavior to `OI-19`. Rejected: silently granting a role or writing email-verified status after a physical ID check, because neither is established by the current fallback requirements.
+**Enforce only approved shopping eligibility.** Shopping requires verified TCU email or a current administrator-approved volunteer role, subject to existing volunteer lifecycle restrictions. In-person visual ID checks are not an option and cannot grant shopping access (`OI-19`, resolved by Wendy Macias, reported by Alexa Mercado on 2026-10-26). Do not grant roles or write email-verified status based on a physical ID check.
 
 
 ### Approved technical implementation contracts
@@ -508,7 +507,7 @@ These are acceptance assertions for future implementation, not tests already run
 | 5a incorrect code | Unit | Reject incorrect code without persisting verification; invalidate on the fifth incorrect attempt and enforce the account-wide failure budget across resends. |
 | 5a expiry boundary | Unit | A code at or after expires_at is rejected by the fixed server clock; a valid unused code just before expiry is accepted. |
 | 5a2 retry/resend | Integration | Corrected code can succeed; resend creates a replacement, and older codes cannot verify the account. |
-| 5b visual fallback | Integration/manual | App grants no role or email verification based on leaving for the visual check; human fallback follows the current use case. Digital shopping access remains blocked on OI-19. |
+| 5b no eligible shopping path | Integration | Shopping is denied without verified TCU email or a current approved volunteer role. The profile explains the permitted paths; a visual ID check grants no access, role, or verified state. |
 | Different or recreated account | Integration | Saved verification remains with the original stable account. A different/recreated account does not inherit verification from a matching email and must complete its own account-bound verification. |
 | Cross-account code submission | Integration | A code issued for one account/email cannot verify another account or a substituted email. |
 | Code replay/concurrent verification | Integration | Only one transaction consumes a email verification request; no duplicate or contradictory verification state results. |
@@ -544,7 +543,7 @@ _[What this design could not settle and who can, and what could go wrong that yo
 
 | Item | Owner | Effect and required resolution |
 |---|---|---|
-| OI-19 visual ID fallback | Wendy and team | Decide who records a check, which account receives access, duration, and whether restricted accounts may use it. Do not implement an override until resolved. |
+| OI-19 shopping eligibility (resolved) | Wendy Macias, reported 2026-10-26 | Only verified TCU email or a current approved volunteer role permits shopping, subject to lifecycle restrictions. No visual-ID fallback or override. |
 | Code lifetime, length, attempt and resend limits — resolved | Team | User approved the code and rate-limit policy above on 2026-10-16. Provider integration must preserve these limits. |
 | OI-6 retention | Wendy and TCU data-governance owner | Approve retention and deletion for verification records/email verification requests, including backups; annual role expiry is not a deletion policy. |
 | OI-18 declined-request resubmission resolved | Administration owner; Wendy for manual grants | A declined user may request access again for the next annual event; Wendy may manually approve the user earlier through the verified sign-in email workflow. Neither a decline nor a pending request grants a role. Shift approval remains outside IDV. |
@@ -552,7 +551,7 @@ _[What this design could not settle and who can, and what could go wrong that yo
 | Role/event availability | Authentication and event configuration owners | Supply trusted active roles, event-end timestamps and revoked/expired restrictions, including existing sessions. Missing state must not grant access. |
 | Email delay, resend races, connectivity | IDV owner | A code request is not verification success; reject superseded codes and preserve correction/retry paths. No background retry queue is designed. |
 
-**Draft readiness:** Remaining template examples are retained by request and are not ReFrog contracts. The IDV additions are the applicable design. The fresh-session questions test has been performed and its answers are recorded below. This draft still needs teammate review, alignment of shared integration contracts, and resolution of requirement-breaking open items (including OI-19) before implementation approval.
+**Draft readiness:** Remaining template examples are retained by request and are not ReFrog contracts. The IDV additions are the applicable design. The fresh-session questions test has been performed and its answers are recorded below. This draft still needs teammate review, alignment of shared integration contracts, and resolution of requirement-breaking open items (excluding resolved OI-19) before implementation approval.
 
 ---
 
@@ -589,7 +588,7 @@ For `UC-IDV-verify-affiliation`, the table records retained fresh-review finding
 | Account merging or recreation | **Resolved:** user confirmed verification stays tied to the original stable account. Different/recreated accounts require their own verification; no automatic transfer or merge-transfer workflow is approved. | No remaining transfer-policy guess; matching email alone cannot copy verified status. |
 | Confirmation contents | **Resolved:** user specified an account status of “TCU email verified” based on saved successful verification. Keep it separate from shopping permission and volunteer-role-only eligibility; do not require the address on the confirmation. | No remaining status-content guess. Existing privacy restrictions and account restrictions still apply; no screenshot-security feature is inferred. |
 | Stale/offline confirmation | **Resolved for email-verified shoppers:** user approved showing saved email-based eligible status offline without a fresh check. Refresh on reconnection; protected submissions still require server authorization. | Cached display may lag new restrictions; this limitation is accepted for the offline display. Volunteer-role-only offline caching is not approved by this decision. |
-| Visual fallback and digital access | **Unconfirmed by user (2026-10-16):** whether a physical-ID check grants digital shopping access remains pending Wendy/organizers under `OI-19`. Do not implement a digital override meanwhile. | **Requirement-sensitive blocker:** no policy approved; this item is not resolved by retaining an implementation guess. |
+| Visual ID checks and shopping access | Shopping requires verified TCU email or a current administrator-approved volunteer role, subject to existing volunteer lifecycle restrictions. In-person visual ID checks are not an option and cannot grant shopping access (`OI-19`, resolved by Wendy Macias, reported by Alexa Mercado on 2026-10-26). | Resolved; extension 5b denies shopping and no override is designed. |
 
 
 _For each item on its list, either fix this document or keep the guess and write one line saying why a wrong guess breaks no requirement. Paste the list, with your answer to each item, into the pull request description under How it was verified, inside a collapsed `<details><summary>Questions test</summary> … </details>` block so the description stays short. The design is ready when nothing on the list could break a requirement.]_

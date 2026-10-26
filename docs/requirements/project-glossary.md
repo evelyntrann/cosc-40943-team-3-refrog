@@ -130,7 +130,7 @@ A shipping-container-like storage unit, donated for use by DFW Capsule, placed a
 
 ### Shopper
 
-A TCU student, faculty member, staff member, or volunteer eligible to take donated items from a ReFrog event at no charge. Digital shopping eligibility is established by verified TCU email or an administrator-granted volunteer role; the existing visual ID check is an in-person fallback.
+A TCU student, faculty member, staff member, or volunteer eligible to take donated items from a ReFrog event at no charge. Digital shopping eligibility is established by verified TCU email or an administrator-granted volunteer role; Shopping requires verified TCU email or a current administrator-approved volunteer role, subject to existing volunteer lifecycle restrictions. In-person visual ID checks are not an option and cannot grant shopping access (`OI-19`, resolved by Wendy Macias, reported by Alexa Mercado on 2026-10-26).
 
 **Not to be confused with:** a Donator, who brings items in rather than taking them out.
 
