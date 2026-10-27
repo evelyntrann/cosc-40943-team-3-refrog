@@ -396,7 +396,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
     - 5a1. The system rejects the code and offers to resend it.
     - 5a2. Use case resumes at step 4 or step 5.
 - **5b. The shopper has no approved volunteer role and cannot access a TCU email:**
-    - 5b1. The volunteer falls back to the current visual ID check (`BR-shopper-verification`) rather than the app.
+    - 5b1. The system denies shopping access and explains that verified TCU email or a current approved volunteer role is required. In-person visual ID checks are not an option (`BR-shopper-verification`, resolved `OI-19`).
     - 5b2. Use case ends.
 
 **Priority:** High — named by the client alongside volunteer sign-up as a top priority.
@@ -412,7 +412,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 **Related Use Cases:** `UC-SHP-log-item-taken`: Record items taken while shopping; `UC-VOL-request-access`; `UC-ADM-review-volunteer-request`; `UC-ADM-grant-volunteer-access`; `UC-ADM-remove-volunteer-access`
 **Assumptions:** Verification persists across visits once completed, rather than being repeated every time — not explicitly confirmed with the client, but implied by "that would help a lot" language around keeping the app simple for repeat shoppers.
-**Open Issues:** `OI-10` is resolved. `OI-19` remains open: the existing visual-ID fallback does not yet specify how a successful physical check grants digital shopping access. Do not infer a digital override.
+**Open Issues:** `OI-10` and `OI-19` are resolved. Shopping requires verified TCU email or a current administrator-approved volunteer role, subject to existing volunteer lifecycle restrictions. In-person visual ID checks are not an option and cannot grant shopping access (`OI-19`, resolved by Wendy Macias, reported by Alexa Mercado on 2026-10-26).
 
 ---
 

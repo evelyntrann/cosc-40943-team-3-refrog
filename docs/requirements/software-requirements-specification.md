@@ -224,7 +224,7 @@ Only an authorized administrator shall grant or remove the volunteer role. A sig
 
 **`FR-AUTH-shopping-eligibility`**
 
-When a signed-in user requests to record shopping activity, the system shall permit the operation only if the account has persisted TCU email verification or the administrator-granted volunteer role. Either is sufficient. Volunteer eligibility shall not set the account's email-verification state; retained TCU email verification shall not bypass the general-information-only restriction after volunteer role removal or annual expiry (`FR-AUTH-volunteer-lifecycle`). The visual ID fallback remains an in-person process and shall not implicitly create an app role or verified email state.
+When a signed-in user requests to record shopping activity, the system shall permit the operation only if the account has persisted TCU email verification or the administrator-granted volunteer role. Either is sufficient. Volunteer eligibility shall not set the account's email-verification state; retained TCU email verification shall not bypass the general-information-only restriction after volunteer role removal or annual expiry (`FR-AUTH-volunteer-lifecycle`). The system shall deny shopping when neither eligibility path applies. Visual ID checks shall not grant shopping access, an app role, or verified email state (`OI-19`, resolved 2026-10-26).
 
 For every protected shopping submission, the server shall obtain the authenticated account identity and current authorization state from trusted server interfaces, check explicit account restrictions first, and then establish eligibility through either saved TCU email verification or an active administrator-granted volunteer role. Absence of a volunteer role alone shall not classify an ordinary shopper as restricted. Once one eligibility path succeeds, the other path need not be queried. Browser-supplied identities, roles, cached confirmations and old session role claims shall not authorize the operation.
 
@@ -469,10 +469,10 @@ The following dictionary identifies the core business data the system must manag
 |  | shoppingDateTime | DateTime | Local time | Required. |
 |  | locationId | String | Existing DonationLocation.locationId | Required. |
 |  | quantityTaken | Integer | 0 or greater | Required; must record number of items removed in the visit. |
-|  | verificationMethod | Enum | visual ID check, digital check, admin override | Required; supports audit and abuse review. |
+|  | verificationMethod | Enum | verified TCU email, approved volunteer role | Required; supports audit and abuse review. |
 | TCUAffiliationCheck | checkId | String | Unique verification record | Required. |
-|  | checkedBy | String | Volunteer or staff member name or ID | Required when performed by a person. |
-|  | method | Enum | physical ID, phone ID, staff confirmation, other | Required; source of the verification result. |
+|  | accountId | String | Stable signed-in account identifier | Required; links successful email verification to the account. |
+|  | method | Enum | TCU email code | Required; volunteer-role eligibility comes from Authentication and does not create an email-verification result. |
 |  | result | Enum | eligible, ineligible, needs review | Required; ineligible or needs-review shoppers must not be approved to shop. |
 |  | timestamp | DateTime | Local time | Required. |
 | DonationPartner | partnerId | String | Unique partner identifier | Required. |
