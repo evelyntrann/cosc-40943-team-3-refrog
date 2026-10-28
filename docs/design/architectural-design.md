@@ -35,6 +35,7 @@ _[These are slugs, like every other identifier in your project, so an inserted d
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 0.1 | | | Initial draft for Checkpoint 1 |
+| 0.2 | 2026-10-28 | Alfonsotomax | Recorded the technology stack (`KD-tech-stack`); named container technologies in §5.1 |
 
 ---
 
@@ -217,9 +218,9 @@ C4Container
     Person(admin, "Administrator", "Manages shifts and reviews activity")
 
     System_Boundary(refrog, "ReFrog") {
-        Container(web, "Web Front End", "PWA, technology not yet chosen", "Donor, shopper, volunteer, and administrator screens in the browser")
-        Container(app, "Application", "technology not yet chosen", "Every business rule from the component table in 5.2; serves the front end")
-        ContainerDb(db, "Database", "technology not yet chosen", "Shifts, volunteer assignments, donations, shopping visits, administrator accounts")
+        Container(web, "Web Front End", "PWA, Vue.js", "Donor, shopper, volunteer, and administrator screens in the browser")
+        Container(app, "Application", "Java / Spring Boot", "Every business rule from the component table in 5.2; serves the front end")
+        ContainerDb(db, "Database", "PostgreSQL", "Shifts, volunteer assignments, donations, shopping visits, administrator accounts")
     }
 
     System_Ext(google, "Google Sign-In", "Authenticates users for general account access")
@@ -230,14 +231,14 @@ C4Container
     Rel(volunteer, web, "Signs up for and cancels shifts", "HTTPS")
     Rel(admin, web, "Manages shifts, views dashboard", "HTTPS")
     Rel(web, app, "Calls", "JSON/HTTPS")
-    Rel(app, db, "Reads and writes", "not yet chosen")
+    Rel(app, db, "Reads and writes", "JDBC")
     Rel(app, google, "Signs a user in", "OAuth / OpenID Connect")
     Rel(app, notify, "Sends a TCU email verification code; sends shift reminders and administrator-triggered notifications", "not yet chosen")
 ```
 
 ReFrog ships as one deployable, reflecting the team's working direction for `KD-deployment-shape` (formal write-up pending §9.2): the three ReFrog founders cannot operate infrastructure, and the team's lack of mobile development experience already ruled out a native app in favor of a single web application. The front end is a separate container only because it runs in the browser as a PWA — it ships inside the application's package, not deployed independently, same as the worked example above.
 
-Technology for all three containers is marked "not yet chosen" deliberately — nothing decided so far commits the team to a specific language, framework, or database, and guessing one here would be exactly the kind of invented precision this document warns against. External systems are provisional pending §3's context diagram.
+The container technologies (Vue.js, Java / Spring Boot, PostgreSQL) are recorded in `KD-tech-stack` (section 9.2). The email delivery provider and the production hosting provider are still not chosen. External systems are provisional pending §3's context diagram.
 
 **Corrected 2026-10-02:** this diagram previously showed Google Sign-In itself deriving TCU affiliation directly from the sign-in email's domain. The client meeting confirmed a different mechanism instead (`OI-10`, resolved): a one-time code sent to a TCU email address the shopper enters, independent of whatever Google account they signed in with. Google Sign-In remains the team's chosen provider for general account access (not yet confirmed with the client); TCU affiliation is a separate, optional step on top of it, not derived from it.
 
@@ -350,9 +351,9 @@ Due: Checkpoint 1. These conventions apply across all components and remain prov
 
 **8.2.2 Time and time zones.** ReFrog event dates and times shall use the `America/Chicago` time zone, timestamps shall be stored in a consistent machine-readable form, and user-facing times shall be converted to the configured event time zone and displayed using a 12-hour clock with `a.m.` or `p.m.`. Tests shall be able to provide a fixed clock when behavior depends on a deadline. This supports `LOC-event-time-zone`, `LOC-time-storage`, and `LOC-time-display`. Shown in: the first time utility and time-dependent tests.
 
-**8.2.3 API conventions.** Public information and protected participant workflows shall use consistent resource naming, structured success and error responses, documented status codes, and an API contract generated or maintained from the implementation. The exact framework, endpoint names, response schema, and API documentation location remain provisional until the containers and technology stack are selected. The contract shall preserve the validation and failure behavior required by `FR-VAL-server-validation`, `FR-VAL-field-feedback`, `FR-SAVE-confirmed-success`, and `ROB-submission-status`. Shown in: the API contract and the first endpoint integration tests.
+**8.2.3 API conventions.** Public information and protected participant workflows shall use consistent resource naming, structured success and error responses, documented status codes, and an API contract generated or maintained from the implementation. The framework is Spring Boot (`KD-tech-stack`); endpoint names, response schema, and API documentation location remain provisional. The contract shall preserve the validation and failure behavior required by `FR-VAL-server-validation`, `FR-VAL-field-feedback`, `FR-SAVE-confirmed-success`, and `ROB-submission-status`. Shown in: the API contract and the first endpoint integration tests.
 
-**8.2.4 Code conventions.** The implementation shall use one agreed formatter, linter, naming convention, dependency-management approach, and test organization across components. Shared business rules shall not be duplicated between participant interfaces and server-side operations. The specific language, framework, formatter, and banned-library list remain provisional until the team records the technology decisions. This supports `MNT-automated-tests`, `MNT-dependency-record`, and `MNT-operational-handoff`. Shown in: the repository formatter/linter configuration and contribution instructions.
+**8.2.4 Code conventions.** The implementation shall use one agreed formatter, linter, naming convention, dependency-management approach, and test organization across components. Shared business rules shall not be duplicated between participant interfaces and server-side operations. The language and frameworks are recorded in `KD-tech-stack` (Java / Spring Boot on the server, Vue.js on the client); the formatter, linter, and banned-library list remain provisional until the team records them. This supports `MNT-automated-tests`, `MNT-dependency-record`, and `MNT-operational-handoff`. Shown in: the repository formatter/linter configuration and contribution instructions.
 
 **8.2.5 Validation.** Validation shall occur on the server before data is stored, including required fields, data types, positive item counts, and references to active ReFrog locations or other valid records. Interfaces shall identify the invalid field, explain the correction, and preserve valid entered values. Client-side validation may improve feedback but is not the authoritative check. This implements `FR-VAL-server-validation`, `FR-VAL-field-feedback`, `FR-VAL-preserve-input`, and `ROB-invalid-input`. Shown in: shared validation tests that submit invalid requests without using the interface.
 
@@ -360,11 +361,11 @@ Due: Checkpoint 1. These conventions apply across all components and remain prov
 
 **8.2.7 Logging.** Logs shall support diagnosis of failed requests and external-service failures while excluding authentication secrets, raw TCU ID numbers, unnecessary affiliation data, and other unnecessary personal information. Log levels and retention shall be chosen with the operational owner and data-governance requirements; no retention period is invented here. This supports `MNT-diagnostics`, `SEC-affiliation-data`, `SEC-transport-encryption`, and SRS section 7.4. Shown in: the shared logging configuration and log-redaction tests.
 
-**8.2.8 Persistence and concurrency.** Each accepted donation, shopping, volunteer, event, location, and partner-pickup change shall be persisted only after the applicable validation and business rules succeed. A transaction shall cover the smallest complete business operation, and a failed write shall not be reported as successful. The database technology, transaction mechanism, duplicate-submission strategy, and behavior when two administrators edit the same record remain provisional; the current requirements require prevention of unintended duplicate records but do not define a broader conflict-resolution policy. This supports `FR-SAVE-confirmed-success`, `ROB-duplicate-submission`, `ROB-invalid-input`, `ROB-backup-recovery`, and `BR-shopping-activity-recorded`. Shown in: persistence integration tests and the first database transaction boundary.
+**8.2.8 Persistence and concurrency.** Each accepted donation, shopping, volunteer, event, location, and partner-pickup change shall be persisted only after the applicable validation and business rules succeed. A transaction shall cover the smallest complete business operation, and a failed write shall not be reported as successful. The database is PostgreSQL (`KD-tech-stack`). The transaction mechanism, duplicate-submission strategy, and behavior when two administrators edit the same record remain provisional; the current requirements require prevention of unintended duplicate records but do not define a broader conflict-resolution policy. This supports `FR-SAVE-confirmed-success`, `ROB-duplicate-submission`, `ROB-invalid-input`, `ROB-backup-recovery`, and `BR-shopping-activity-recorded`. Shown in: persistence integration tests and the first database transaction boundary.
 
 **8.2.9 Auditing.** The system shall record successful and unsuccessful administrator authentication attempts and administrator changes to event, schedule, and participant records, consistent with `SEC-audit-log`. The initial release shall not add a separate general-purpose audit subsystem beyond that minimum requirement unless the client or TCU approves the additional scope. Audit records shall not contain secrets or unnecessary sensitive data, and their retention and disposal remain subject to SRS section 7.4 and `OI-6`. Shown in: the administrator audit events and their integration tests.
 
-**8.2.10 Testing.** Automated tests shall cover authentication and authorization, volunteer scheduling, shared validation, data-calculation rules, duplicate-submission behavior, time-zone behavior, and persistence failure handling. Tests shall use representative but non-production data and shall verify both successful and rejected requests. The test framework and exact test-layer split remain provisional until the technology stack is selected. This supports `MNT-automated-tests`, `MNT-diagnostics`, `FR-AUTH-enforce-permissions`, `FR-VAL-server-validation`, `ROB-duplicate-submission`, and `ROB-backup-recovery`. Shown in: the repository test suite and its test-data guidance.
+**8.2.10 Testing.** Automated tests shall cover authentication and authorization, volunteer scheduling, shared validation, data-calculation rules, duplicate-submission behavior, time-zone behavior, and persistence failure handling. Tests shall use representative but non-production data and shall verify both successful and rejected requests. The test framework and exact test-layer split remain provisional until the team records them for the stack in `KD-tech-stack`. This supports `MNT-automated-tests`, `MNT-diagnostics`, `FR-AUTH-enforce-permissions`, `FR-VAL-server-validation`, `ROB-duplicate-submission`, and `ROB-backup-recovery`. Shown in: the repository test suite and its test-data guidance.
 
 ## 9. Architecture Decisions
 
@@ -402,6 +403,14 @@ _Example:]_
 - **Decision:** Build the use-case-area and cross-cutting components from section 5.2 as modules inside one application. Build the PWA front end into that application's package and release both as one deployable artifact to one application-hosting target. Keep persistent data in the single database container shown in section 5.1. The application framework, database technology, and production hosting provider remain open decisions.
 - **Rejected:** Deploying the PWA independently from the application, or deploying the use-case areas as separate services. Either alternative would add deployment pipelines, network calls, distributed authentication and authorization, cross-service data coordination, and additional failure modes without a requirement for independent release or scaling.
 - **Trade-off:** The application is released and scaled as a whole, and an application failure can interrupt every workflow. This decision must be revisited if a future requirement demands independent scaling, deployment, security isolation, or availability for one part of the system.
+
+**`KD-tech-stack`: Java / Spring Boot application, Vue.js PWA, PostgreSQL database.** _Accepted._
+
+- **Driving requirements:** `MNT-operational-handoff`, `MNT-dependency-record`, `CO-operational-ownership`, `ROB-duplicate-submission`, and `USE-mobile-responsive`.
+- **Context:** `KD-deployment-shape` fixes one application, one PWA front end built into its package, and one database, but left the technologies open. Volunteer Scheduling must lock a shift while it changes that shift's assignments (`UC-VOL-signup`, [vol.md](vol.md)), which needs a relational database with transactions and row locks. The long-term maintenance owner is unresolved, so the stack must be mainstream and well documented. `CO-azure-database-hosting` may require the production database to run on Azure.
+- **Decision:** Build the Application container in Java with Spring Boot, the Web Front End as a Vue.js progressive web app built into the application's package, and the Database container on PostgreSQL. Production hosting remains open (`DE-tcu-azure-hosting`); Azure offers managed services for all three, so the choice holds if `CO-azure-database-hosting` applies.
+- **Rejected:** TypeScript end to end (a Node.js server framework with an ORM such as Prisma). One language across client and server is an advantage, but the common ORMs need raw SQL for the row lock Volunteer Scheduling depends on, and the team has less course support for it than for Spring Boot and Vue.js.
+- **Trade-off:** The repository carries two languages and two toolchains (Java and JavaScript), so §8.2.4 must name a formatter, linter, and test layout for each. This decision must be revisited if TCU IT or the eventual maintenance owner requires a different supported stack (`CO-tcu-it-approval`, `CO-operational-ownership`).
 
 ## 10. Quality Requirements
 
