@@ -36,6 +36,8 @@ _[These are slugs, like every other identifier in your project, so an inserted d
 |---|---|---|---|
 | 0.1 | | | Initial draft for Checkpoint 1 |
 | 0.2 | 2026-10-28 | Alfonsotomax | Recorded the technology stack (`KD-tech-stack`); named container technologies in §5.1 |
+| 0.3 | 2026-10-30 | Alfonsotomax | §5.2 `VOL` *Depends on*: removed Notifications (Notifications depends on VOL, `OI-7`); locations come from Administration ([vol.md](vol.md)) |
+| 0.4 | 2026-10-30 | Uyen Tran | Removed Google Sign-In; own email-and-password accounts verified by code at sign-up (`KD-own-accounts`) |
 
 ---
 
@@ -116,16 +118,14 @@ C4Context
 
     System(refrog, "ReFrog Application", "PWA that manages volunteer scheduling, donation and shopping forms, TCU-affiliation verification, and organizer reporting.")
 
-    System_Ext(authprovider, "Google Sign-In", "Authenticates users for general account access")
-    System_Ext(notification, "Email delivery channel", "Sends TCU verification codes and shift/staffing notifications; exact provider not yet chosen")
+    System_Ext(notification, "Email delivery channel", "Sends sign-up and TCU verification codes and shift/staffing notifications; exact provider not yet chosen")
 
     Rel(admin, refrog, "Manages events, shifts, locations; reviews dashboard and abuse flags")
     Rel(volunteer, refrog, "Signs up for and cancels shifts; views schedule and hours")
     Rel(donor, refrog, "Submits donation forms")
     Rel(shopper, refrog, "Submits shopping forms after affiliation is confirmed")
     Rel(visitor, refrog, "Views event info, locations, hours")
-    Rel(refrog, authprovider, "Authenticates users")
-    Rel(refrog, notification, "Sends a TCU email verification code; sends shift reminders and administrator-triggered notifications")
+    Rel(refrog, notification, "Sends sign-up and TCU email verification codes; sends shift reminders and administrator-triggered notifications")
 ```
 
 ### Boundary-crossing relationships
@@ -136,17 +136,15 @@ C4Context
 
 - **Volunteer** — signs up for shifts (`UC-VOL-signup`), cancels shifts (`UC-VOL-cancel-shift`), and views their assigned schedule and hours (`UC-VOL-view-schedule`). Must be signed in. Receives shift reminders via the Notification Service (`FR-NOTIFY-shift-reminder`).
 
-- **Donor** — submits a donation form at a drop-off location (`UC-DON-log-donation`). Confirmed under `OI-4` (resolved): no sign-in is required, so the donor does not authenticate through the sign-in provider at all.
+- **Donor** — submits a donation form at a drop-off location (`UC-DON-log-donation`). Confirmed under `OI-4` (resolved): no sign-in is required, so the donor does not need an account at all.
 
-- **Shopper** — signs in via Google Sign-In like any other user, then completes an additional, optional TCU-affiliation check (`UC-IDV-verify-affiliation`, `FR-AUTH-affiliation-from-signin`) before submitting a shopping form (`UC-SHP-log-item-taken`). That check is a one-time code sent to a TCU email address the shopper enters — a separate step on top of signing in, not something derived from the Google account itself. The verified confirmation is displayed on the account profile view for in-person verification by a volunteer.
+- **Shopper** — signs in with a ReFrog account like any other user (`FR-AUTH-account-signup`), then completes an additional, optional TCU-affiliation check (`UC-IDV-verify-affiliation`, `FR-AUTH-affiliation-from-signin`) before submitting a shopping form (`UC-SHP-log-item-taken`). That check is a one-time code sent to a TCU email address the shopper enters — a separate step on top of signing in, not something derived from the email used to sign up. The verified confirmation is displayed on the account profile view for in-person verification by a volunteer.
 
 - **TCU Community Visitor** — views public event information (`UC-LOC-view-locations`) without signing in. No data crosses the trust boundary beyond publicly displayed event details.
 
-**External systems.** Two external systems are shown. No external-system integration is committed for the initial release (`SRS §2.1`), but both are architecturally necessary for the features the specification requires:
+**External systems.** One external system is shown. No external-system integration is committed for the initial release (`SRS §2.1`), but it is architecturally necessary for the features the specification requires. There is no external identity provider: the application creates and signs in its own accounts (section 8.1, `KD-own-accounts`, `OI-17`).
 
-- **Google Sign-In** — the application delegates general account sign-in to Google Sign-In, the team's chosen provider for any account (TCU-affiliated or not), open to volunteers and administrators alike. The application does not store passwords or issue its own credentials; it consumes an identity token from Google. **Corrected 2026-10-02:** this previously also claimed TCU affiliation was derived from the sign-in email's domain — that part was wrong and is now handled entirely separately, below, as its own optional step on top of sign-in. `SEC-authentication-provider`'s text still frames the choice of authentication *method* as open at the specification level; this diagram reflects the team's working decision to use Google Sign-In specifically, not yet confirmed with the client.
-
-- **Email delivery channel** — the channel through which the application sends a TCU affiliation verification code (`UC-IDV-verify-affiliation`, resolves `OI-10`), shift reminders (`FR-NOTIFY-shift-reminder`), and administrator-triggered volunteer notifications (`UC-ADM-notify-volunteers`). The specific provider is a team decision, not yet made. Every message except a verification code is also kept in the recipient's in-app inbox inside the application (`FR-NOTIFY-in-app-inbox`), so a user sees it even if the email is missed. The system must check notification accuracy before sending (`FR-NOTIFY-current-state`) and must not block business-state changes if a notification fails (`FR-NOTIFY-preserve-business-state`).
+- **Email delivery channel** — the channel through which the application sends the sign-up verification code (`FR-AUTH-account-signup`), a TCU affiliation verification code (`UC-IDV-verify-affiliation`, resolves `OI-10`), shift reminders (`FR-NOTIFY-shift-reminder`), and administrator-triggered volunteer notifications (`UC-ADM-notify-volunteers`). The specific provider is a team decision, not yet made. Every message except a verification code is also kept in the recipient's in-app inbox inside the application (`FR-NOTIFY-in-app-inbox`), so a user sees it even if the email is missed. The system must check notification accuracy before sending (`FR-NOTIFY-current-state`) and must not block business-state changes if a notification fails (`FR-NOTIFY-preserve-business-state`).
 
 **What is not on this diagram.** The current toolchain — SignUpGenius, Google Forms, Google Sheets, and the ReFrog website — does not appear because the application replaces rather than integrates with them (`OE-decentralized-tool-replacement`; `INT-integration-scope`). If any of those tools is later selected for integration rather than replacement, it becomes an external-system box here and needs a corresponding `SI-*` or `CI-*` entry in the specification. The Azure database (`CO-azure-database-hosting`) is internal to the system boundary and appears on the container diagram in section 5.1, not here.
 
@@ -156,11 +154,11 @@ C4Context
 
 - **The application is divided by use case area** — Volunteer Scheduling, Identity Verification, Location Info, Administration, Shopping-Abuse Monitoring, Shopping, and Donation — with shared Authentication and Notifications components for concerns used across multiple areas (section 5.2).
 
-- **General account authentication is delegated to Google Sign-In, while TCU affiliation is verified separately through a one-time code sent to a TCU email address** (section 8.1, `SEC-authentication-provider`, `UC-IDV-verify-affiliation`), keeping identity and ReFrog-specific shopping eligibility as separate concerns (quality goal 2).
+- **The application runs its own email-and-password accounts, each email confirmed by a one-time code at sign-up, while TCU affiliation is verified separately through a one-time code sent to a TCU email address** (section 8.1, `KD-own-accounts`, `SEC-authentication-provider`, `UC-IDV-verify-affiliation`), keeping identity and ReFrog-specific shopping eligibility as separate concerns (quality goal 2).
 
 - **Public and participant-facing workflows remain separated from protected administrative operations at the Application trust boundary**, where authentication, authorization, and role-based access are enforced before protected data is returned or changed (section 8.1, `SEC-authenticated-administration`, `SEC-role-based-access`, `SEC-least-privilege`).
 
-- **The initial release replaces the current SignUpGenius, Google Forms, and Google Sheets workflow rather than integrating with those systems**, limiting external dependencies to authentication and email delivery so essential ReFrog workflows remain simpler to operate and recover during event periods (`OE-decentralized-tool-replacement`, quality goal 3).
+- **The initial release replaces the current SignUpGenius, Google Forms, and Google Sheets workflow rather than integrating with those systems**, limiting external dependencies to email delivery so essential ReFrog workflows remain simpler to operate and recover during event periods (`OE-decentralized-tool-replacement`, quality goal 3).
 
 ## 5. Building Block View
 
@@ -223,8 +221,7 @@ C4Container
         ContainerDb(db, "Database", "PostgreSQL", "Shifts, volunteer assignments, donations, shopping visits, administrator accounts")
     }
 
-    System_Ext(google, "Google Sign-In", "Authenticates users for general account access")
-    System_Ext(notify, "Email delivery channel", "Sends TCU verification codes and shift notifications; exact provider not yet chosen")
+    System_Ext(notify, "Email delivery channel", "Sends sign-up and TCU verification codes and shift notifications; exact provider not yet chosen")
 
     Rel(donor, web, "Logs a donation", "HTTPS")
     Rel(shopper, web, "Verifies affiliation, logs items taken", "HTTPS")
@@ -232,15 +229,14 @@ C4Container
     Rel(admin, web, "Manages shifts, views dashboard", "HTTPS")
     Rel(web, app, "Calls", "JSON/HTTPS")
     Rel(app, db, "Reads and writes", "JDBC")
-    Rel(app, google, "Signs a user in", "OAuth / OpenID Connect")
-    Rel(app, notify, "Sends a TCU email verification code; sends shift reminders and administrator-triggered notifications", "not yet chosen")
+    Rel(app, notify, "Sends sign-up and TCU email verification codes; sends shift reminders and administrator-triggered notifications", "not yet chosen")
 ```
 
 ReFrog ships as one deployable, reflecting the team's working direction for `KD-deployment-shape` (formal write-up pending §9.2): the three ReFrog founders cannot operate infrastructure, and the team's lack of mobile development experience already ruled out a native app in favor of a single web application. The front end is a separate container only because it runs in the browser as a PWA — it ships inside the application's package, not deployed independently, same as the worked example above.
 
 The container technologies (Vue.js, Java / Spring Boot, PostgreSQL) are recorded in `KD-tech-stack` (section 9.2). The email delivery provider and the production hosting provider are still not chosen. External systems are provisional pending §3's context diagram.
 
-**Corrected 2026-10-02:** this diagram previously showed Google Sign-In itself deriving TCU affiliation directly from the sign-in email's domain. The client meeting confirmed a different mechanism instead (`OI-10`, resolved): a one-time code sent to a TCU email address the shopper enters, independent of whatever Google account they signed in with. Google Sign-In remains the team's chosen provider for general account access (not yet confirmed with the client); TCU affiliation is a separate, optional step on top of it, not derived from it.
+**Corrected 2026-10-02:** this diagram previously showed Google Sign-In itself deriving TCU affiliation directly from the sign-in email's domain. The client meeting confirmed a different mechanism instead (`OI-10`, resolved): a one-time code sent to a TCU email address the shopper enters, independent of the account they signed in with. **Changed 2026-10-30:** Google Sign-In is removed; the application creates and signs in its own accounts (`KD-own-accounts`). TCU affiliation remains a separate, optional step on top of sign-in, not derived from it.
 
 ### 5.2 Use case areas and components
 
@@ -265,14 +261,14 @@ _[Check before Checkpoint 1: every area in your use case file appears in the fir
 
 | Use case area | Component | Responsibility | Depends on | Status |
 |---|---|---|---|---|
-| `VOL` | Volunteer Scheduling | Owns a volunteer's shift sign-ups, cancellations, and their own schedule and hours | Administration, Authentication, Notifications | provisional |
+| `VOL` | Volunteer Scheduling | Owns a volunteer's shift sign-ups, cancellations, and their own schedule and hours | Administration, Authentication | provisional |
 | `IDV` | Identity Verification | Owns determining whether a signed-in shopper is eligible to shop — TCU-affiliated (confirmed 2026-10-02 via a one-time code sent to a TCU email, not a sign-in domain check) or a registered volunteer | Authentication, Email delivery channel | provisional |
 | `LOC` | Location Info | Owns the list of active ReFrog locations, hours, and event info shown to every participant | Administration | provisional |
 | `ADM` | Administration | Owns annual volunteer access review and renewal approval, volunteer access request decisions and manual email-based role grants and removals (team design decision, 2026-10-16), shift creation and configuration, manually triggering a notification to volunteers about open shifts (confirmed 2026-10-02, not an automatic alert), and the cross-location dashboard of donation, shopping, and volunteer-coverage activity | Authentication, Volunteer Scheduling, Shopping, Donation, Shopping-Abuse Monitoring, Email delivery channel | provisional |
 | `ABU` | Shopping-Abuse Monitoring | Owns flagging and administrator review of potentially-excessive shopping activity | Shopping, Authentication | provisional |
 | `SHP` | Shopping | Owns recording what a shopper takes during a visit | Identity Verification, Administration | provisional |
 | `DON` | Donation | Owns recording what a donor drops off at a location | Administration | provisional |
-| _(cross-cutting)_ | Authentication | Owns sign-in, stable account identity, trusted current roles and explicit revoked/expired restrictions, event-scoped access and renewal state, and administrator recognition | Google Sign-In (external) | provisional |
+| _(cross-cutting)_ | Authentication | Owns sign-in, stable account identity, trusted current roles and explicit revoked/expired restrictions, event-scoped access and renewal state, and administrator recognition | Email delivery channel (sign-up codes) | provisional |
 | _(cross-cutting)_ | Notifications | Owns every reminder and alert the system sends — shift reminders, understaffed-shift alerts | Volunteer Scheduling, an external delivery channel (not yet chosen) | provisional |
 
 Volunteer role handling is detailed in [Administration](adm.md) and [Authentication](authentication.md). Administrators approve requests or manually approve verified sign-in emails; IDV checks the current role through Authentication. These team-selected workflows still require supporting use cases and SRS alignment.
@@ -318,13 +314,13 @@ _[Four short paragraphs. The last three each cite the `SEC-*` requirement they a
 
 _Secrets (passwords, API keys, connection strings) never appear in this document or in the repository. Say where they will live, not what they are.]_
 
-**Trust boundary.** The `Application` container is the security boundary for ReFrog's business operations. The `Web Front End`, users' browsers and personal devices, the `Sign-in provider`, the TCU email delivery channel, and any other external system are outside that boundary. Public event and location information may be read without authentication, but every request to a non-public endpoint, including framework-provided endpoints, shall be authenticated and authorized before protected data is returned or changed. Network communication containing credentials, affiliation information, or participant records shall use HTTPS (`SEC-authenticated-administration`, `SEC-role-based-access`, `SEC-transport-encryption`).
+**Trust boundary.** The `Application` container is the security boundary for ReFrog's business operations. The `Web Front End`, users' browsers and personal devices, the email delivery channel, and any other external system are outside that boundary. Public event and location information may be read without authentication, but every request to a non-public endpoint, including framework-provided endpoints, shall be authenticated and authorized before protected data is returned or changed. Network communication containing credentials, affiliation information, or participant records shall use HTTPS (`SEC-authenticated-administration`, `SEC-role-based-access`, `SEC-transport-encryption`).
 
-**Authentication.** Google Sign-In is the current external identity-provider candidate for general ReFrog account authentication (`OI-17`); if selected, the application shall consume Google's identity token or session claims and shall not issue or store user passwords. General sign-in establishes account identity only. A shopper must be signed in before beginning the separate ReFrog-specific affiliation workflow: the shopper enters a TCU email address, receives a one-time code through the external email and notification service, and is marked TCU-affiliated only after the code is successfully verified. This separation allows Google Sign-In, or another approved external identity provider, to coexist with TCU email verification without treating a provider email domain as proof of affiliation (`SEC-authentication-provider`, `UC-IDV-verify-affiliation`, `OI-10`). Donation logging does not require sign-in, because the client confirmed that donors may be unauthenticated and volunteers may submit the form on a donor's behalf (`OI-4`, `UC-DON-log-donation`).
+**Authentication.** The application creates and signs in its own accounts; there is no external identity provider (`KD-own-accounts`, `OI-17`). A user signs up with any email address and a password, and the account is created only after the user enters the one-time code sent to that email (`FR-AUTH-account-signup`). Afterwards the user signs in with email and password. Passwords are stored only as a salted, slow one-way hash and are never logged or returned. General sign-in establishes account identity only. A shopper must be signed in before beginning the separate ReFrog-specific affiliation workflow: the shopper enters a TCU email address, receives a one-time code through the external email and notification service, and is marked TCU-affiliated only after the code is successfully verified. This separation keeps the sign-up email, whatever its domain, from ever counting as proof of affiliation (`SEC-authentication-provider`, `UC-IDV-verify-affiliation`, `OI-10`). Donation logging does not require sign-in, because the client confirmed that donors may be unauthenticated and volunteers may submit the form on a donor's behalf (`OI-4`, `UC-DON-log-donation`).
 
 **Authorization.** The application shall enforce role-based access and least privilege after authentication. Authentication exposes trusted stable account identity, current roles and explicit lifecycle restrictions to protected server operations; browser claims and cached profile status are not authorization evidence. Restriction checks precede either email-based or volunteer-role shopping eligibility; a missing role alone is not a restriction. Administration owns annual review/renewal approval, Authentication supplies the resulting event-scoped state, and IDV consumes it (`FR-AUTH-shopping-eligibility`, `FR-AUTH-volunteer-lifecycle`). Checks apply to every protected submission, including existing sessions; a later revocation does not retroactively cancel an operation already authorized and in progress. ReFrog administrators, currently the three founders and any approved designated helpers, may manage event and shift data, view cross-location activity, export authorized data, and review potential shopping abuse. Volunteers may view and manage only their own shift participation and authorized event activity. Shoppers may access their own affiliation confirmation and shopping workflow; donors may submit donation information without an account; and public visitors may access only public event and location information. No participant role may access the administrator dashboard or another participant's records, and suspected shopping-abuse information is restricted to authorized administrators (`SEC-role-based-access`, `SEC-least-privilege`, `SEC-administrator-review`, `FR-AUTH-enforce-permissions`).
 
-**Sensitive data.** The `Database` may contain external-provider account references, TCU email addresses used for verification, affiliation-verification status, volunteer assignments, in-app inbox messages, donation and shopping records, administrator changes, and shopping-abuse review information. The system shall not require or store a raw TCU ID number; Shopping requires verified TCU email or a current administrator-approved volunteer role, subject to existing volunteer lifecycle restrictions. In-person visual ID checks are not an option and cannot grant shopping access (`OI-19`, resolved by Wendy Macias, reported by Alexa Mercado on 2026-10-26). (`SEC-affiliation-data`, `UC-IDV-verify-affiliation`, SRS §7.4.5). The application sends a TCU email address and one-time verification code through the external email and notification service, while general authentication data is handled by the selected identity provider. Secrets such as passwords, API keys, and connection strings shall live only in the approved deployment secret store, never in this document, source control, logs, exports, or error responses. Retention, disposal, backup purge, and authorization to dispose of these records remain subject to client and TCU approval (`CO-tcu-data-governance`, SRS §§7.4.3-7.4.5, `OI-6`).
+**Sensitive data.** The `Database` may contain account emails and password hashes, TCU email addresses used for verification, affiliation-verification status, volunteer assignments, in-app inbox messages, donation and shopping records, administrator changes, and shopping-abuse review information. The system shall not require or store a raw TCU ID number; Shopping requires verified TCU email or a current administrator-approved volunteer role, subject to existing volunteer lifecycle restrictions. In-person visual ID checks are not an option and cannot grant shopping access (`OI-19`, resolved by Wendy Macias, reported by Alexa Mercado on 2026-10-26). (`SEC-affiliation-data`, `UC-IDV-verify-affiliation`, SRS §7.4.5). The application sends one-time verification codes, for sign-up and for TCU affiliation, through the external email and notification service. User passwords exist in the `Database` only as hashes. Secrets such as service passwords, API keys, and connection strings shall live only in the approved deployment secret store, never in this document, source control, logs, exports, or error responses. Retention, disposal, backup purge, and authorization to dispose of these records remain subject to client and TCU approval (`CO-tcu-data-governance`, SRS §§7.4.3-7.4.5, `OI-6`).
 
 ### 8.2 Other concepts
 
@@ -411,6 +407,14 @@ _Example:]_
 - **Decision:** Build the Application container in Java with Spring Boot, the Web Front End as a Vue.js progressive web app built into the application's package, and the Database container on PostgreSQL. Production hosting remains open (`DE-tcu-azure-hosting`); Azure offers managed services for all three, so the choice holds if `CO-azure-database-hosting` applies.
 - **Rejected:** TypeScript end to end (a Node.js server framework with an ORM such as Prisma). One language across client and server is an advantage, but the common ORMs need raw SQL for the row lock Volunteer Scheduling depends on, and the team has less course support for it than for Spring Boot and Vue.js.
 - **Trade-off:** The repository carries two languages and two toolchains (Java and JavaScript), so §8.2.4 must name a formatter, linter, and test layout for each. This decision must be revisited if TCU IT or the eventual maintenance owner requires a different supported stack (`CO-tcu-it-approval`, `CO-operational-ownership`).
+
+**`KD-own-accounts`: the application runs its own email-and-password accounts, with no external identity provider.** _Accepted._
+
+- **Driving requirements:** `SEC-authentication-provider`, `FR-AUTH-account-signup`, `BR-volunteer-role-approval`.
+- **Context:** Users sign up with any email domain. A volunteer approval granted by email must reach only the person who controls that email, so the sign-up email has to be proven, not just typed.
+- **Decision:** Sign-up takes an email and a password and creates the account only after the user enters the one-time code sent to that email (`FR-AUTH-verification-code`, `FR-AUTH-verification-limits`). Sign-in is email and password. Passwords are stored only as a salted, slow one-way hash. Team decision, 2026-10-30 (`OI-17`).
+- **Rejected:** Google Sign-In, optional or required, because the team wants one sign-in path for every user, whatever their email provider. Also rejected: accounts without a sign-up code, because anyone could register with someone else's email.
+- **Trade-off:** The application now stores password hashes and owns the sign-up code flow, so password rules and account recovery must be specified before Authentication is built.
 
 ## 10. Quality Requirements
 
