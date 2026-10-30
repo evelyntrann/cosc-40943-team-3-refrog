@@ -36,6 +36,7 @@ _[These are slugs, like every other identifier in your project, so an inserted d
 |---|---|---|---|
 | 0.1 | | | Initial draft for Checkpoint 1 |
 | 0.2 | 2026-10-28 | Alfonsotomax | Recorded the technology stack (`KD-tech-stack`); named container technologies in §5.1 |
+| 0.3 | 2026-10-30 | Alfonsotomax | §5.2 `VOL` *Depends on*: removed Notifications (Notifications depends on VOL, `OI-7`); locations come from Administration ([vol.md](vol.md)) |
 
 ---
 
@@ -265,7 +266,7 @@ _[Check before Checkpoint 1: every area in your use case file appears in the fir
 
 | Use case area | Component | Responsibility | Depends on | Status |
 |---|---|---|---|---|
-| `VOL` | Volunteer Scheduling | Owns a volunteer's shift sign-ups, cancellations, and their own schedule and hours | Administration, Authentication, Notifications | provisional |
+| `VOL` | Volunteer Scheduling | Owns a volunteer's shift sign-ups, cancellations, and their own schedule and hours | Administration, Authentication | provisional |
 | `IDV` | Identity Verification | Owns determining whether a signed-in shopper is eligible to shop — TCU-affiliated (confirmed 2026-10-02 via a one-time code sent to a TCU email, not a sign-in domain check) or a registered volunteer | Authentication, Email delivery channel | provisional |
 | `LOC` | Location Info | Owns the list of active ReFrog locations, hours, and event info shown to every participant | Administration | provisional |
 | `ADM` | Administration | Owns annual volunteer access review and renewal approval, volunteer access request decisions and manual email-based role grants and removals (team design decision, 2026-10-16), shift creation and configuration, manually triggering a notification to volunteers about open shifts (confirmed 2026-10-02, not an automatic alert), and the cross-location dashboard of donation, shopping, and volunteer-coverage activity | Authentication, Volunteer Scheduling, Shopping, Donation, Shopping-Abuse Monitoring, Email delivery channel | provisional |
