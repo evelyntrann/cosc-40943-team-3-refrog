@@ -216,6 +216,30 @@ Confirmed with the client 2026-10-02 (resolves `OI-10`): the system shall verify
 
 **Verification:** Enter a TCU email, receive and submit the code, and confirm affiliation shows verified. Sign out and back in, and confirm the verified status persists without repeating the email-code step.
 
+**`FR-AUTH-verification-code`**
+
+When a signed-in user requests a code for an email allowed by `BR-tcu-email-domain`, the system shall send that email a six-digit code from a cryptographically secure generator (leading zeros allowed), valid for ten minutes from its creation by the server clock. Only the account's most recent code shall be accepted: requesting a new code invalidates the previous one, even if the new code's delivery fails. A code shall be accepted at most once, and only for the account and email it was issued to.
+
+**Verification:** With a fixed clock, a code submitted just before ten minutes is accepted and one at ten minutes is rejected. After a resend, the earlier code is rejected. A code issued to one account is rejected for another. A second submission of an accepted code is rejected.
+
+**Source:** Team decision, October 16, 2026 (`docs/design/IDV.md`); not a recorded client approval.
+
+**`FR-AUTH-verification-limits`**
+
+The system shall enforce these limits on the server, across sessions: a code is invalidated by its fifth incorrect submission; an account may make at most ten incorrect submissions in any rolling 15 minutes, counted across resends; code requests from one account shall be at least 60 seconds apart; and at most five code requests may be made in any rolling hour per account and, separately, per destination email. A refused request shall tell the user when they may try again. Every limit expires with time; none locks an account permanently.
+
+**Verification:** With a fixed clock, test each limit at its boundary: the fifth wrong code invalidates it; the eleventh wrong submission in 15 minutes is refused even after a resend; a request 59 seconds after the last is refused and one at 60 seconds is accepted; a sixth request in an hour is refused for the account and for the email independently. Each refusal states the retry time, and requests succeed again once the window passes.
+
+**Source:** Team decision, October 16, 2026 (`docs/design/IDV.md`); not a recorded client approval.
+
+**`FR-AUTH-verification-ownership`**
+
+Saved TCU email verification shall belong to the account that completed it. Any other account, including a new account using the same email, shall complete its own verification. Changing the sign-in email on the same account shall keep the saved verification and shall not mark the new sign-in email as TCU-verified.
+
+**Verification:** Verify on one account, then sign in with a second account and enter the same TCU email; the second account is not verified until it completes its own code. Change the first account's sign-in email; it stays verified without a new code.
+
+**Source:** Team decision, October 16, 2026 (`docs/design/IDV.md`); not a recorded client approval.
+
 **`FR-AUTH-volunteer-role`**
 
 Only an authorized administrator shall grant or remove the volunteer role. A signed-in user may request approval through `UC-VOL-request-access`; a pending or declined request shall grant no volunteer permissions. Administrators may also approve a volunteer by email through `UC-ADM-grant-volunteer-access`; an unclaimed approval shall grant no access until matched to the account's provider-verified sign-in email. Role grants and removals shall be audited, and protected checks shall use current role state. Cancelling a shift shall not itself revoke the role.

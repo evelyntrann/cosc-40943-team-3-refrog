@@ -401,17 +401,17 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 **Priority:** High — named by the client alongside volunteer sign-up as a top priority.
 **Frequency of Use:** The email-code check happens once per shopper; the confirmation display happens every shopping visit, thousands per event.
-**Business Rules:** `BR-shopper-tcu-affiliation`, `BR-shopper-verification`, `BR-volunteer-role-approval`, `BR-volunteer-role-lifecycle`
+**Business Rules:** `BR-shopper-tcu-affiliation`, `BR-shopper-verification`, `BR-tcu-email-domain`, `BR-volunteer-role-approval`, `BR-volunteer-role-lifecycle`
 
 **Associated Information:**
 
 | Property name | Data type | Validation rule | Security or access concerns | Glossary reference |
 |---|---|---|---|---|
-| TCU email address | String | Required; must end in the TCU email domain | Visible only to the shopper and administrators | TCU ID |
-| verification code | String | Required; time-limited, single-use | Never logged in plain form after use | — |
+| TCU email address | String | Required; domain per `BR-tcu-email-domain` | Visible only to the shopper and administrators | TCU ID |
+| verification code | String | Required; per `FR-AUTH-verification-code` and `FR-AUTH-verification-limits` | Never logged in plain form after use | — |
 
 **Related Use Cases:** `UC-SHP-log-item-taken`: Record items taken while shopping; `UC-VOL-request-access`; `UC-ADM-review-volunteer-request`; `UC-ADM-grant-volunteer-access`; `UC-ADM-remove-volunteer-access`
-**Assumptions:** Verification persists across visits once completed, rather than being repeated every time — not explicitly confirmed with the client, but implied by "that would help a lot" language around keeping the app simple for repeat shoppers.
+**Assumptions:** None. Verification persisting across visits was confirmed with the client on 2026-10-02 (`FR-AUTH-affiliation-from-signin`); it belongs to the account that completed it (`FR-AUTH-verification-ownership`).
 **Open Issues:** `OI-10` and `OI-19` are resolved. Shopping requires verified TCU email or a current administrator-approved volunteer role, subject to existing volunteer lifecycle restrictions. In-person visual ID checks are not an option and cannot grant shopping access (`OI-19`, resolved by Wendy Macias, reported by Alexa Mercado on 2026-10-26).
 
 ---
