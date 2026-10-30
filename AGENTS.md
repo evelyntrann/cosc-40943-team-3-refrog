@@ -17,8 +17,22 @@ ReFrog: a phone-first progressive web app for TCU's finals-week move-out donatio
 - Build only from a merged design-of-record and a build-context issue that cites a `UC-*`; read the use case, its design, and everything they cite before writing code.
 - Cite identifiers (`UC-*`, `BR-*`, `FR-*`, `OI-*`); never copy a use case or rule into code comments, issues, or docs.
 - Never invent a rule, threshold, or term: if the repository does not say it, stop and list it as an assumption; client questions go in `OPEN-ISSUES.md`.
-- Do not implement anything blocked on an open issue (e.g. the visual-ID override, `OI-19`); build the stated default and leave it at that.
+- Do not implement anything blocked on an open issue; build the stated default and leave it at that.
 - Do not add scope the use case does not ask for (no extra queues, overrides, status fields, or "while we are here" features).
+
+## The agent must not
+
+- Add a dependency until a person confirms it exists and is the one we meant (course Agent Setup; `.claude/commands/implement.md`).
+- Remove the `Co-Authored-By` trailer from a commit (`.claude/commands/implement.md`).
+- Merge a pull request, force-push, or delete the repository (`.claude/settings.json` deny rules).
+- Read secrets: `.env` files, `secrets/`, `*.pem`, `*.key` (`.claude/settings.json` deny rules).
+
+## Parallel agents (course Agent Setup)
+
+- One agent per sub-issue, each in its own worktree (`.claude/worktrees/`) and branch, ending in its own pull request.
+- Fan out only after the shared code the leaves depend on is merged.
+- Never split one use case's layers across agents.
+- No more agents running than pull requests you will review that day.
 
 ## Project-wide constraints
 
