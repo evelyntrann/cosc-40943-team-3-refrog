@@ -129,7 +129,7 @@ A note on `UC-VOL-claim-open-shift`: an earlier draft of this list had it as a s
 
 ---
 
-**Volunteer role decision (2026-10-16):** Team decision with Alexa Mercado: administrators approve volunteer requests or grant access manually by verified sign-in email. Approval creates the volunteer role; pending requests do not. A signed-in role holder may shop without TCU email verification. This is separate from shift assignment; whether role approval is required before shift signup remains `OI-18`.
+**Volunteer role decision (2026-10-16):** Team decision with Alexa Mercado: administrators approve volunteer requests or grant access manually by verified sign-in email. Approval creates the volunteer role; pending requests do not. A signed-in role holder may shop without TCU email verification. This is separate from shift assignment. Shift sign-up does not require the role first: a person without it signs up as pending approval (`UC-VOL-signup` 5c), and an account whose access was removed or expired cannot sign up (`UC-VOL-signup` 1a).
 
 ## 4. Use Cases
 
@@ -166,6 +166,9 @@ A note on `UC-VOL-claim-open-shift`: an earlier draft of this list had it as a s
 
 **Extensions:**
 
+- **1a. The account's volunteer access was removed or has expired (`FR-AUTH-volunteer-lifecycle`), at step 1 or when the volunteer selects a shift at step 3:**
+    - 1a1. The system informs the volunteer that volunteer access is inactive and administrator review is required, and shows no shifts.
+    - 1a2. Use case ends.
 - **2a. No shifts are currently open:**
     - 2a1. The system displays that no shifts are open.
     - 2a2. Use case ends.
@@ -184,13 +187,13 @@ A note on `UC-VOL-claim-open-shift`: an earlier draft of this list had it as a s
 - **5b. The volunteer retries after step 5a, or submits twice in quick succession:**
     - 5b1. The system recognizes the shift is already assigned to this volunteer from the prior attempt and does not create a second assignment or occupy a second slot.
     - 5b2. The system confirms the existing sign-up. Use case ends.
-- **5c. An administrator has not yet approved this person as a volunteer (their first sign-up, or any sign-up before approval):**
+- **5c. The person does not hold the current volunteer role (`BR-volunteer-role-approval`), for example their first sign-up, or any sign-up before an administrator approves them:**
     - 5c1. The system records the assignment as pending approval. A pending assignment holds the slot exactly like an approved one.
     - 5c2. The system confirms the sign-up and tells the volunteer it is awaiting administrator approval (`UC-ADM-review-volunteer`). Use case ends.
 
 **Priority:** High — the client named volunteer sign-up as the first feature needed, since recruitment starts before shopping or donation activity does.
 **Frequency of Use:** High during the roughly one-to-one-and-a-half-month recruitment window before each event (`AS-seasonal-readiness`); low otherwise.
-**Business Rules:** `BR-volunteer-assignment`, `BR-location-staffing`
+**Business Rules:** `BR-volunteer-assignment`, `BR-location-staffing`, `BR-volunteer-role-approval`, `BR-volunteer-role-lifecycle`
 
 **Associated Information:**
 
@@ -204,7 +207,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 **Related Use Cases:** `UC-VOL-cancel-shift`: Cancel a signed-up shift; `UC-VOL-view-schedule`: View assigned shifts and hours; `UC-ADM-manage-shifts`: Create and configure volunteer shifts
 **Assumptions:** Sign-in is via Google Sign-In — the team's working decision (resolves `OI-17`), not yet confirmed with the client. Distinct from `OI-10` (resolved), which settled TCU-affiliation verification specifically, not general sign-in. Everyone signs in, volunteers included; a signed-in account becomes a volunteer only when an administrator approves it (team discussion, 2026-10-16). The volunteer claims first and is approved after, so a first-time volunteer can still claim a shift without waiting (`USE-volunteer-signup-completion`).
-**Open Issues:** none.
+**Open Issues:** `OI-21` (a returning volunteer whose access expired cannot sign up until renewed, while a new account can sign up as pending).
 
 ---
 

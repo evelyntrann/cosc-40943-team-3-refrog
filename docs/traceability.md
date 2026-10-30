@@ -69,6 +69,14 @@ _In week 8 the spine extends past the use case: **business objective → feature
 
 ---
 
+## 4. Use case to design, code, and tests
+
+| Use case | Design | Build | Code | Tests | Verify |
+|---|---|---|---|---|---|
+| `UC-VOL-signup` | [design/vol.md](design/vol.md#uc-vol-signup-signing-up-for-a-shift) | 📐 Designed | | | |
+
+---
+
 ## Working this document with your agent
 
 _[Delegate: running both checks and reporting what fails; finding every `BR-`, `FEAT-`, and `UC-` identifier cited anywhere in `docs/` and listing the ones with no definition; regenerating the second table from the Business Rules fields of your use cases after you have edited them._
