@@ -266,7 +266,7 @@ If current restriction state or eligibility cannot be established because requir
 
 **Verification of current shopping authorization:** Confirm a restricted email-verified account is denied, an unrestricted email-verified non-volunteer is accepted, and a role-only active volunteer is accepted. Confirm the next submission after revocation is denied without cancelling an already authorized operation. Simulate unavailable restriction and eligibility lookups: deny temporarily, offer retry, and retain saved verification. Confirm a successful eligibility path does not require the second source.
 
-**Source for the role requirements:** Team decision with Alexa Mercado, October 16, 2026, consistent with `BR-volunteer-role-approval` and `BR-shopper-verification`; not a recorded client approval. Whether approval gates shift signup remains `OI-18`.
+**Source for the role requirements:** Team decision with Alexa Mercado, October 16, 2026, consistent with `BR-volunteer-role-approval` and `BR-shopper-verification`; not a recorded client approval. Role approval does not gate shift sign-up: a person without the role signs up as pending approval (`UC-VOL-signup` 5c).
 **`FR-AUTH-volunteer-lifecycle`**
 
 At or after the configured annual event end timestamp, evaluated using server time and the event’s America/Chicago time convention, the system shall expire volunteer privileges for that event. Each new annual event shall require administrator review and approval before volunteer access is renewed; renewal shall not be automatic. Explicitly revoked or expired volunteer accounts shall have general-information access only; retained TCU email verification shall not restore participation capabilities. The server shall enforce this restriction on subsequent protected requests, including requests made through an existing session. General information includes public event details, locations, hours, and guidance; restricted accounts shall not submit shopping or donation records, use volunteer operations, or perform administrative operations. Administrator renewal is the path to restored volunteer privileges; this requirement does not create a self-renewal capability.
@@ -471,7 +471,7 @@ The following dictionary identifies the core business data the system must manag
 | ReFrogEvent | eventId | String / UUID | Unique per event | Required; each record must map to one event season or event window. |
 |  | eventYear | Integer | Current academic year or move-out cycle | Required; should match the event's move-out period. |
 |  | scheduleWindow | Date range | Monday-Saturday during finals week, approx. 2:00 p.m. start | Must align with the operational schedule defined by the committee. |
-|  | status | Enum | planned, active, closed, archived | Required; only active records may accept live submissions. |
+|  | status | Enum | planned, active, closed, archived | Required; only active records may accept live submissions, except volunteer shift sign-ups, which are accepted while the event is planned or active because recruitment precedes the event (`UC-VOL-signup`, [vol.md](../design/vol.md)). |
 | DonationLocation | locationId | String | Unique site identifier | Required; one location per operational site. |
 |  | name | String | Site name or code | Required; human readable and unique within the event. |
 |  | status | Enum | open, closed, maintenance, capacity | Required; a closed location must not accept new activity. |
@@ -482,7 +482,7 @@ The following dictionary identifies the core business data the system must manag
 | VolunteerShift | shiftId | String | Unique shift identifier | Required. |
 |  | date | Date | Event date | Required; must fall within the active event window. |
 |  | startTime / endTime | Time | HH:MM local time | Required for a scheduled shift; end time must be after start time. |
-|  | assignmentStatus | Enum | assigned, claimed, cancelled, filled | Required to support last-minute replacement workflows. |
+|  | assignmentStatus | — | Not a shift field | Each volunteer's assignment to a shift carries its own status (pending, active, cancelled, denied); "filled" is derived from the count of held assignments against the shift's required volunteer count ([vol.md](../design/vol.md) Data model). |
 | Donator | donatorId | String | Unique donor identifier if personal data is retained | Optional; keep only if needed for follow-up and not as a raw ID unless approved. |
 |  | name | String | Free text | Optional for anonymous or low-friction drop-off records. |
 |  | affiliation | Enum | TCU student, faculty, staff, community, unknown | Optional; used only where it affects the donation process. |
