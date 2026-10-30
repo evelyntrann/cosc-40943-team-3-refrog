@@ -152,7 +152,7 @@ Members of TCU, staff, faculty, or students. Who are able to participate in refr
 
 ### TCU Email Verification
 
-Proof that a signed-in account controls a `tcu.edu` email address, established by entering a one-time code sent to that address (`UC-IDV-verify-affiliation`, resolved `OI-10`). It is saved on the account and kept across visits. It is one of the two ways to be eligible to shop, alongside the Volunteer Role, and it does not override the restriction in the Volunteer Role Lifecycle.
+Proof that a signed-in account controls an email address allowed by `BR-tcu-email-domain`, established by entering a one-time code sent to that address (`UC-IDV-verify-affiliation`, resolved `OI-10`). It is saved on the account that completed it and kept across visits (`FR-AUTH-verification-ownership`). It is one of the two ways to be eligible to shop, alongside the Volunteer Role, and it does not override the restriction in the Volunteer Role Lifecycle.
 
 **Not to be confused with:** a TCU ID, which the app never checks or stores.
 
