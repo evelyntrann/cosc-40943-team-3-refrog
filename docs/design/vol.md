@@ -67,7 +67,7 @@ classDiagram
         +listOpenShifts(volunteerId) List~OpenShift~
         +signUp(volunteerId, shiftId) SignUpResult
         +cancel(volunteerId, shiftId) CancelResult
-        +confirmPending(volunteerId)
+        +confirmPending(volunteerId, eventId)
         +denyPending(volunteerId, shiftId)
     }
     class RoleGrantingOperations {
@@ -110,7 +110,7 @@ classDiagram
     class CurrentUser {
         <<reused, authentication>>
         +id() String
-        +volunteerAccess() ROLE_ACTIVE | NONE | RESTRICTED
+        +volunteerAccess(eventId) ROLE_ACTIVE | NONE | RESTRICTED
     }
     class Clock {
         <<reused, crosscutting 8.2.2>>
@@ -134,21 +134,21 @@ classDiagram
 ```
 
 - `server/volunteer/VolunteerShiftController` (new): the HTTP entry point for all four endpoints. It takes the volunteer id from `CurrentUser`, never from the path or body. It checks the request shape and nothing else. It also owns the duplicate backstop's re-read (see Key decisions).
-- `server/volunteer/AssignmentService` (new): owns the three invariants. `listOpenShifts` and `signUp` first read `CurrentUser.volunteerAccess()`. `RESTRICTED` is refused, and an unavailable state is refused as unavailable. Neither is ever treated as `NONE` (see Key decisions). Each `signUp` and `cancel` call is one transaction. `confirmPending` flips all of a person's `PENDING` rows to `ACTIVE`; `denyPending` flips one `PENDING` row to `DENIED`. Only role-granting operations owned by ADM and Authentication call these two, inside their own transaction, so a grant changes the account's role and its pending sign-ups together.
+- `server/volunteer/AssignmentService` (new): owns the three invariants. `listOpenShifts` and `signUp` read `CurrentUser.volunteerAccess(eventId)` for the shift's event before any assignment check. `RESTRICTED` is refused, and an unavailable state is refused as unavailable. Neither is ever treated as `NONE` (see Key decisions). Each `signUp` and `cancel` call is one transaction. `confirmPending` flips all of a person's `PENDING` rows to `ACTIVE`; `denyPending` flips one `PENDING` row to `DENIED`. Only role-granting operations owned by ADM and Authentication call these two, inside their own transaction, so a grant changes the account's role and its pending sign-ups together.
 - Role-granting operations (new, **owned by ADM and Authentication**, shown for the contract only): **every** operation that gives an account the current volunteer role calls `confirmPending` in the same transaction. That includes `UC-ADM-review-volunteer` approve (step 4), `UC-ADM-review-volunteer-request` approve, `UC-ADM-grant-volunteer-access` (both the direct grant and the claim at sign-in, 4b), and annual renewal. `UC-ADM-review-volunteer`'s deny (3a1) calls `denyPending` for one sign-up and leaves the account unchanged. [adm.md](adm.md) and Authentication's design own the endpoints, screens, and authorization.
 - `server/volunteer/ScheduleService` (new): read-only. It builds the volunteer's upcoming shifts, including pending ones, and computes hours from `ACTIVE` assignments and shift times at read time.
 - `server/volunteer/AssignmentRepository` and the `ShiftAssignment` entity (new): the only code that touches the `shift_assignment` table.
 - `server/volunteer/AssignmentQueryService` (new): the read-only face VOL shows other areas, so they never touch VOL's table. ADM's dashboard (`UC-ADM-view-dashboard`, `UC-ADM-notify-volunteers`) and the shift reminder's recheck (`FR-NOTIFY-current-state`) call it. `isActive` is false for a `PENDING` assignment, so an unapproved person gets no shift reminder. `countsByShift` returns active and pending counts separately. Only the two methods shown are in VOL's scope. Any other method another area needs is added by that area's design, not here.
-- `administration/ShiftService` (reused, **owned by ADM**): VOL needs three methods from it. `findSignupCandidates(now)` returns the shifts that have not started, in an event whose status is `planned` or `active`. `findById` is the plain lookup. `lockForAssignment` is the same lookup but holds a pessimistic write lock on the shift row until the caller's transaction ends. All three return a shift's start and end as **instants** (UTC), not as the data dictionary's local date and `HH:MM`. ADM converts from `America/Chicago` when it stores a shift (§8.2.2), and VOL compares them only with `Clock.now()`. These three methods are a contract with ADM's design (`adm.md`). See Open questions.
+- `administration/ShiftService` (reused, **owned by ADM**): VOL needs three methods from it. `findSignupCandidates(now)` returns the shifts that have not started, in an event whose status is `planned` or `active`. `findById` is the plain lookup. `lockForAssignment` is the same lookup but holds a pessimistic write lock on the shift row until the caller's transaction ends. It **joins** the caller's transaction (Spring's default `REQUIRED` propagation, never `REQUIRES_NEW` or read-only), so the lock lasts until VOL commits. Every shift these methods return carries its event id and the event's status, so `signUp` applies the same `planned`/`active` rule to one locked shift that `findSignupCandidates` applies to the list. All three return a shift's start and end as **instants** (UTC), not as the data dictionary's local date and `HH:MM`. ADM converts from `America/Chicago` when it stores a shift (§8.2.2), and VOL compares them only with `Clock.now()`. These three methods are a contract with ADM's design (`adm.md`). See Open questions.
 - `adm/AdminEventConfigService` (reused, **owned by ADM**, the same service [INF.md](INF.md) reads): `getLocationsForEvent(eventId)` supplies location name and address for display.
-- `authentication/CurrentUser` (reused): the signed-in account's id and its current volunteer access.
-  - `ROLE_ACTIVE`: holds the current volunteer role.
-  - `NONE`: signed in, no role, not restricted.
-  - `RESTRICTED`: access removed or expired, `FR-AUTH-volunteer-lifecycle`.
+- `authentication/CurrentUser` (reused): the signed-in account's id and its volunteer access **for one annual event** (`BR-volunteer-role-lifecycle`: the role is reviewed for each event).
+  - `ROLE_ACTIVE`: holds the volunteer role for that event.
+  - `NONE`: no role for that event and not restricted, for example a new account, or a current volunteer looking at next year's planned event before renewal.
+  - `RESTRICTED`: access removed, or expired and not renewed (`FR-AUTH-volunteer-lifecycle`).
 
-  When Authentication cannot establish the state, `volunteerAccess()` fails as unavailable; it never returns a default. Authentication owns the role, the restriction, and their event scope (architecture §5.2, §8.1). VOL reads them and stores nothing about them (see Data model).
+  When Authentication cannot establish the state, `volunteerAccess(eventId)` fails with a dedicated "unavailable" exception that the shared error handler maps to `503`. It never returns a default. Called inside a transaction, it reads the account row with a shared lock (`FOR SHARE`) held until commit, so a role grant or removal (which writes that row first) cannot interleave with a sign-up (see Key decisions). Authentication owns the role, the restriction, and their event scope (architecture §5.2, §8.1). VOL reads them and stores nothing about them (see Data model).
 - `Clock` (reused, architecture §8.2.2): the injected clock, so tests can fix "now" for "has the shift started" and "has the shift ended".
-- **Front end** (new): the `UI-volunteer-schedule` view, with an open-shifts list, a sign-up action, and a my-schedule list with a cancel action. Sign-up is a single action on the open-shifts list, with no confirm dialog before it is sent, so a volunteer claims a shift within the two interactions `UI-volunteer-schedule` allows. The "signed up" confirmation shows only after the server answers `201` or `200` (step 6, `FR-SAVE-confirmed-success`). When the response's status is `PENDING`, it says the sign-up is awaiting administrator approval (5c2), and the my-schedule list marks that shift the same way. A `403 VOLUNTEER_ACCESS_INACTIVE` shows "Volunteer access inactive—administrator review required", the same text IDV shows (1a1). A `503 ACCESS_UNAVAILABLE` shows "Unable to verify access—try again" with a retry, never "no shifts are open". A confirm-before-send dialog is used only for cancel (`UC-VOL-cancel-shift` step 4). While a sign-up or cancel request is in flight, its button is disabled.
+- **Front end** (new): the `UI-volunteer-schedule` view, with an open-shifts list, a sign-up action, and a my-schedule list with a cancel action. Sign-up is a single action on the open-shifts list, with no confirm dialog before it is sent, so a volunteer claims a shift within the two interactions `UI-volunteer-schedule` allows. The "signed up" confirmation shows only after the server answers `201` or `200` (step 6, `FR-SAVE-confirmed-success`). When the response's status is `PENDING`, it says the sign-up is awaiting administrator approval (5c2), and the my-schedule list marks that shift the same way. A `403 VOLUNTEER_ACCESS_INACTIVE` shows "Volunteer access inactive—administrator review required", the same text IDV shows (1a1). A `503 ACCESS_UNAVAILABLE` shows "Unable to verify access—try again" with a retry, never "no shifts are open". A confirm-before-send dialog is used only for cancel (`UC-VOL-cancel-shift` step 4). While a sign-up or cancel request is in flight, its button is disabled. After any `409` or `404` the front end shows the matching message (`404` uses the 4a1 "no longer available" text) and reloads the open list (4a2, 4c2). The service worker serves every `/api/v1/*` request network-only. It caches no shift list or access state and queues no `POST`, because a cached list or a queued sign-up would show what the server has not confirmed (§8.1, `FR-SAVE-confirmed-success`). Times arrive as ISO-8601 with their UTC offset and are displayed in `America/Chicago` on a 12-hour clock (§8.2.2).
 
 ### The assignment's states
 
@@ -188,8 +188,9 @@ sequenceDiagram
     V->>WEB: View open shifts (step 1)
     WEB->>C: GET /api/v1/shifts/open
     C->>AS: listOpenShifts(volunteerId from session)
-    AS->>U: volunteerAccess() (1a guard)
-    alt RESTRICTED (1a)
+    AS->>SH: findSignupCandidates(clock.now())
+    AS->>U: volunteerAccess(eventId) for each event among the candidates (1a guard)
+    alt RESTRICTED for every such event, or no candidates and the account is restricted (1a)
         AS-->>C: refused, VOLUNTEER_ACCESS_INACTIVE
         C-->>WEB: 403
         WEB-->>V: "Volunteer access inactive—administrator review required", no shifts (1a1)
@@ -197,25 +198,25 @@ sequenceDiagram
         AS-->>C: refused, ACCESS_UNAVAILABLE
         C-->>WEB: 503
         WEB-->>V: "Unable to verify access—try again", retry
-    else ROLE_ACTIVE or NONE
-        AS->>SH: findSignupCandidates(clock.now())
-        AS->>R: held (ACTIVE + PENDING) counts for those shifts
-        AS-->>C: shifts with openSlots > 0, each with assignedToMe
+    else otherwise
+        AS->>R: held (ACTIVE + PENDING) counts for the shifts of events where access is ROLE_ACTIVE or NONE
+        AS-->>C: those shifts with openSlots > 0, each with assignedToMe
         C-->>WEB: 200, list (possibly empty)
         WEB-->>V: Shifts by date and location, open slots shown (step 2), or "no shifts are open" (2a)
     end
     V->>WEB: Select a shift (step 3)
     WEB->>C: POST /api/v1/shifts/{shiftId}/assignments
     C->>AS: signUp(volunteerId, shiftId)
-    AS->>U: volunteerAccess() (1a guard, again: access may have changed since step 2)
-    alt RESTRICTED (1a) or unavailable (§8.2.1)
-        AS-->>C: refused, VOLUNTEER_ACCESS_INACTIVE or ACCESS_UNAVAILABLE, nothing written
-    end
-    Note over AS,R: one transaction from here to commit
-    AS->>SH: lockForAssignment(shiftId), row locked until commit
+    Note over AS,R: one transaction (READ COMMITTED) from here to commit; locks taken account first, then shift
+    AS->>SH: findById(shiftId), for its event id
     alt shift unknown
         AS-->>C: refused, SHIFT_NOT_FOUND
-    else
+    else shift exists
+        AS->>U: volunteerAccess(eventId), account row FOR SHARE until commit (1a guard, again: access may have changed since step 2)
+        alt RESTRICTED (1a) or unavailable (§8.2.1)
+            AS-->>C: refused, VOLUNTEER_ACCESS_INACTIVE or ACCESS_UNAVAILABLE, nothing written
+        else ROLE_ACTIVE or NONE
+        AS->>SH: lockForAssignment(shiftId), row locked until commit (bounded lock wait; a timeout is 5a)
         AS->>R: findByShiftAndVolunteer(shiftId, volunteerId)
         alt already ACTIVE or PENDING (4b, 5b)
             AS-->>C: existing assignment, alreadyAssigned = true
@@ -237,15 +238,21 @@ sequenceDiagram
             end
         end
     end
+    end
     C-->>WEB: 201 new / 200 already assigned / 403 / 409 / 404 / 503 / 5xx
     WEB-->>V: Confirmation (step 6, 5b2), inactive-access message (1a1), "unable to verify access", retry (503), "signed up, awaiting approval" (5c2), "already signed up" (4b1), "you cannot sign up for this shift", back to list (4c1, 4c2), "no longer available", back to list (4a1, 4a2), or "not completed, no assignment made", retry (5a1, 5a2)
 ```
 
-_The access check comes **before everything else**, including the lock and the own-assignment check. A restricted account cannot hold a row: removal clears its assignments (`UC-ADM-remove-volunteer-access` step 4), and expiry falls after the event's shifts have ended. So it never gets `alreadyAssigned`._
+_The access check comes right after the shift lookup that gives it the shift's event, and **before** the shift lock and the own-assignment check. A restricted account cannot hold a row: removal clears its assignments (`UC-ADM-remove-volunteer-access` step 4), and expiry falls after the event's shifts have ended. So it never gets `alreadyAssigned`._
 
 _The own-assignment check comes **before** both the not-open check and the capacity check. A retry on a shift that this volunteer's first attempt has just filled, or a retry that arrives after the shift has started, returns "already signed up" (5b). It never returns "shift full" or "not open" (4a)._
 
-**Unknown outcome (`FR-SAVE-unknown-outcome`).** If the connection drops before the response arrives, the front end does not report a failure. It calls `GET /api/v1/me/schedule` and reports a sign-up if the shift is there. If it is not, it says no assignment was made. Retrying the `POST` is also safe, because it is idempotent.
+**Unknown outcome (`FR-SAVE-unknown-outcome`).** The outcome is unknown when the connection drops, when the client times out, or when a `5xx` arrives without one of this table's error codes (for example a proxy's `502` or `504`, which can follow a commit). In those cases the front end does not report a failure. It calls `GET /api/v1/me/schedule`.
+- If the shift is there, it shows step 6's confirmation, or 5c2's "awaiting approval" when the row's `status` is `PENDING`.
+- If the shift is not there, it shows 5a1's "no assignment was made".
+- If that `GET` also fails, it says the outcome is not yet known and asks the volunteer to check their schedule. It never claims either result.
+
+A `5xx` that carries an application code, such as `503 ACCESS_UNAVAILABLE`, was refused before any write, so it is reported directly. Retrying the `POST` is also safe, because it is idempotent. The timeout length is left to the build.
 
 ### UC-VOL-cancel-shift: cancelling a shift
 
@@ -332,7 +339,7 @@ sequenceDiagram
     Note over VR,R: one transaction, opened by ADM
     alt approve (step 4)
         VR->>VR: grant the account the current volunteer role (Authentication)
-        VR->>AS: confirmPending(volunteerId)
+        VR->>AS: confirmPending(volunteerId, eventId), after the account row is written
         AS->>R: every PENDING row of this person becomes ACTIVE; held counts unchanged
     else deny one sign-up (3a1)
         VR->>AS: denyPending(volunteerId, shiftId)
@@ -349,7 +356,7 @@ _The notification to the person (`UC-ADM-review-volunteer` step 5, 3a2) is ADM's
 
 _[One row per endpoint, scheduled job, or message this area adds or changes, appended per use case. **This section is never dropped**: before the code exists it is the only thing the person (or agent session) building the front end and the one building the back end both read. Name the caller and who may call it, the request fields, the success response, and the error each extension returns. Leave field types and exact JSON to the agent unless a wrong guess would break something, such as a format another system depends on. Use the error shape your architecture-of-record's section 8.2 fixes; do not invent one here.]_
 
-The architecture's §8.2.1 and §8.2.3 don't fix an error shape yet (see Open questions). So this table fixes only the error **codes** the front end branches on, not the response envelope around them.
+The architecture's §8.2.1 and §8.2.3 don't fix an error shape yet (see Open questions). So this table fixes only the error **codes** the front end branches on, not the response envelope around them. Whatever envelope the team fixes, each code must sit in a machine-readable field of it, produced by the one shared error handler, because the front end chooses 1a1, 4a1, and 4c1 by code. "Access unavailable" must reach that handler as its own exception mapped to `503`, never the generic `500`. Times in responses are ISO-8601 with their UTC offset.
 
 | Endpoint | Caller (who may) | Request | Success | Errors, by extension |
 |---|---|---|---|---|
@@ -368,8 +375,9 @@ _A decision that affects the whole system rather than this area is an architectu
 
 **How overbooking is prevented.** Inside the sign-up transaction, VOL locks the shift's row (`ShiftService.lockForAssignment`, a Spring Data JPA `PESSIMISTIC_WRITE` lock, which PostgreSQL executes as `SELECT … FOR UPDATE`, `KD-tech-stack`). Then it counts held assignments (`ACTIVE` plus `PENDING`) and inserts. Two concurrent claims for the last slot run one after the other: the second sees the count at capacity and gets `SHIFT_FULL`. Cancel takes the same lock, so a cancel and a claim on the same shift cannot interleave.
 Rejected: a stored `filledCount` column decremented on cancel, which can drift from the real assignments after a partial failure. Rejected: an optimistic version check with retry, which the SRS §5.2 scoping note cut as more than this event's load needs (`SCA-event-capacity`: 200 volunteers), and which surfaces as spurious failures under the sign-up rush. Rejected: an in-process lock, which breaks as soon as the application runs more than one instance. Contention is per shift, so locking one shift row never blocks sign-ups for other shifts (`PER-form-submission`).
+The transaction runs at PostgreSQL's default **READ COMMITTED**, so the count after the lock sees the previous claimant's committed row. Rejected: REPEATABLE READ or SERIALIZABLE. Their snapshot is taken before the lock wait, so the count would miss the insert committed during the wait (REPEATABLE READ), or the second claimant would get a serialization failure instead of `SHIFT_FULL` (SERIALIZABLE). The wait for the shift lock is bounded (PostgreSQL `lock_timeout`; the value is left to the build), and a timeout is answered as 5a: `5xx`, nothing written, retry.
 
-**How duplicates are prevented.** Two layers. (1) The service looks up the volunteer's row first and returns `200 alreadyAssigned` if it is `ACTIVE` or `PENDING` (4b, 5b, `FR-SAVE-duplicate-submission`). (2) A database **unique constraint on (shift_id, volunteer_id)** is the backstop if two identical requests ever get past the lock. A violation of that constraint is caught and answered as `alreadyAssigned`, not as an error. In PostgreSQL a constraint violation aborts the transaction, so the catch sits in the controller, outside `signUp`'s transaction. It re-reads the volunteer's row in a **new** read-only transaction and answers `200 alreadyAssigned` from it.
+**How duplicates are prevented.** Two layers. (1) The service looks up the volunteer's row first and returns `200 alreadyAssigned` if it is `ACTIVE` or `PENDING` (4b, 5b, `FR-SAVE-duplicate-submission`). (2) A database **unique constraint on (shift_id, volunteer_id)** is the backstop if two identical requests ever get past the lock. A violation of that constraint is caught and answered as `alreadyAssigned`, not as an error. In PostgreSQL a constraint violation aborts the transaction, so the catch sits in the controller, outside `signUp`'s transaction. It catches **only** a violation of the (`shift_id`, `volunteer_id`) constraint, identified by its constraint name, not every integrity error. It re-reads the volunteer's row in a **new** read-only transaction. It answers `200 alreadyAssigned` only if that row is `ACTIVE` or `PENDING`, and otherwise `5xx` (5a), so a sign-up that wrote nothing is never confirmed (`FR-SAVE-confirmed-success`).
 Rejected: `INSERT … ON CONFLICT DO NOTHING`, because a sign-up that reactivates a `CANCELLED` row is an `UPDATE`, which would leave two write paths with different duplicate handling. Rejected: a client-generated idempotency key per submission, which adds a table and key handling for a case that "(shift, volunteer) is unique" already identifies exactly. Rejected: relying only on disabling the button, which does not survive a page reload or a retry after a lost response (`FR-SAVE-unknown-outcome`).
 
 **4b and 5b get the same response.** The server cannot tell "already signed up and selected it again" (4b) apart from "retry of a sign-up that succeeded" (5b). The state is identical. Both get `200` with `alreadyAssigned: true`, and the UI's "You're already signed up for this shift" satisfies both 4b1 and 5b2.
@@ -390,8 +398,19 @@ Rejected: following the data dictionary literally (see Open questions, item 4). 
 **A new volunteer claims first and is approved after; a pending claim holds the slot.** Everyone signs in. A sign-up by an account not yet approved is saved as `PENDING` and counts against the shift's capacity like an `ACTIVE` one, so the overbooking invariant still holds whatever the administrator later decides. Approval is once per person per annual event (`UC-ADM-review-volunteer` or any other role grant): it gives the account the Volunteer role and confirms all its pending sign-ups. After that, sign-ups go straight to `ACTIVE` until the role expires or is removed (`BR-volunteer-role-lifecycle`). Denial is per sign-up: the administrator denies one pending sign-up, its slot reopens, and the person cannot claim that shift again (`409 SIGNUP_DENIED`). Their other sign-ups, in this event or later ones, are unaffected, and their account stays not yet approved. The person is notified of each decision (see Approval hand-off).
 Rejected: approving the person before they may claim anything, which keeps a first-time volunteer from claiming a shift within two minutes (`USE-volunteer-signup-completion`). Rejected: a pending claim that does not hold a slot, which lets approval push a shift past its required count, or forces the administrator to deny people only because the shift filled meanwhile. Rejected: approval per sign-up, which multiplies the founders' review work for no requirement. Rejected: denying the whole person, which would block them from every shift and every later event (team decision, 2026-10-16). Rejected: letting a denied sign-up be re-claimed, which would put the same request straight back in front of the administrator.
 
-**The access check comes first, and an unknown state is never `NONE`.** `listOpenShifts` and `signUp` read `CurrentUser.volunteerAccess()` before anything else. `RESTRICTED` gets `403 VOLUNTEER_ACCESS_INACTIVE` (1a, `FR-AUTH-volunteer-lifecycle`). An unavailable state gets `503 ACCESS_UNAVAILABLE` with retry (§8.2.1). Neither writes anything. `signUp` checks again rather than trusting the list, because access can be removed between steps 2 and 3, and §8.1 forbids authorizing from earlier session state.
+**The access check comes first, and an unknown state is never `NONE`.** `listOpenShifts` and `signUp` read `CurrentUser.volunteerAccess(eventId)` before any assignment check or shift lock. `RESTRICTED` gets `403 VOLUNTEER_ACCESS_INACTIVE` (1a, `FR-AUTH-volunteer-lifecycle`). An unavailable state gets `503 ACCESS_UNAVAILABLE` with retry (§8.2.1). Neither writes anything. `signUp` checks again rather than trusting the list, because access can be removed between steps 2 and 3, and §8.1 forbids authorizing from earlier session state.
 Rejected: treating an unavailable state as `NONE`. That would quietly write a `PENDING` sign-up for a revoked person. Rejected: checking access after the own-assignment lookup, which could answer `200 alreadyAssigned` to a restricted account.
+
+**A role change and a sign-up cannot interleave.** `signUp` reads access inside its transaction while holding a shared lock on the account row (`FOR SHARE`). Every operation that grants or removes the role writes that account row **first**, and only then touches assignments (`confirmPending`, or the release on removal). So whichever commits second sees the other's result.
+- If the grant commits first, sign-up sees `ROLE_ACTIVE` and writes `ACTIVE`.
+- If sign-up commits first, the grant's `confirmPending` sees the new `PENDING` row.
+- A removal likewise never leaves a held row behind.
+
+Locks are always taken account first, then shift, by sign-up and by removal alike, so the two cannot deadlock.
+Rejected: reading access before the transaction. A `confirmPending` that commits between the read and the insert would leave a `PENDING` row for a role holder, and a removal in that window would leave an `ACTIVE` row behind (`BR-volunteer-role-lifecycle`).
+
+**Access is per annual event.** `volunteerAccess(eventId)` answers for the event of the shift being claimed, and `confirmPending(volunteerId, eventId)` confirms only that event's pending rows. So a role for this year's event never turns a sign-up for next year's planned event into `ACTIVE` without the review `BR-volunteer-role-lifecycle` requires.
+Rejected: one account-wide answer, which is correct only while a single event is open for sign-up, and nothing guarantees that.
 
 **"Approved" means holding the current volunteer role, and every grant confirms pending sign-ups.** The role is granted in several ways (`UC-ADM-review-volunteer`, `UC-ADM-review-volunteer-request`, `UC-ADM-grant-volunteer-access`, annual renewal; `BR-volunteer-role-approval`). Each of them calls `confirmPending` in its own transaction, so a person who holds the role has no `PENDING` sign-ups (team decision, 2026-10-30).
 Rejected: only `UC-ADM-review-volunteer` confirms. A person given the role through a request or by email would then keep `PENDING` sign-ups, with no hours and no reminders, until an administrator approved them a second time.
@@ -443,7 +462,7 @@ _[One row per flow: the main success scenario and **every** extension of every u
 | UC-VOL-signup 1a, list | integration | A `RESTRICTED` account: `GET` open shifts gets `403 VOLUNTEER_ACCESS_INACTIVE` and no shifts |
 | UC-VOL-signup 1a, sign-up | integration | A `RESTRICTED` account, free slot: `POST` gets `403 VOLUNTEER_ACCESS_INACTIVE`, no row written, `openSlots` unchanged |
 | UC-VOL-signup 1a, removed after listing | integration | Access becomes `RESTRICTED` between the `GET` and the `POST`: `POST` gets `403`, nothing written |
-| UC-VOL-signup, access unavailable | integration | `volunteerAccess()` fails: `GET` and `POST` both get `503 ACCESS_UNAVAILABLE`, and no `PENDING` row is written |
+| UC-VOL-signup, access unavailable | integration | `volunteerAccess(eventId)` fails: `GET` and `POST` both get `503 ACCESS_UNAVAILABLE`, and no `PENDING` row is written |
 | UC-VOL-signup 1a, front end | unit (front end) | `403 VOLUNTEER_ACCESS_INACTIVE` shows the inactive-access message. `503` shows "unable to verify access" with retry, not "no shifts are open" |
 | UC-VOL-signup step 2 | integration | The open list excludes full shifts, shifts that have started (fixed clock), and shifts in a `closed`/`archived` event. It includes a `planned` event's shifts |
 | UC-VOL-signup step 2, `assignedToMe` | integration | A shift the volunteer holds that still has free slots is listed with `assignedToMe: true` |
@@ -461,6 +480,15 @@ _[One row per flow: the main success scenario and **every** extension of every u
 | UC-VOL-signup 5b, sequential | integration | The same `POST` sent twice: one `201`, one `200 alreadyAssigned`, one row, slot counted once (`FR-SAVE-duplicate-submission` verification) |
 | UC-VOL-signup 5b, concurrent | integration | The same volunteer's two concurrent `POST`s: one row, slot counted once, neither response is an error |
 | UC-VOL-signup 5b, unique-violation backstop | integration | Force a unique-constraint violation on insert: the response is `200 alreadyAssigned` read in a fresh transaction, one row, no `5xx` |
+| UC-VOL-signup 5b, backstop is narrow | integration | A forced violation of another constraint (for example a foreign key), or a unique violation whose re-read finds no held row: `5xx`, never `200 alreadyAssigned` |
+| UC-VOL-signup 5c, grant races sign-up | integration | A role grant and a sign-up by the same account run concurrently: whatever the commit order, the account ends with no `PENDING` row in that event |
+| UC-VOL-signup 1a, removal races sign-up | integration | A role removal and a sign-up by the same account run concurrently: whatever the commit order, the account ends with no held row, and no deadlock occurs |
+| UC-VOL-signup 5c, event scope | integration | An account with `ROLE_ACTIVE` for this year's event signs up for a shift in next year's `planned` event: `201` with `status: PENDING`. `confirmPending` for this year leaves that row `PENDING` |
+| UC-VOL-signup 4a, closed event via direct POST | integration | `POST` for a shift whose event is `closed` or `archived` (hidden from the list): `409 SHIFT_NOT_OPEN`, nothing written |
+| UC-VOL-signup 5a, lock wait times out | integration | The shift row is held by another transaction past the lock timeout: `5xx`, nothing written |
+| UC-VOL-signup unknown outcome | unit (front end) | After a timeout, or a `502`/`504` with no application code: the front end checks the schedule and shows step 6's message, 5c2's (when `PENDING`), or 5a1's to match. If the check also fails, it shows "not yet known", not a failure |
+| UC-VOL-signup 4a2, 4c2 | unit (front end) | After `409` or `404`, the open list reloads. `404` shows the 4a1 message |
+| UC-VOL-signup, no API caching | unit (front end) | The service worker serves `/api/v1/*` network-only: offline, the open list shows an error, not a cached list, and a `POST` is not queued |
 | UC-VOL-signup 5c, role granted elsewhere | integration | An account with `PENDING` sign-ups gains the role through a path other than `UC-ADM-review-volunteer`, which calls `confirmPending` in its transaction: every row is `ACTIVE`, held counts unchanged |
 | UC-VOL-signup 5b, filled by own retry | integration | The volunteer took the last slot, then retries: `200 alreadyAssigned`, not `409 SHIFT_FULL` |
 | UC-VOL-signup 5b, retry after start | unit | The volunteer holds the slot and the retry arrives after the fixed clock passes the shift's start: `200 alreadyAssigned`, not `409 SHIFT_NOT_OPEN` |
@@ -478,7 +506,7 @@ _[One row per flow: the main success scenario and **every** extension of every u
 | UC-VOL-cancel-shift, no notification | integration | A successful cancel sends and queues no notification (`OI-7`) |
 | UC-VOL-view-schedule main | integration | Lists only the volunteer's `ACTIVE` and `PENDING` assignments whose shift has not ended, ordered by start, with location address and `status` |
 | UC-VOL-view-schedule, pending hours | unit | A `PENDING` 3-hour shift, ended or upcoming, adds to neither `finishedHours` nor `plannedHours` |
-| Approval hand-off, approve | integration | `confirmPending` turns all of the person's `PENDING` rows `ACTIVE` in ADM's transaction; held counts unchanged; `isActive` now true |
+| Approval hand-off, approve | integration | `confirmPending(volunteerId, eventId)` turns all of the person's `PENDING` rows in that event `ACTIVE` in ADM's transaction, and leaves another event's `PENDING` rows unchanged; held counts unchanged; `isActive` now true |
 | Approval hand-off, deny | integration | `denyPending` turns that one `PENDING` row `DENIED`: its open slots increase by one, the person's other `PENDING` rows and account status are unchanged |
 | Approval hand-off, failure and repeat | integration | A failed commit leaves the account status and every row unchanged (4a). Repeating either call changes nothing (4b) |
 | Reminder recheck | unit | `isActive` is false for a `PENDING` assignment, so no shift reminder goes to an unapproved person |
@@ -514,9 +542,10 @@ _[What this design could not settle and who can, and what could go wrong that yo
 **Coordination with other areas** (contract, not client):
 
 - **ADM (Ananye):** `ShiftService.findSignupCandidates`, `findById`, `lockForAssignment` as described in Components, returning start and end as UTC instants converted from `America/Chicago`. `required_count` starts from the location's count set at event setup and may be changed per shift. `UC-ADM-review-volunteer` is ADM's, calling `confirmPending` and `denyPending` in its own transaction (see Approval hand-off). ADM's `UC-ADM-manage-shifts` 6a also has to decide what happens to held assignments when a shift is edited below its held count or removed. VOL does not handle this; it only reads `required_count`. Whatever ADM decides, it must not leave held count > required count without saying so.
-- **Authentication:** exposes `CurrentUser.volunteerAccess()`: `ROLE_ACTIVE` for the current annual event's role, `NONE`, or `RESTRICTED` for removed or expired access. It fails as unavailable rather than defaulting. The architecture links an `authentication.md` that does not exist yet; whoever writes it adopts this contract. Every role grant it owns (the claim of an email approval at sign-in) calls `confirmPending`.
+- **Authentication:** exposes `CurrentUser.volunteerAccess(eventId)`: `ROLE_ACTIVE` for that event's role, `NONE`, or `RESTRICTED` for removed or expired access. It fails as unavailable rather than defaulting, and inside a transaction it reads the account row `FOR SHARE`. Every grant or removal writes the account row before touching assignments (see Key decisions). Session, cookie, and CSRF handling for VOL's state-changing `POST` and `DELETE` come from the application-wide Spring Security configuration Authentication owns (§8.1); VOL adds none of its own. The architecture links an `authentication.md` that does not exist yet; whoever writes it adopts this contract. Every role grant it owns (the claim of an email approval at sign-in) calls `confirmPending`.
 - **ADM, role grants:** [adm.md](adm.md) still models approval as `volunteerStatus = NONE | APPROVED`. It needs revising to the role model, and every grant it owns (`UC-ADM-review-volunteer-request`, `UC-ADM-grant-volunteer-access`, renewal) must call `confirmPending` in its transaction.
-- **ADM, role removal:** `UC-ADM-remove-volunteer-access` step 4 clears active assignments and releases their capacity. That needs a VOL method that releases all of a person's held rows under each shift's lock. ADM's design adds it, per this document's rule on `AssignmentQueryService`.
+- **ADM, role removal:** `UC-ADM-remove-volunteer-access` step 4 clears active assignments and releases their capacity. That needs a VOL method that releases all of a person's held rows under each shift's lock. ADM's design adds it, per this document's rule on `AssignmentQueryService`. The released rows become `CANCELLED`, never `DENIED` or a new status, so a later re-grant lets the person claim those shifts again (step 5, not 4c).
+- **ADM, shift contract:** shifts returned by `ShiftService` carry their event id and event status, and `lockForAssignment` joins the caller's transaction (see Components).
 - **Notifications / `FR-NOTIFY-current-state`:** the reminder rechecks with `AssignmentQueryService.isActive` before sending.
 - **Notifications / `UC-ADM-review-volunteer`:** ADM's review notifies the person of an approval or a denied sign-up after its transaction commits, through the Notifications component. VOL sends nothing. If the notification fails, the decision stands and the administrator sees the failure (`FR-NOTIFY-preserve-business-state`).
 - **IDV:** architecture §5.2 makes "registered volunteer" a route to shopping eligibility. [IDV.md](IDV.md) reads the current volunteer role from Authentication (`BR-shopper-verification`), not from VOL. A `PENDING` or `ACTIVE` sign-up alone is not proof of anything.
