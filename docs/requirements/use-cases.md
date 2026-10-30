@@ -203,7 +203,7 @@ A note on `UC-VOL-claim-open-shift`: an earlier draft of this list had it as a s
 A failed save leaves no assignment recorded (fails cleanly, no partial state). A retry of the same sign-up, whether user-initiated or a duplicate submission, must not create two assignments for the same volunteer on the same shift or double-count against the shift's capacity.
 
 **Related Use Cases:** `UC-VOL-cancel-shift`: Cancel a signed-up shift; `UC-VOL-view-schedule`: View assigned shifts and hours; `UC-ADM-manage-shifts`: Create and configure volunteer shifts
-**Assumptions:** Sign-in is via Google Sign-In — the team's working decision (resolves `OI-17`), not yet confirmed with the client. Distinct from `OI-10` (resolved), which settled TCU-affiliation verification specifically, not general sign-in. Everyone signs in, volunteers included; a signed-in account becomes a volunteer only when an administrator approves it (team discussion, 2026-10-16). The volunteer claims first and is approved after, so a first-time volunteer can still claim a shift without waiting (`USE-volunteer-signup-completion`).
+**Assumptions:** Sign-in uses the application's own email-and-password accounts, each email verified by code at sign-up (`FR-AUTH-account-signup`, resolves `OI-17`). Distinct from `OI-10` (resolved), which settled TCU-affiliation verification specifically, not general sign-in. Everyone signs in, volunteers included; a signed-in account becomes a volunteer only when an administrator approves it (team discussion, 2026-10-16). The volunteer claims first and is approved after, so a first-time volunteer can still claim a shift without waiting (`USE-volunteer-signup-completion`).
 **Open Issues:** none.
 
 ---
@@ -838,7 +838,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 **Created By:** Alexa Mercado
 **Date Created:** 2026-10-16
 **Primary Actor:** Administrator, including Wendy
-**Secondary Actors:** Volunteer; sign-in provider
+**Secondary Actors:** Volunteer
 **Trigger:** An administrator chooses to add a volunteer directly.
 **Description:** Grant access without a user request by matching a verified sign-in email. Source: team decision with Alexa Mercado, not a recorded client approval.
 **Preconditions:**
@@ -864,7 +864,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 **Priority:** High for administrator-directed volunteer access.
 **Frequency of Use:** During recruitment and volunteer onboarding.
 **Business Rules:** `BR-volunteer-role-approval`
-**Associated Information:** A typed profile email or TCU affiliation email is insufficient to claim a manual grant; match provider-verified sign-in email. Pending approval grants no access. No account credentials, invitation message, or shift assignment are created by this use case.
+**Associated Information:** A typed profile email or TCU affiliation email is insufficient to claim a manual grant; match the sign-in email verified at sign-up (`FR-AUTH-account-signup`). Pending approval grants no access. No account credentials, invitation message, or shift assignment are created by this use case.
 **Related Use Cases:** `UC-ADM-remove-volunteer-access`, `UC-IDV-verify-affiliation`
 **Assumptions:** General sign-in remains the existing authentication flow.
 **Role lifecycle:** At the configured annual event end, volunteer privileges expire. Each new annual event requires administrator review and approval before renewal; access does not renew automatically. Email changes on the same account preserve an active role. See `BR-volunteer-role-lifecycle`.
