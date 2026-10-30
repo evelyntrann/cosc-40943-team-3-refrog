@@ -331,7 +331,7 @@ The migration that adds these tables, and the one that seeds the categories and 
 
 _[Which existing services, components, and conventions this area uses rather than rebuilding: authentication, the error handler, email, the clock, another area's service. Cite your architecture-of-record's section 8.2 for each convention by name rather than restating it.]_
 
-- **Authentication and authorization:** session identity from the Authentication component (Google Sign-In, `OI-17`). Shopping endpoints require sign-in (arch §8.1 Authorization, `FR-AUTH-enforce-permissions`, `SEC-role-based-access`).
+- **Authentication and authorization:** session identity from the Authentication component (own email-and-password accounts, `KD-own-accounts`). Shopping endpoints require sign-in (arch §8.1 Authorization, `FR-AUTH-enforce-permissions`, `SEC-role-based-access`).
 - **Affiliation status:** `AffiliationService` from Identity Verification (arch §5.2 `IDV`). SHP never reads or stores the shopper's TCU email itself.
 - **Locations and the current event:** `LocationService` from Administration (arch §5.2 `ADM`).
 - **Item categories and weights:** `CategoryService` and the `item_category` table, shared with Donation. **⚠ GUESS:** whether Donation also records weight (for a "weight donated" total) is not decided. The shared table supports it either way.

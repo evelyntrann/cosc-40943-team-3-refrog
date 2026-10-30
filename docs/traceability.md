@@ -98,4 +98,6 @@ Team decision with Alexa Mercado, October 16, 2026. This table supplements the t
 | Business rule | Source | Enforced by |
 |---|---|---|
 | `BR-volunteer-role-approval` | Team decision with Alexa Mercado, 2026-10-16 | `UC-VOL-request-access`, `UC-ADM-review-volunteer-request`, `UC-ADM-grant-volunteer-access`, `UC-ADM-remove-volunteer-access`, `FR-AUTH-volunteer-role` |
+| `BR-volunteer-role-approval` claim by email | Team decision, 2026-10-30 (`OI-17`) | `FR-AUTH-account-signup` (sign-in email verified by code at sign-up) |
+| `BR-tcu-email-domain` | Client meeting 2026-10-02 (`OI-10`); exact-domain rule, team decision 2026-10-16 | `UC-IDV-verify-affiliation` step 3 and extension 3a, `FR-AUTH-verification-code` |
 | `BR-shopper-verification` | Client email-verification decision 2026-10-02; team volunteer-role clarification 2026-10-16; Wendy exclusion of visual-ID checks, reported 2026-10-26 (`OI-19`) | `UC-IDV-verify-affiliation` step 2 and extensions 2b/5b, `UC-SHP-log-item-taken` PRE-1, `FR-AUTH-shopping-eligibility` |

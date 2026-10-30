@@ -95,7 +95,7 @@ See the [Vision Statement](vision-and-scope.md#24-vision-statement) and [User En
 
 _[The kinds of user, and what distinguishes them: frequency of use, technical skill, privilege level, whether they are inside or outside the client's organization. Link to the stakeholder profiles in your vision and scope; what belongs here is what affects the software's behavior, especially permissions.]_
 
-The application has six user classes. General sign-in remains provisional. TCU email verification and administrator-approved volunteer roles are separate shopping eligibility paths; the volunteer role decision was recorded with Alexa Mercado on October 16, 2026.
+The application has six user classes. General sign-in uses the application's own email-and-password accounts (`FR-AUTH-account-signup`). TCU email verification and administrator-approved volunteer roles are separate shopping eligibility paths; the volunteer role decision was recorded with Alexa Mercado on October 16, 2026.
 
 | User class | Characteristics and frequency of use | Intended access |
 |---|---|---|
@@ -210,15 +210,47 @@ When a user requests volunteer scheduling data, shopping activity, or an adminis
 
 **Verification:** Request the administrator dashboard while signed in as a volunteer. The request is denied and no administrator data is returned. Request a volunteer's own shift assignments while signed out. The request is denied.
 
+**`FR-AUTH-account-signup`**
+
+A user shall sign up with an email address of any domain and a password. The system shall create the account only after the user enters the one-time code sent to that email (`FR-AUTH-verification-code`, `FR-AUTH-verification-limits`); until then no account exists and nothing can be signed in to. A signed-up user shall sign in with that email and password. The system shall use no external identity provider, shall store passwords only as a salted, slow one-way hash, and shall never log or return them. An email that already belongs to an account shall not create a second account.
+
+**Verification:** Sign up with a non-TCU email; sign-in fails until the emailed code is entered, then succeeds with the password. Entering a wrong or expired code creates no account. Signing up again with the same email does not create a second account. The stored password is not readable as plain text.
+
+**Source:** Team decision, October 30, 2026 (`OI-17`, `KD-own-accounts`); not a recorded client approval.
+
 **`FR-AUTH-affiliation-from-signin`**
 
 Confirmed with the client 2026-10-02 (resolves `OI-10`): the system shall verify a shopper's TCU affiliation by sending a one-time code to a TCU email address the shopper provides, and shall persist that verified status on their account rather than repeating the check on every visit, consistent with `UC-IDV-verify-affiliation`. This replaces an earlier draft of this requirement that assumed affiliation could be derived directly from a sign-in provider's email domain — that depended on TCU's email running on the same provider used for sign-in, which was never confirmed and is not what the client chose.
 
 **Verification:** Enter a TCU email, receive and submit the code, and confirm affiliation shows verified. Sign out and back in, and confirm the verified status persists without repeating the email-code step.
 
+**`FR-AUTH-verification-code`**
+
+When a user requests a code, either at sign-up for the email being registered (`FR-AUTH-account-signup`) or while signed in for an email allowed by `BR-tcu-email-domain`, the system shall send that email a six-digit code from a cryptographically secure generator (leading zeros allowed), valid for ten minutes from its creation by the server clock. Only the account's most recent code shall be accepted: requesting a new code invalidates the previous one, even if the new code's delivery fails. A code shall be accepted at most once, and only for the account and email it was issued to.
+
+**Verification:** With a fixed clock, a code submitted just before ten minutes is accepted and one at ten minutes is rejected. After a resend, the earlier code is rejected. A code issued to one account is rejected for another. A second submission of an accepted code is rejected.
+
+**Source:** Team decision, October 16, 2026 (`docs/design/IDV.md`); not a recorded client approval.
+
+**`FR-AUTH-verification-limits`**
+
+The system shall enforce these limits on the server, across sessions, for sign-up and TCU affiliation codes alike, counting a pending sign-up as an account: a code is invalidated by its fifth incorrect submission; an account may make at most ten incorrect submissions in any rolling 15 minutes, counted across resends; code requests from one account shall be at least 60 seconds apart; and at most five code requests may be made in any rolling hour per account and, separately, per destination email. A refused request shall tell the user when they may try again. Every limit expires with time; none locks an account permanently.
+
+**Verification:** With a fixed clock, test each limit at its boundary: the fifth wrong code invalidates it; the eleventh wrong submission in 15 minutes is refused even after a resend; a request 59 seconds after the last is refused and one at 60 seconds is accepted; a sixth request in an hour is refused for the account and for the email independently. Each refusal states the retry time, and requests succeed again once the window passes.
+
+**Source:** Team decision, October 16, 2026 (`docs/design/IDV.md`); not a recorded client approval.
+
+**`FR-AUTH-verification-ownership`**
+
+Saved TCU email verification shall belong to the account that completed it. Any other account, including a new account using the same email, shall complete its own verification. Changing the sign-in email on the same account shall keep the saved verification and shall not mark the new sign-in email as TCU-verified.
+
+**Verification:** Verify on one account, then sign in with a second account and enter the same TCU email; the second account is not verified until it completes its own code. Change the first account's sign-in email; it stays verified without a new code.
+
+**Source:** Team decision, October 16, 2026 (`docs/design/IDV.md`); not a recorded client approval.
+
 **`FR-AUTH-volunteer-role`**
 
-Only an authorized administrator shall grant or remove the volunteer role. A signed-in user may request approval through `UC-VOL-request-access`; a pending or declined request shall grant no volunteer permissions. Administrators may also approve a volunteer by email through `UC-ADM-grant-volunteer-access`; an unclaimed approval shall grant no access until matched to the account's provider-verified sign-in email. Role grants and removals shall be audited, and protected checks shall use current role state. Cancelling a shift shall not itself revoke the role.
+Only an authorized administrator shall grant or remove the volunteer role. A signed-in user may request approval through `UC-VOL-request-access`; a pending or declined request shall grant no volunteer permissions. Administrators may also approve a volunteer by email through `UC-ADM-grant-volunteer-access`; an unclaimed approval shall grant no access until matched to the account's sign-in email, verified at sign-up (`FR-AUTH-account-signup`). Role grants and removals shall be audited, and protected checks shall use current role state. Cancelling a shift shall not itself revoke the role.
 
 **Verification:** Confirm self-requesting does not grant access, approval does, an ordinary user cannot grant roles, only a verified matching sign-in email claims a manual approval, and removal prevents an existing session or old pending approval from restoring volunteer-based access.
 
@@ -310,7 +342,7 @@ If a notification fails to send after a shift sign-up, cancellation, or schedule
 
 **`FR-NOTIFY-in-app-inbox`**
 
-When the system sends a notification to a user's account, it shall send it by email and also place it in that user's in-app inbox, where only that user can read it and it stays marked unread until they open it. TCU affiliation verification codes are the exception: they are sent by email only, because the code proves the shopper can read that TCU inbox. Team decision, 2026-10-16.
+When the system sends a notification to a user's account, it shall send it by email and also place it in that user's in-app inbox, where only that user can read it and it stays marked unread until they open it. Verification codes, for sign-up and for TCU affiliation, are the exception: they are sent by email only, because the code proves the user can read that inbox. Team decision, 2026-10-16.
 
 **Verification:** Send a volunteer an approval decision. It arrives by email, it appears unread in their in-app inbox, and another signed-in user cannot see it. Request a verification code. It arrives by email and does not appear in the inbox.
 
@@ -762,7 +794,7 @@ _Example: `SEC-authentication`: The system shall authenticate every request to a
 - `SEC-administrator-review`: The system shall restrict access to suspected shopping-abuse information to authorized ReFrog administrators, consistent with `BR-shopping-abuse-review`.
 - `SEC-transport-encryption`: The system shall encrypt network communication containing authentication credentials, affiliation information, or participant records by using HTTPS.
 - `SEC-audit-log`: The system shall record successful and unsuccessful administrator authentication attempts and administrator changes to event, schedule, and participant records.
-- `SEC-authentication-provider`: Before accepting digital shopping activity, the system shall require a signed-in account with either verified control of a TCU-issued email address or an administrator-granted volunteer role. General sign-in email alone shall not establish TCU affiliation; role eligibility shall not imply email verification.
+- `SEC-authentication-provider`: The system shall authenticate users with its own email-and-password accounts, each email verified by a one-time code at sign-up, and no external identity provider (`FR-AUTH-account-signup`). Before accepting digital shopping activity, the system shall require a signed-in account with either verified control of a TCU-issued email address or an administrator-granted volunteer role. General sign-in email alone shall not establish TCU affiliation; role eligibility shall not imply email verification.
 - `SEC-session-expiration`: The system shall expire an administrator session after the team-approved period of inactivity.
 
 ### 9.4 Safety

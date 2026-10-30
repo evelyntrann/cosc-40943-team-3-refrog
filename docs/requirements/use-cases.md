@@ -206,7 +206,7 @@ A note on `UC-VOL-claim-open-shift`: an earlier draft of this list had it as a s
 A failed save leaves no assignment recorded (fails cleanly, no partial state). A retry of the same sign-up, whether user-initiated or a duplicate submission, must not create two assignments for the same volunteer on the same shift or double-count against the shift's capacity.
 
 **Related Use Cases:** `UC-VOL-cancel-shift`: Cancel a signed-up shift; `UC-VOL-view-schedule`: View assigned shifts and hours; `UC-ADM-manage-shifts`: Create and configure volunteer shifts
-**Assumptions:** Sign-in is via Google Sign-In — the team's working decision (resolves `OI-17`), not yet confirmed with the client. Distinct from `OI-10` (resolved), which settled TCU-affiliation verification specifically, not general sign-in. Everyone signs in, volunteers included; a signed-in account becomes a volunteer only when an administrator approves it (team discussion, 2026-10-16). The volunteer claims first and is approved after, so a first-time volunteer can still claim a shift without waiting (`USE-volunteer-signup-completion`).
+**Assumptions:** Sign-in uses the application's own email-and-password accounts, each email verified by code at sign-up (`FR-AUTH-account-signup`, resolves `OI-17`). Distinct from `OI-10` (resolved), which settled TCU-affiliation verification specifically, not general sign-in. Everyone signs in, volunteers included; a signed-in account becomes a volunteer only when an administrator approves it (team discussion, 2026-10-16). The volunteer claims first and is approved after, so a first-time volunteer can still claim a shift without waiting (`USE-volunteer-signup-completion`).
 **Open Issues:** `OI-21` (a returning volunteer whose access expired cannot sign up until renewed, while a new account can sign up as pending).
 
 ---
@@ -404,17 +404,17 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 **Priority:** High — named by the client alongside volunteer sign-up as a top priority.
 **Frequency of Use:** The email-code check happens once per shopper; the confirmation display happens every shopping visit, thousands per event.
-**Business Rules:** `BR-shopper-tcu-affiliation`, `BR-shopper-verification`, `BR-volunteer-role-approval`, `BR-volunteer-role-lifecycle`
+**Business Rules:** `BR-shopper-tcu-affiliation`, `BR-shopper-verification`, `BR-tcu-email-domain`, `BR-volunteer-role-approval`, `BR-volunteer-role-lifecycle`
 
 **Associated Information:**
 
 | Property name | Data type | Validation rule | Security or access concerns | Glossary reference |
 |---|---|---|---|---|
-| TCU email address | String | Required; must end in the TCU email domain | Visible only to the shopper and administrators | TCU ID |
-| verification code | String | Required; time-limited, single-use | Never logged in plain form after use | — |
+| TCU email address | String | Required; domain per `BR-tcu-email-domain` | Visible only to the shopper and administrators | TCU ID |
+| verification code | String | Required; per `FR-AUTH-verification-code` and `FR-AUTH-verification-limits` | Never logged in plain form after use | — |
 
 **Related Use Cases:** `UC-SHP-log-item-taken`: Record items taken while shopping; `UC-VOL-request-access`; `UC-ADM-review-volunteer-request`; `UC-ADM-grant-volunteer-access`; `UC-ADM-remove-volunteer-access`
-**Assumptions:** Verification persists across visits once completed, rather than being repeated every time — not explicitly confirmed with the client, but implied by "that would help a lot" language around keeping the app simple for repeat shoppers.
+**Assumptions:** None. Verification persisting across visits was confirmed with the client on 2026-10-02 (`FR-AUTH-affiliation-from-signin`); it belongs to the account that completed it (`FR-AUTH-verification-ownership`).
 **Open Issues:** `OI-10` and `OI-19` are resolved. Shopping requires verified TCU email or a current administrator-approved volunteer role, subject to existing volunteer lifecycle restrictions. In-person visual ID checks are not an option and cannot grant shopping access (`OI-19`, resolved by Wendy Macias, reported by Alexa Mercado on 2026-10-26).
 
 ---
@@ -841,7 +841,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 **Created By:** Alexa Mercado
 **Date Created:** 2026-10-16
 **Primary Actor:** Administrator, including Wendy
-**Secondary Actors:** Volunteer; sign-in provider
+**Secondary Actors:** Volunteer
 **Trigger:** An administrator chooses to add a volunteer directly.
 **Description:** Grant access without a user request by matching a verified sign-in email. Source: team decision with Alexa Mercado, not a recorded client approval.
 **Preconditions:**
@@ -867,7 +867,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 **Priority:** High for administrator-directed volunteer access.
 **Frequency of Use:** During recruitment and volunteer onboarding.
 **Business Rules:** `BR-volunteer-role-approval`
-**Associated Information:** A typed profile email or TCU affiliation email is insufficient to claim a manual grant; match provider-verified sign-in email. Pending approval grants no access. No account credentials, invitation message, or shift assignment are created by this use case.
+**Associated Information:** A typed profile email or TCU affiliation email is insufficient to claim a manual grant; match the sign-in email verified at sign-up (`FR-AUTH-account-signup`). Pending approval grants no access. No account credentials, invitation message, or shift assignment are created by this use case.
 **Related Use Cases:** `UC-ADM-remove-volunteer-access`, `UC-IDV-verify-affiliation`
 **Assumptions:** General sign-in remains the existing authentication flow.
 **Role lifecycle:** At the configured annual event end, volunteer privileges expire. Each new annual event requires administrator review and approval before renewal; access does not renew automatically. Email changes on the same account preserve an active role. See `BR-volunteer-role-lifecycle`.
