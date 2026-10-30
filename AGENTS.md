@@ -23,7 +23,7 @@ ReFrog: a phone-first progressive web app for TCU's finals-week move-out donatio
 ## Project-wide constraints
 
 - One deployable: PWA front end and application modules ship together, one database (architecture §9.2 `KD-deployment-shape`).
-- Technology stack: **not yet chosen** — do not pick a language, framework, or database on your own (architecture §5.1, §8.2.4). Update this line when the team decides.
+- Technology stack: Java / Spring Boot application, Vue.js PWA, PostgreSQL database (architecture §9.2 `KD-tech-stack`); do not add another language, framework, or database on your own.
 - Hosting: **unresolved**, TCU IT vs. paid (`OI-15`); keep hosting specifics out of code.
 - Sign-in: Google Sign-In is the working candidate (`OI-17`); it proves identity only, never TCU affiliation (architecture §8.1).
 - TCU affiliation is proven only by the email one-time code (`UC-IDV-verify-affiliation`, `OI-10`).
