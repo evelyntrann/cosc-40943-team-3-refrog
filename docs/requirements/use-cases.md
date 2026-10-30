@@ -351,7 +351,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 **Created By:** Evelyn Tran
 **Date Created:** 2026-09-23
 **Primary Actor:** Shopper
-**Secondary Actors:** Volunteer (may observe or fall back to a manual check at the location)
+**Secondary Actors:** Volunteer (observes the verified confirmation at the location; no manual check can grant access, `OI-19`)
 **Trigger:** A shopper at a ReFrog location wants to begin shopping.
 **Description:** A shopper verifies TCU affiliation by email code so they can be admitted to shop, per `BR-shopper-tcu-affiliation`. Confirmed with the client 2026-10-02 (resolves `OI-10`): the shopper enters their TCU email on a profile page, the system sends a one-time code to that email, and the shopper enters the code to verify. This is a deliberate choice over an in-app physical-ID check — Wendy wanted the ID step out of the app specifically so the app could focus on shoppers self-logging what they take (`UC-SHP-log-item-taken`). The email check happens once per shopper (not once per visit); after that, showing the verified screen to a volunteer at the location is the practical, physical confirmation, similar to today's process.
 
@@ -407,7 +407,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 | Property name | Data type | Validation rule | Security or access concerns | Glossary reference |
 |---|---|---|---|---|
-| TCU email address | String | Required; must end in the TCU email domain | Visible only to the shopper and administrators | TCU ID |
+| TCU email address | String | Required; must end in the TCU email domain | Visible only to the shopper and administrators | TCU Email Verification |
 | verification code | String | Required; time-limited, single-use | Never logged in plain form after use | — |
 
 **Related Use Cases:** `UC-SHP-log-item-taken`: Record items taken while shopping; `UC-VOL-request-access`; `UC-ADM-review-volunteer-request`; `UC-ADM-grant-volunteer-access`; `UC-ADM-remove-volunteer-access`

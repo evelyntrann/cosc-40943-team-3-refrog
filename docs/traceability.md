@@ -69,6 +69,14 @@ _In week 8 the spine extends past the use case: **business objective → feature
 
 ---
 
+## 4. Use case to design, code, and tests
+
+| Use case | Design | Build | Code | Tests | Verify |
+|---|---|---|---|---|---|
+| `UC-IDV-verify-affiliation` | [design/IDV.md](design/IDV.md#uc-idv-verify-affiliation-verifying-shopping-eligibility) | 📐 Designed | | | |
+
+---
+
 ## Working this document with your agent
 
 _[Delegate: running both checks and reporting what fails; finding every `BR-`, `FEAT-`, and `UC-` identifier cited anywhere in `docs/` and listing the ones with no definition; regenerating the second table from the Business Rules fields of your use cases after you have edited them._
