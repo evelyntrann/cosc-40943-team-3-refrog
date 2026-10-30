@@ -150,9 +150,15 @@ A pattern in which a Shopper acquires a disproportionate number of items, preven
 
 Members of TCU, staff, faculty, or students. Who are able to participate in refrog as one of the various roles (Donator, Shopper, Volunteer)
 
+### TCU Email Verification
+
+Proof that a signed-in account controls an email address allowed by `BR-tcu-email-domain`, established by entering a one-time code sent to that address (`UC-IDV-verify-affiliation`, resolved `OI-10`). It is saved on the account that completed it and kept across visits (`FR-AUTH-verification-ownership`). It is one of the two ways to be eligible to shop, alongside the Volunteer Role, and it does not override the restriction in the Volunteer Role Lifecycle.
+
+**Not to be confused with:** a TCU ID, which the app never checks or stores.
+
 ### TCU ID
 
-A Texas Christian University–issued identification card used to verify that a Shopper is an eligible member of the TCU community (student, faculty, staff, or volunteer). IDs are checked at point of entry to a shopping session.
+A Texas Christian University–issued identification card, checked visually at the shopping location under the earlier process. The app does not use it: in-person visual ID checks cannot grant shopping access (`OI-19`), and the app never requires or stores a raw TCU ID number (SRS §7.4.5).
 
 ### TCU Sustainability Committee
 
