@@ -495,8 +495,8 @@ The following dictionary identifies the core business data the system must manag
 |  | itemCount | Integer | 1 or greater | Required when item-level quantities are tracked. |
 |  | condition | Enum | usable, damaged, uncertain | Required when item quality is recorded; otherwise may default to usable if not assessed. |
 | Shopper | name / shopperId | String | Unique shopper identifier | Required if the system tracks repeat visits or abuse patterns. |
-|  | affiliationType | Enum | student, faculty, staff, volunteer, not-eligible | Required; used to determine shopping eligibility. |
-|  | verificationStatus | Enum | verified, unverified, rejected, review-needed | Required; ties to the TCU affiliation check process. |
+|  | affiliationType | — | Not collected | The TCU email code cannot tell student, faculty, or staff apart, and shopping eligibility does not need it (§7.4.5). Eligibility comes from `verificationStatus` or the volunteer role (`FR-AUTH-shopping-eligibility`). |
+|  | verificationStatus | Enum | verified, unverified | Required; verified only after a successful TCU email one-time code (`UC-IDV-verify-affiliation`). There is no rejected or review state, because no visual-ID review exists (`OI-19`). |
 | ShoppingRecord | shoppingRecordId | String | Unique record identifier | Required. |
 |  | shoppingDateTime | DateTime | Local time | Required. |
 |  | locationId | String | Existing DonationLocation.locationId | Required. |

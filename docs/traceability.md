@@ -74,6 +74,7 @@ _In week 8 the spine extends past the use case: **business objective → feature
 | Use case | Design | Build | Code | Tests | Verify |
 |---|---|---|---|---|---|
 | `UC-VOL-signup` | [design/vol.md](design/vol.md#uc-vol-signup-signing-up-for-a-shift) | 📐 Designed | | | |
+| `UC-IDV-verify-affiliation` | [design/IDV.md](design/IDV.md#uc-idv-verify-affiliation-verifying-shopping-eligibility) | 📐 Designed | | | |
 
 ---
 
