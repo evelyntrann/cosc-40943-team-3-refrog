@@ -1,13 +1,13 @@
 # Identity Verification Design
 
-> **Stack revision required (2026-11-04):** `KD-tcu-it-stack` supersedes the Java/Spring/Vue/PostgreSQL assumptions in this design. Do not implement IDV until its framework, persistence, transaction, and security details are revised for C# / ASP.NET Core, Blazor, and Microsoft SQL Server while preserving the cited requirements.
+> **Stack and ownership revision required (2026-11-04):** `KD-tcu-it-stack` supersedes the Java/Spring/Vue/PostgreSQL assumptions in this design, and [AUTH.md](AUTH.md) now owns accounts, persisted TCU email verification, and shared verification challenges. Do not implement IDV until its components, persistence, transactions, and tests are revised to consume AUTH and retain only shopping-eligibility behavior.
 
 **Project:** ReFrog
 **Team:** Team 3
 **Area:** `IDV`
 
 > **Realizes:** `UC-IDV-verify-affiliation`, `FR-AUTH-affiliation-from-signin`, `FR-AUTH-verification-code`, `FR-AUTH-verification-limits`, `FR-AUTH-verification-ownership`, IDV's part of `FR-AUTH-shopping-eligibility` (the eligibility check Shopping calls)
-> **Depends on:** `BR-shopper-tcu-affiliation`, `BR-shopper-verification`, `BR-tcu-email-domain`, `BR-volunteer-role-approval`, `BR-volunteer-role-lifecycle`, `FR-AUTH-enforce-permissions`, `FR-AUTH-volunteer-lifecycle`, `FR-VAL-server-validation`, `FR-VAL-field-feedback`, `FR-VAL-preserve-input`, `FR-SAVE-confirmed-success`, `FR-SAVE-unknown-outcome`, `ROB-external-service-failure`, `SEC-affiliation-data`, `SEC-authentication-provider`, `SEC-transport-encryption`, `UI-account-profile`, `KD-tech-stack`
+> **Depends on:** [Authentication](AUTH.md), `BR-shopper-tcu-affiliation`, `BR-shopper-verification`, `BR-tcu-email-domain`, `BR-volunteer-role-approval`, `BR-volunteer-role-lifecycle`, `FR-AUTH-enforce-permissions`, `FR-AUTH-volunteer-lifecycle`, `FR-VAL-server-validation`, `FR-VAL-field-feedback`, `FR-VAL-preserve-input`, `FR-SAVE-confirmed-success`, `FR-SAVE-unknown-outcome`, `ROB-external-service-failure`, `SEC-affiliation-data`, `SEC-authentication-provider`, `SEC-transport-encryption`, `UI-account-profile`, `KD-tcu-it-stack`
 > **See:** [Use cases](../requirements/use-cases.md#area-identity-verification-idv), [Business rules](../requirements/business-rules.md), [Specification](../requirements/software-requirements-specification.md), [Architecture of record](architectural-design.md) (§5.2 components, §8 crosscutting concepts, §9.2 `KD-tech-stack`)
 > **Designed against:** `d8893c1` (first draft); revised for `UC-IDV-verify-affiliation` against `main` `f781bf3` (which includes `KD-tech-stack`), 2026-10-30. `CurrentUser.volunteerAccess`, `VOLUNTEER_ACCESS_INACTIVE`, and `ACCESS_UNAVAILABLE` come from the VOL design merged in #66; re-checked against `main` after #66 and #69 (which added the `FR-AUTH-verification-*` requirements and `BR-tcu-email-domain`). No application code exists yet; every class below is new.
 
@@ -29,7 +29,7 @@ _**How much to write.** Pin down what a wrong guess would break: a requirement, 
 
 _[One paragraph: what this area does, which components of your [architecture-of-record](architectural-design.md) it lives in, and what it reads from or calls in other areas. Link the container diagram rather than redrawing it. If this design changes the architecture-of-record, say so here and list the change under "Changes to the architecture-of-record" below.]_
 
-Identity Verification decides whether a signed-in account may shop, displays persisted TCU email verification that may have been established during registration, and runs the later profile one-time-code check for accounts that still need it (`UC-IDV-verify-affiliation`, `FR-AUTH-shopping-eligibility`). It is the `IDV` component of the one Spring Boot Application, and its screen is a section of the Vue `UI-account-profile` view ([containers](architectural-design.md#51-containers), [components](architectural-design.md#52-use-case-areas-and-components)). It reads the account identity, current volunteer access, and lifecycle restriction from Authentication's `CurrentUser` (the contract [vol.md](vol.md) fixed), never from the browser. It sends codes through the one shared email delivery adapter (architecture §3, §5.1). It owns its own verification and code tables in PostgreSQL. Shopping calls `AffiliationService.checkShoppingEligibility()` on every protected submission, and IDV owns that method. The pending stack revision must also move shared verification-code machinery to Authentication and allow Authentication to create the persisted verification during `UC-AUTH-register-account`.
+Identity Verification decides whether a signed-in account may shop from the persisted TCU verification and trusted current access state owned by [Authentication](AUTH.md) (`UC-IDV-verify-affiliation`, `FR-AUTH-shopping-eligibility`). Authentication also runs the shared email-code machinery for the later profile verification path. IDV owns only the shopping-eligibility decision and its presentation. The remaining Spring/Vue/PostgreSQL components and data model below are superseded and must be replaced in the dedicated IDV revision before implementation.
 
 ## Components & classes
 
@@ -106,7 +106,7 @@ classDiagram
   - `RESTRICTED`: the role was explicitly removed, or it expired at an event's end and has not been renewed (`BR-volunteer-role-lifecycle`). This holds between events too.
   - `NONE`: the account never held the role, or has only a pending or declined request (`BR-volunteer-role-approval`: a request conveys no permissions, and a decline imposes no restriction).
 
-  IDV's build adds **no** Authentication code: no sign-in, no account table, no Spring Security setup. It codes against the `CurrentUser` interface and stubs it in tests. Using IDV end to end waits for Authentication to exist (`SEC-authentication-provider`, §8.1).
+  IDV's build adds **no** Authentication code: no sign-in, account table, cookie setup, or role resolution. It codes against `ICurrentUser` and `IVolunteerAccessStateProvider` and stubs them in tests. Using IDV end to end waits for Authentication to exist (`SEC-authentication-provider`, §8.1).
 - `EmailSender` (reused, shared delivery adapter, architecture §3 and §5.1): the one adapter every area sends email through. Verification codes go by email only, never to the in-app inbox (SRS §5.2 notifications). If IDV is built before any other area that sends email, IDV's build creates only the provider-neutral interface and a test fake. The provider is not chosen, so no real implementation is written.
 - `Clock` and the shared error handler (reused, §8.2.1, §8.2.2): same as VOL.
 
@@ -230,7 +230,7 @@ _A decision that affects the whole system rather than this area is an architectu
 
 **Restriction first, then either qualifying path.** `currentVolunteerAccess()` is read before anything else. `RESTRICTED` ends the check whatever `tcu_email_verification` holds (2c, `FR-AUTH-volunteer-lifecycle`). `ROLE_ACTIVE` qualifies without email verification and never writes it (2b). `NONE` falls to the saved email verification. Rejected: one shared "verified" flag set by either path, because it would mark volunteers as email-verified and would survive role removal (`FR-AUTH-shopping-eligibility`).
 
-**IDV asks Authentication for the current event's access, with no event id.** VOL passes a shift's event to `volunteerAccess(eventId)`, but IDV has no shift. `currentVolunteerAccess()` lets Authentication, which §5.2 already makes owner of event-scoped access and renewal state, decide which annual event is current. Rejected: IDV asking ADM for the current event and passing it in, because that adds an IDV→ADM dependency §5.2 does not list, and Shopping would have to repeat it. This is a contract the future `authentication.md` must adopt (see Open questions).
+**IDV asks Authentication for the current event's access, with no event id.** VOL passes a shift's event to `volunteerAccess(eventId)`, but IDV has no shift. `currentVolunteerAccess()` lets Authentication, which §5.2 already makes owner of event-scoped access and renewal state, decide which annual event is current. Rejected: IDV asking ADM for the current event and passing it in, because that adds an IDV→ADM dependency §5.2 does not list, and Shopping would have to repeat it. [AUTH.md](AUTH.md) adopts this contract.
 
 **The status read is one read-only transaction, and any failure in it is 2d.** Access state, email verification, and role all come from the one PostgreSQL database, so the read either succeeds whole or returns `503 ACCESS_UNAVAILABLE`. Rejected: reporting eligibility when one source answered and the other failed. `FR-AUTH-shopping-eligibility` permits skipping the second source, but within one database the partial case adds branches and tests for nothing. Restriction state is still required on every path (§8.2.1).
 
@@ -308,7 +308,7 @@ erDiagram
 
 _[Which existing services, components, and conventions this area uses rather than rebuilding: authentication, the error handler, email, the clock, another area's service. Cite your architecture-of-record's section 8.2 for each convention by name rather than restating it.]_
 
-- **Authentication** (§8.1): `CurrentUser.accountId()` and `currentVolunteerAccess()`. Session, cookie, and CSRF handling for IDV's `POST`s come from the application-wide Spring Security configuration Authentication owns; IDV adds none.
+- **Authentication** (§8.1): `ICurrentUser` and `IVolunteerAccessStateProvider`. Session, cookie, and antiforgery handling for IDV's state-changing requests come from the application-wide ASP.NET Core configuration Authentication owns; IDV adds none.
 - **Email:** the shared `EmailSender` adapter (§3, §5.1). The provider is not chosen, and no provider name appears in IDV code.
 - **Error handling and API** (§8.2.1, §8.2.3): the shared handler, the codes above, and `/api/v1/me/...` naming consistent with VOL.
 - **Time** (§8.2.2): `Clock` for expiry, cooldown, and rolling windows. `expiresAt` is displayed in `America/Chicago` on a 12-hour clock.
@@ -376,12 +376,12 @@ _[What this design could not settle and who can, and what could go wrong that yo
 
 | Item | Owner | Effect and what resolves it |
 |---|---|---|
-| `CurrentUser.currentVolunteerAccess()` | Authentication (and ADM for "which event is current") | IDV and Shopping need the current event's access without an event id. The architecture links an `authentication.md` that does not exist yet; whoever writes it adopts this method next to VOL's `volunteerAccess(eventId)`. Between events, the method's answer for a past volunteer follows `BR-volunteer-role-lifecycle`. |
+| `CurrentUser.currentVolunteerAccess()` | Authentication (and ADM for "which event is current") | IDV and Shopping need the current event's access without an event id. [AUTH.md](AUTH.md) adopts this method next to VOL's `volunteerAccess(eventId)`. Between events, the method's answer for a past volunteer follows `BR-volunteer-role-lifecycle`. |
 | Shopping's contract | SHP owner | [SHP.md](SHP.md) calls `AffiliationService.isVerified` and refuses with `AFFILIATION_NOT_VERIFIED`, which leaves out the volunteer path and the restriction that `FR-AUTH-shopping-eligibility` requires. SHP should call `checkShoppingEligibility()` and map `RESTRICTED`, `NOT_ELIGIBLE`, and unavailable. This design does not edit SHP.md. |
 | `OI-22`: expiry restricts past volunteers | Client | Under `BR-volunteer-role-lifecycle`, a past volunteer who is a TCU student cannot shop at the next event until renewed, even with verified email. This design builds the rule as written. |
 | `OI-6` retention | Client and TCU data governance | Retention and pruning of verified emails and of code and failure rows. |
 | Response envelope (**build prerequisite**) | Team | §8.2.1 and §8.2.3 still do not fix it, and IDV fixes only codes. `/implement` must not choose one: the team records it once in §8.2.3 before IDV's (or any area's) first endpoint is built. |
-| Code machinery shared with sign-up | Team (Authentication and IDV owners) | `FR-AUTH-verification-code` and `FR-AUTH-verification-limits` now govern sign-up codes too, and the limits count a pending sign-up as an account (`KD-own-accounts`). This design gives IDV its own code tables. When Authentication is designed, the team decides whether both use one shared code component or keep separate tables with the same rules. That decision belongs in `authentication.md`, and it does not change IDV's endpoints. |
+| Code machinery shared with registration | Authentication owner | Resolved in [AUTH.md](AUTH.md): AUTH owns one purpose-aware challenge service and persisted TCU verification for registration and later IDV verification. The IDV revision removes its duplicate code tables and verifier. |
 | Authentication not built | Team (build order) | IDV can be built and tested against a stubbed `CurrentUser`, but it cannot run end to end, or create its `account` foreign key, until Authentication exists. |
 | Email provider | Team (`OI-15` hosting) | The `202` means provider acceptance only. A slow provider shows up as `503 EMAIL_NOT_SENT` with retry; no background resend is designed. |
 

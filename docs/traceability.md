@@ -75,11 +75,18 @@ Release values follow the course's release plan: `v0.1.0` is the proving slice (
 
 | Use case or FR | Design | Release | Build | Code | Tests | Verify |
 |---|---|---|---|---|---|---|
+| `UC-AUTH-register-account` | [design/AUTH.md](design/AUTH.md#uc-auth-register-account) | v0.1.0 | 📐 Designed | | | |
+| `UC-AUTH-sign-in` | [design/AUTH.md](design/AUTH.md#uc-auth-sign-in-and-sign-out) | v0.1.0 | 📐 Designed | | | |
+| `UC-AUTH-recover-account` | [design/AUTH.md](design/AUTH.md#uc-auth-recover-account) | v0.1.0 | 📐 Designed | | | |
+| `FR-AUTH-account-signup` | [design/AUTH.md](design/AUTH.md) | v0.1.0 | 📐 Designed | | | |
+| `FR-AUTH-password-policy` | [design/AUTH.md](design/AUTH.md) | v0.1.0 | 📐 Designed | | | |
+| `FR-AUTH-session-policy` | [design/AUTH.md](design/AUTH.md) | v0.1.0 | 📐 Designed | | | |
+| `FR-AUTH-password-recovery` | [design/AUTH.md](design/AUTH.md) | v0.1.0 | 📐 Designed | | | |
 | `UC-IDV-verify-affiliation` | [design/IDV.md](design/IDV.md#uc-idv-verify-affiliation-verifying-shopping-eligibility) | v0.1.0 | 📐 Designed | | | |
 | `FR-AUTH-affiliation-from-signin` | [design/IDV.md](design/IDV.md) | v0.1.0 | 📐 Designed | | | |
-| `FR-AUTH-verification-code` | [design/IDV.md](design/IDV.md) | v0.1.0 | 📐 Designed | | | |
-| `FR-AUTH-verification-limits` | [design/IDV.md](design/IDV.md) | v0.1.0 | 📐 Designed | | | |
-| `FR-AUTH-verification-ownership` | [design/IDV.md](design/IDV.md) | v0.1.0 | 📐 Designed | | | |
+| `FR-AUTH-verification-code` | [design/AUTH.md](design/AUTH.md) | v0.1.0 | 📐 Designed | | | |
+| `FR-AUTH-verification-limits` | [design/AUTH.md](design/AUTH.md) | v0.1.0 | 📐 Designed | | | |
+| `FR-AUTH-verification-ownership` | [design/AUTH.md](design/AUTH.md) and [design/IDV.md](design/IDV.md) | v0.1.0 | 📐 Designed | | | |
 | `FR-VAL-server-validation` | | v0.1.0 | ❌ Not started | | | |
 | `FR-VAL-field-feedback` | | v0.1.0 | ❌ Not started | | | |
 | `FR-VAL-preserve-input` | | v0.1.0 | ❌ Not started | | | |
