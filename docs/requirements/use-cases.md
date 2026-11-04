@@ -122,7 +122,7 @@ _Data fields are specified as a table:_
 | `AUTH` | Authentication, enabling protected workflows | `UC-AUTH-register-account`, `UC-AUTH-sign-in`, `UC-AUTH-recover-account` |
 | `VOL` | Volunteer scheduling, from `FEAT-volunteer-scheduling` | `UC-VOL-signup`, `UC-VOL-cancel-shift`, `UC-VOL-view-schedule`, `UC-VOL-request-access` |
 | `IDV` | Identity verification, from `FEAT-identity-verification` | `UC-IDV-verify-affiliation` |
-| `LOC` | Location info, from `FEAT-location-info` | `UC-LOC-view-locations` |
+| `INF` | Event & location information, from `FEAT-event-info` | `UC-INF-view-event-info`, `UC-INF-view-locations`, `UC-INF-view-role-guides`, `UC-INF-view-install-guide` |
 | `ADM` | Administration, from `FEAT-adminstration` | `UC-ADM-view-dashboard`, `UC-ADM-manage-shifts`, `UC-ADM-notify-volunteers`, `UC-ADM-review-volunteer` |
 | `ABU` | Shopping-abuse monitoring, from `FEAT-shopping-monitoring` | `UC-ABU-review-alert` |
 | `SHP` | Shopping, from `FEAT-shopping` | `UC-SHP-log-item-taken` |
@@ -637,7 +637,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 | daily operating hours | Time range / Text | Required | Public | — |
 | overview summary | Rich text | Required | Public | — |
 
-**Related Use Cases:** `UC-INF-view-locations`, `UC-INF-view-role-guides`
+**Related Use Cases:** `UC-INF-view-locations`, `UC-INF-view-role-guides`, `UC-INF-view-install-guide`
 **Assumptions:** Viewing general event info does not require sign-in.
 **Open Issues:** none
 
@@ -692,7 +692,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 | map pin link / coordinates | Geo URL / lat-lng | Optional | Public | — |
 | infographic / map image URL | URI | Optional | Public | — |
 
-**Related Use Cases:** `UC-INF-view-event-info`, `UC-INF-view-role-guides`, `UC-DON-log-donation`, `UC-SHP-log-item-taken`, `UC-VOL-signup`
+**Related Use Cases:** `UC-INF-view-event-info`, `UC-INF-view-role-guides`, `UC-INF-view-install-guide`, `UC-DON-log-donation`, `UC-SHP-log-item-taken`, `UC-VOL-signup`
 **Assumptions:** Accessible without sign-in on both mobile and desktop browsers.
 **Open Issues:** none
 
@@ -743,8 +743,72 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 | instructional steps | List of Strings | Required | Public | — |
 | role business rules summary | Rich text | Required | Public | — |
 
-**Related Use Cases:** `UC-INF-view-event-info`, `UC-INF-view-locations`, `UC-DON-log-donation`, `UC-SHP-log-item-taken`, `UC-VOL-signup`
+**Related Use Cases:** `UC-INF-view-event-info`, `UC-INF-view-locations`, `UC-INF-view-install-guide`, `UC-DON-log-donation`, `UC-SHP-log-item-taken`, `UC-VOL-signup`
 **Assumptions:** Accessible publicly without authentication.
+**Open Issues:** none
+
+---
+
+### UC-INF-view-install-guide: View app installation guide and device instructions
+
+**UC ID and Name:** `UC-INF-view-install-guide`: View app installation guide and device instructions
+**Created By:** Team 03
+**Date Created:** 2026-11-04
+**Primary Actor:** App user (visitor, donor, shopper, volunteer, or administrator)
+**Secondary Actors:** none
+**Trigger:** A user navigates to the "Install App" / "Get the App" page, or taps an in-app installation prompt/banner.
+**Description:** A user accesses a progressive web app (PWA) installation guide that automatically detects their client operating system (Android, iOS, Windows, macOS, or Linux) and browser environment. The system presents platform-specific installation instructions, displays a direct "Install App" action button if supported by the browser, allows manual switching between OS instructions, and provides a Frequently Asked Questions (FAQ) section addressing common PWA installation and usage questions.
+
+**Preconditions:** none — public access, accessible without signing in.
+
+**Postconditions:**
+
+- POST-1. Tailored installation guidance matching the user's detected or chosen operating system is displayed, including direct installation trigger actions (if supported) and installation FAQ items.
+
+**Main Success Scenario:**
+
+1. The user indicates they want to view app installation guidance (e.g., clicks "Get the App" in the navigation bar or taps an install banner).
+2. The system inspects client environment signals (client user agent and platform hints) to detect the user's operating system (Android, iOS, Windows, macOS, or Linux) and browser type.
+3. The system checks whether the current browser session supports programmatic installation prompting (such as the standard `beforeinstallprompt` event).
+4. The system presents the installation guide page with the detected operating system tab preselected:
+    - For platforms/browsers supporting native in-app installation prompts (e.g., Chromium on Android, Windows, macOS, Linux): displays an active "Install App" button along with concise step-by-step guidance.
+    - For platforms requiring browser-level manual addition (e.g., Safari on iOS / iPadOS): displays numbered visual instructions detailing how to use the browser Share menu and select "Add to Home Screen".
+5. The system displays an installation FAQ section answering common questions (including PWA definition, App Store / Play Store absence, offline support, device storage impact, app updates, and troubleshooting install issues).
+6. Use case ends.
+
+**Extensions:**
+
+- **3a. The user clicks the programmatic "Install App" button:**
+    - 3a1. The system invokes the browser's native installation prompt.
+    - 3a2. The user accepts or cancels the browser installation dialog.
+    - 3a3. If accepted, the browser installs ReFrog to the home screen or app launcher, and the system transitions the install button to indicate installed status.
+    - 3a4. Use case ends.
+- **4a. The user selects a different operating system tab:**
+    - 4a1. The user clicks another platform tab (Android, iOS, Windows, macOS, or Linux).
+    - 4a2. The system dynamically updates the displayed installation instructions, screenshots, and action buttons for the selected platform without a full page reload.
+    - 4a3. Flow continues at step 4.
+- **4b. The application is already running in installed standalone mode:**
+    - 4b1. The system detects that the app is currently running in standalone display mode (`display-mode: standalone`).
+    - 4b2. The system displays a confirmation notice that ReFrog is already installed on this device, along with quick tips for updating and managing the app.
+    - 4b3. Flow continues at step 5 (FAQ remains accessible).
+- **2a. Client operating system cannot be reliably detected:**
+    - 2a1. The system defaults to general/mobile guidance and prompts the user to select their device platform from the platform selector tabs.
+    - 2a2. Flow continues at step 4.
+
+**Priority:** Medium — enhances phone-first mobile experience and accessibility for move-out participants without native app store friction.
+**Frequency of Use:** Frequent; referenced by new visitors and participants seeking quick home screen access.
+**Business Rules:** none (public frontend UX guide; aligns with architectural decisions `KD-deployment-shape` and `KD-tcu-it-stack`)
+
+**Associated Information:**
+
+| Property name | Data type | Validation rule | Security or access concerns | Glossary reference |
+|---|---|---|---|---|
+| client platform | Enum | One of `ANDROID`, `IOS`, `WINDOWS`, `MACOS`, `LINUX`, `UNKNOWN` | Public (client-side detection) | — |
+| install capability | Enum | One of `NATIVE_PROMPT_SUPPORTED`, `MANUAL_STEPS_REQUIRED`, `ALREADY_INSTALLED` | Public | — |
+| faq questions & answers | List of Structured Pairs | Required | Public | — |
+
+**Related Use Cases:** `UC-INF-view-event-info`, `UC-INF-view-locations`, `UC-INF-view-role-guides`
+**Assumptions:** Accessible publicly without authentication. Installation behaves according to standard progressive web app web standards across major browsers.
 **Open Issues:** none
 
 ---
@@ -1257,7 +1321,7 @@ A failed save leaves no visit recorded. A retry of the same submission, whether 
 
 A failed save leaves no donation recorded. A retry of the same submission, whether donor-initiated or a duplicate, must not record the same donation twice.
 
-**Related Use Cases:** `UC-INF-view-locations`, `UC-INF-view-role-guides`, `UC-ADM-view-dashboard`
+**Related Use Cases:** `UC-INF-view-locations`, `UC-INF-view-role-guides`, `UC-INF-view-install-guide`, `UC-ADM-view-dashboard`
 **Assumptions:** none.
 **Open Issues:** none — `OI-4` is resolved. The exact final category list is not yet finalized with the client, but the shape (5–6 fixed options) is confirmed.
 

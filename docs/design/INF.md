@@ -4,7 +4,7 @@
 **Team:** Team 03
 **Area:** `UC-INF-*`
 
-> **Realizes:** `UC-INF-view-event-info`, `UC-INF-view-locations`, `UC-INF-view-role-guides`
+> **Realizes:** `UC-INF-view-event-info`, `UC-INF-view-locations`, `UC-INF-view-role-guides`, `UC-INF-view-install-guide`
 > **Depends on:** `BR-event-schedule`, `BR-event-in-person`, `BR-free-shopping`, `BR-shopper-tcu-affiliation`, `BR-donation-ease`, `BR-location-staffing`
 > **See:** [use-cases.md](../requirements/use-cases.md#area-event--location-information-inf), [business-rules.md](../requirements/business-rules.md#event-operations), [architectural-design.md §5.2](architectural-design.md#52-use-case-areas-and-components)
 > **Designed against:** `7ca0391`
@@ -39,7 +39,7 @@ _Example, from the Cafeteria Ordering System:_
 
 _Ordering takes a patron's meal order from menu selection to a confirmed, payroll-charged order. It is the `ORD` area of the API ([containers](architectural-design.md#51-containers), [use case areas](architectural-design.md#52-use-case-areas-and-components)), reads the day's menu from `menu`, and asks the Payroll System to authorize the deduction before an order is stored (`DE-payroll-integration`).]_
 
-Event & Location Information (`INF`) provides public, unauthenticated access to active ReFrog event schedules, operational role participation guidelines, and physical site locations. It is the `INF` area of the API (formerly `LOC`, [containers](architectural-design.md#51-containers), [use case areas](architectural-design.md#52-use-case-areas-and-components)). It reads active event schedules, participation content, and location configurations initialized by `ADM`. Because location and operational details change each season (e.g., adding an 8th pod, varying weekday operating hours), `INF` serves dynamic location listings, map pin navigation URLs (for Google/Apple Maps), and visual guide/infographic assets. It prioritizes concise, actionable event instructions for donors, shoppers, and volunteers over static historical narrative.
+Event & Location Information (`INF`) provides public, unauthenticated access to active ReFrog event schedules, operational role participation guidelines, physical site locations, and a cross-platform progressive web app (PWA) installation guide. It is the `INF` area of the API (formerly `LOC`, [containers](architectural-design.md#51-containers), [use case areas](architectural-design.md#52-use-case-areas-and-components)). It reads active event schedules, participation content, and location configurations initialized by `ADM`. Because location and operational details change each season (e.g., adding an 8th pod, varying weekday operating hours), `INF` serves dynamic location listings, map pin navigation URLs (for Google/Apple Maps), and visual guide/infographic assets. It also provides an automated installation walkthrough (`UC-INF-view-install-guide`) detecting whether a user is on Android, iOS, Windows, macOS, or Linux to present tailored home screen installation buttons/steps and a PWA installation FAQ. It prioritizes concise, actionable event instructions for donors, shoppers, and volunteers over static historical narrative.
 
 ## Components & classes
 
@@ -105,6 +105,17 @@ classDiagram
         +getLocationsForEvent(eventId) List~DonationLocation~
         +getEventGuidelines(eventId, role) List~EventGuideline~
     }
+    class ClientPlatformDetector {
+        <<new, client>>
+        +detectOperatingSystem() String
+        +detectBrowser() String
+    }
+    class PwaInstallManager {
+        <<new, client>>
+        +isStandalone() Boolean
+        +isPromptAvailable() Boolean
+        +triggerNativePrompt() PromptOutcome
+    }
 
     InfoController --> InfoService
     InfoService --> MapLinkBuilder
@@ -115,6 +126,8 @@ classDiagram
 - `info/InfoService` (new): reads published event configuration, location schedules, and role guidelines, assembling responsive DTOs for the client.
 - `info/MapLinkBuilder` (new): utility formatting external navigation URLs (Google Maps / Apple Maps universal web links) from coordinates and address labels.
 - `adm/AdminEventConfigService` (reused, `ADM`): service providing published event metadata, dates, site schedules, and media/infographic references configured by administrators.
+- `client/info/ClientPlatformDetector` (new): client-side utility inspecting `navigator.userAgent` and platform hints to identify user OS (Android, iOS, Windows, macOS, Linux).
+- `client/info/PwaInstallManager` (new): handles browser `beforeinstallprompt` interception, standalone display mode detection (`display-mode: standalone`), and prompt invocation.
 
 ## Sequence
 
@@ -244,6 +257,46 @@ sequenceDiagram
     end
 ```
 
+### UC-INF-view-install-guide: View app installation guide and device instructions
+
+```mermaid
+sequenceDiagram
+    actor U as User (Visitor / Participant)
+    participant WEB as Web front end (PWA)
+    participant CPD as ClientPlatformDetector
+    participant PIM as PwaInstallManager
+    participant BRW as Browser Native Dialog
+
+    U->>WEB: Open "Get the App" / tap install banner (step 1)
+    WEB->>CPD: detectOperatingSystem()
+    CPD-->>WEB: OS (Android | iOS | Windows | macOS | Linux)
+    WEB->>PIM: checkInstallCapability()
+    alt Already installed in standalone mode (4b)
+        PIM-->>WEB: ALREADY_INSTALLED
+        WEB-->>U: Display "ReFrog is installed" status and management tips (step 4b2)
+    else Native prompt supported (3a)
+        PIM-->>WEB: NATIVE_PROMPT_SUPPORTED (held beforeinstallprompt event)
+        WEB-->>U: Preselect detected OS tab, show "Install App" button & guidance (step 4)
+        opt User clicks "Install App" button (3a)
+            U->>WEB: Click "Install App"
+            WEB->>PIM: triggerNativePrompt()
+            PIM->>BRW: prompt()
+            BRW-->>U: Native installation confirmation dialog
+            U->>BRW: Accept installation
+            BRW-->>PIM: outcome = 'accepted'
+            PIM-->>WEB: Transition button to installed state (step 3a3)
+        end
+    else Manual browser addition required (e.g. Safari on iOS)
+        PIM-->>WEB: MANUAL_STEPS_REQUIRED
+        WEB-->>U: Preselect iOS tab, show Share -> "Add to Home Screen" steps (step 4)
+    end
+    WEB-->>U: Display expandable Installation FAQ accordion (step 5)
+    opt User selects different OS tab (4a)
+        U->>WEB: Select different platform tab (e.g. Windows)
+        WEB-->>U: Render selected platform install instructions (step 4a2)
+    end
+```
+
 ## API contract
 
 _[One row per endpoint, scheduled job, or message this area adds or changes, appended per use case. **This section is never dropped**: before the code exists it is the only thing the person (or agent session) building the front end and the one building the back end both read. Name the caller and who may call it, the request fields, the success response, and the error each extension returns. Leave field types and exact JSON to the agent unless a wrong guess would break something, such as a format another system depends on. Use the error shape your architecture-of-record's section 8.2 fixes; do not invent one here._
@@ -261,6 +314,7 @@ _Example:]_
 | `GET /api/info/locations` | Anyone (public, unauthenticated) | Query param: optional `activeOnly` (default true) | `200 OK`: Array of `{ locationId, name, address, operatingSchedule: [{ dayOfWeek, openTime, closeTime }], mapUrl, latitude, longitude, infographicUrl, podNotes }` | Unexpected failure: `500`. |
 | `GET /api/info/locations/{locationId}` | Anyone (public, unauthenticated) | Path param: `locationId` | `200 OK`: Detailed location object including access instructions, specific pod notes, accepted categories, mapUrl, and high-resolution infographic URL | Location not found: `404`. |
 | `GET /api/info/guides` | Anyone (public, unauthenticated) | Query param: optional `role` (`DONOR`, `SHOPPER`, `VOLUNTEER`, `ALL`) | `200 OK`: Array or object of `{ role, title, summaryText, instructionalSteps: [{ stepNumber, title, body }], rulesSummary }` | Invalid role query: `400`. Unexpected failure: `500`. |
+| Client PWA Guide / `GET /api/info/install-guide` | Anyone (public, unauthenticated) | Client user agent, platform hints, and `beforeinstallprompt` event | `200 OK` (client-rendered): `{ platform, installCapability, instructions: [{ stepNumber, text, visualIcon }], faq: [{ question, answer }] }` | 2a: Unrecognized platform falls back to manual tab list; 4b: Standalone mode indicates installed state. |
 
 ## Key decisions
 
@@ -287,6 +341,10 @@ _Example:]_
 **Image/Infographic hosting via static asset URLs.** Organizers frequently use campus map flyers and visual infographics. The data model stores an `infographicUrl` per location (and for the event overall), linking to optimized static image assets. Rejected: rendering vector campus layouts programmatically inside the frontend.
 
 **Public, zero-auth access.** All `INF` endpoints are accessible without login or token validation, allowing visitors and unauthenticated students/parents to immediately see where and when to drop off items (`OI-4`).
+
+**Client-side OS and PWA installation detection with manual platform switching.** Client detection runs in the browser via standard User Agent / Navigator platform hints and `beforeinstallprompt` event listeners, accompanied by explicit platform tabs (Android, iOS, Windows, macOS, Linux). Rejected: relying solely on automatic detection without manual tabs, which fails when users browse on desktop to learn how to install on mobile or when privacy user agents mask the platform.
+
+**PWA installation guidance and FAQ over native app store distribution.** ReFrog is distributed directly via the web as a Progressive Web App, avoiding native app store delays and developer account fees. The installation guide provides Clash Ninja-style OS-specific home screen installation walkthroughs and a comprehensive FAQ answering common user questions (app stores, offline caching, storage footprint, updates). Rejected: silent reliance on browser default install badges without dedicated user instructions, which leaves iOS Safari and mobile users unaware of how to add the web app to their home screens.
 
 ## Data model
 
@@ -380,6 +438,11 @@ _Example:]_
 | Location detail 404 | unit | Non-existent location ID returns standard `404` error payload |
 | UC-INF-view-role-guides main | integration | `/api/info/guides?role=DONOR` returns structured donor participation guidelines and rules |
 | UC-INF-view-role-guides tab switch | unit | Filtering `/api/info/guides` by different role enums returns distinct respective instructions |
+| UC-INF-view-install-guide main (Android/Chromium) | unit | Detects Android and surfaces `Install App` button when `beforeinstallprompt` is active |
+| UC-INF-view-install-guide (iOS/Safari) | unit | Detects iOS Safari and renders Share -> "Add to Home Screen" visual instructions |
+| UC-INF-view-install-guide (desktop OS tabs) | unit | Switching between Windows, macOS, and Linux tabs updates instructions without reload |
+| UC-INF-view-install-guide (standalone mode) | unit | Displays already-installed status when running under `display-mode: standalone` |
+| UC-INF-view-install-guide (FAQ accordion) | unit | Expands and collapses installation FAQ items answering PWA and app store queries |
 | Unauthenticated access | integration | All `INF` endpoints respond with 200 OK when no authentication token/cookie is present |
 
 ## Changes to the architecture-of-record
