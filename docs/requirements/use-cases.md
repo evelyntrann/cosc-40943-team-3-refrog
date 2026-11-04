@@ -585,7 +585,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 | Property name | Data type | Validation rule | Security or access concerns | Glossary reference |
 |---|---|---|---|---|
 | TCU email address | String | Required; domain per `BR-tcu-email-domain` | Visible only to the shopper and administrators | TCU Email Verification |
-| verification code | String | Required; per `FR-AUTH-verification-code` and `FR-AUTH-verification-limits` | Never logged in plain form after use | — |
+| verification code | String | Required; per `FR-AUTH-verification-code` and `FR-AUTH-verification-limits` | Never logged; stored only as a keyed hash (architecture §8.2.7) | — |
 
 **Related Use Cases:** `UC-SHP-log-item-taken`: Record items taken while shopping; `UC-VOL-request-access`; `UC-ADM-review-volunteer-request`; `UC-ADM-grant-volunteer-access`; `UC-ADM-remove-volunteer-access`
 **Assumptions:** None. Verification persisting across visits was confirmed with the client on 2026-10-02 (`FR-AUTH-affiliation-from-signin`); it belongs to the account that completed it (`FR-AUTH-verification-ownership`).
