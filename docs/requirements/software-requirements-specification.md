@@ -235,7 +235,9 @@ Account passwords shall follow the explicitly configured .NET 10 ASP.NET Core Id
 
 Authentication shall use server-issued secure, HttpOnly, same-site cookies over HTTPS. Ordinary-user sessions shall have a 30-day absolute lifetime and no inactivity timeout. Administrator sessions shall expire after four hours of inactivity. Signing out shall invalidate the current session. A password reset shall invalidate all earlier sessions for the affected account. State-changing cookie-authenticated requests shall require antiforgery protection. Authorization shall continue to use current trusted server state rather than treating an unexpired cookie as proof of a current role.
 
-**Verification:** Inspect cookie security attributes; reject a state-changing request without valid antiforgery proof; cross each expiry boundary with a fixed clock; sign out and confirm the cookie no longer authorizes; reset a password and confirm earlier sessions fail; remove a role and confirm an existing session cannot continue using it.
+Five consecutive failed password attempts for a registered account shall produce a five-minute sign-in lockout. A successful sign-in shall reset the failed-attempt count. Unknown-email, wrong-password, and locked-account responses shall remain indistinguishable and shall establish no session.
+
+**Verification:** Inspect cookie security attributes; reject a state-changing request without valid antiforgery proof; cross each expiry boundary with a fixed clock; sign out and confirm the cookie no longer authorizes; reset a password and confirm earlier sessions fail; remove a role and confirm an existing session cannot continue using it. Confirm the fifth consecutive failed password attempt locks a registered account for five minutes, all credential-failure responses remain identical, the boundary permits sign-in after five minutes, and a successful sign-in resets the count.
 
 **Source:** Team decision, November 4, 2026; administrator inactivity limit and ordinary-user session lifetime are not recorded client business rules.
 
@@ -243,7 +245,9 @@ Authentication shall use server-issued secure, HttpOnly, same-site cookies over 
 
 Account recovery shall return the same public acknowledgement for registered and unregistered emails. For a registered account, the system shall send a one-time password-reset link that expires 30 minutes after server-side issuance. A successful reset shall atomically replace the password, consume the reset token, and invalidate all earlier sessions. An invalid, expired, or reused token shall change neither password nor session state.
 
-**Verification:** Compare public responses for known and unknown emails; use a fixed clock to accept a token immediately before 30 minutes and reject it at 30 minutes; confirm a token works once; confirm a successful reset invalidates old credentials and sessions; simulate a failed password write and confirm the old password and sessions remain valid.
+Accepted recovery messages to one normalized destination email shall be at least 60 seconds apart, with at most five accepted messages in any rolling hour. Refused, unknown-account, and failed-delivery requests shall return the same public acknowledgement and shall not disclose account existence, throttling, or delivery outcome. These recovery limits are separate from `FR-AUTH-verification-limits`, which governs six-digit registration and affiliation codes.
+
+**Verification:** Compare public responses for known, unknown, throttled, and failed-delivery recovery requests; confirm only registered accounts receive links. With a fixed clock, accept a recovery send at 60 seconds but not 59, accept five sends in a rolling hour but not a sixth, accept a reset token immediately before 30 minutes and reject it at 30 minutes, confirm a token works once, confirm a successful reset invalidates old credentials and sessions, and simulate a failed password write to confirm the old password and sessions remain valid.
 
 **Source:** Team decision, November 4, 2026; not a client business rule.
 

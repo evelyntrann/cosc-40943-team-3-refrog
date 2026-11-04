@@ -447,7 +447,8 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 - **3a. The credentials are not accepted:**
     - 3a1. The system displays the same safe failure for an unknown email and a wrong password and establishes no session.
-    - 3a2. Use case resumes at step 2 or the person begins `UC-AUTH-recover-account`.
+    - 3a2. Five consecutive failed password attempts for a registered account produce a five-minute lockout. Unknown-email, wrong-password, and locked-account responses remain indistinguishable.
+    - 3a3. Use case resumes at step 2 when permitted or the person begins `UC-AUTH-recover-account`.
 - **3b. Authentication state cannot be established:**
     - 3b1. The system reports that sign-in is temporarily unavailable, establishes no session, and offers retry.
     - 3b2. Use case resumes at step 3.
