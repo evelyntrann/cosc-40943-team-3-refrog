@@ -1,5 +1,7 @@
 # Identity Verification Design
 
+> **Stack revision required (2026-11-04):** `KD-tcu-it-stack` supersedes the Java/Spring/Vue/PostgreSQL assumptions in this design. Do not implement IDV until its framework, persistence, transaction, and security details are revised for C# / ASP.NET Core, Blazor, and Microsoft SQL Server while preserving the cited requirements.
+
 **Project:** ReFrog
 **Team:** Team 3
 **Area:** `IDV`

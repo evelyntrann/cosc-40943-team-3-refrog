@@ -37,7 +37,7 @@ ReFrog: a phone-first progressive web app for TCU's finals-week move-out donatio
 ## Project-wide constraints
 
 - One deployable: PWA front end and application modules ship together, one database (architecture §9.2 `KD-deployment-shape`).
-- Technology stack: Java / Spring Boot application, Vue.js PWA, PostgreSQL database (architecture §9.2 `KD-tech-stack`); do not add another language, framework, or database on your own.
+- Technology stack: C# / ASP.NET Core application, Blazor PWA, Microsoft SQL Server database (architecture §9.2 `KD-tcu-it-stack`); do not add another language, framework, or database on your own.
 - Hosting: **unresolved**, TCU IT vs. paid (`OI-15`); keep hosting specifics out of code.
 - Sign-in: the app's own email-and-password accounts, email confirmed by a one-time code at sign-up; no Google or other external identity provider (architecture §9.2 `KD-own-accounts`). Sign-in proves identity only, never TCU affiliation (architecture §8.1).
 - TCU affiliation is proven only by the email one-time code (`UC-IDV-verify-affiliation`, `OI-10`).
@@ -52,7 +52,7 @@ ReFrog: a phone-first progressive web app for TCU's finals-week move-out donatio
 - **Code:** one formatter, linter, and test layout across the repo; do not duplicate business rules between client and server (§8.2.4).
 - **Validation:** the server check is the one that counts; name the bad field and keep the user's valid input (§8.2.5).
 - **Config and secrets:** settings come from deployment configuration; secrets never appear in source, docs, logs, exports, or error responses (§8.2.6).
-- **Logging:** log enough to diagnose failures; never log secrets, verification codes, raw TCU IDs, or unnecessary personal data (§8.2.7).
+- **Logging:** use centralized automated logging for diagnosis and operational error notification; never log secrets, verification codes, raw TCU IDs, or unnecessary personal data (§8.2.7, `MNT-error-notification`).
 - **Persistence:** persist only after validation and business rules pass; one transaction per smallest complete business operation (§8.2.8).
 - **Auditing:** record admin sign-in attempts and admin changes only; no general-purpose audit subsystem (§8.2.9).
 - **Testing:** cover both accepted and rejected requests with non-production data, including auth, validation, duplicates, time zones, and persistence failures (§8.2.10).
