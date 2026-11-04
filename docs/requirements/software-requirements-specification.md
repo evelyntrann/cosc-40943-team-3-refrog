@@ -136,6 +136,8 @@ _Examples:_
 
 **TCU-related constraints:**
 
+- _`CO-tcu-it-technology-stack`: The application shall use C# with ASP.NET Core, a Blazor progressive web application, and Microsoft SQL Server, as directed by TCU IT._
+- _`CO-version-control-workflow`: Project changes shall follow the branch, pull-request, and independent-review workflow defined in `docs/team-contract.md` §5 and `AGENTS.md`._
 - _`CO-nontechnical-administration`: The administrative interface shall be usable by ReFrog organizers without technical knowledge._
 - _`CO-tcu-it-approval`: The system shall not integrate with TCU identity services or other university systems until TCU IT approves the integration._
 - _`CO-tcu-accessibility`: The system shall conform to the accessibility standards required by TCU for student-facing software._
@@ -164,7 +166,9 @@ _Examples:_
 - _`DE-delivery-platform-decision`: Implementation depends on ReFrog confirming the selected delivery platform, because the current requirements do not finalize whether the application is a mobile app, website, or another solution._
 - _`DE-affiliation-verification`: Electronic TCU-affiliation verification depends on the client and TCU accepting a verification method and, if needed, granting approval for university resources or integrations._
 - _`DE-tcu-azure-hosting`: Production deployment depends on access to a TCU-approved Microsoft Azure account and configuration for the production database._
-- _`DE-operational-ownership`: Continued operation after the senior design team completes the project depends on ReFrog or a designated university group assigning a maintenance owner for service accounts, recurring costs, and support._
+- _`DE-operational-ownership`: Continued operation after the senior design team completes the project depends on EAP completing operational handoff and assuming maintenance responsibility (`OI-12`, resolved 2026-11-04)._
+- _`DE-eas-production-review`: Production launch depends on a pre-implementation/go-live review with EAS; the exact lead time represented by the meeting note "3-4 before we go live" remains open under `OI-24`._
+- _`DE-spring-closeout-meetings`: Project closeout depends on holding one or two meetings with TCU IT before the team wraps up work in spring._
 
 ---
 
@@ -845,8 +849,10 @@ _[Add the ones that apply, with `SCA-`, `INT-`, and `MNT-` identifiers. Maintain
 - `MNT-deployment-documentation`: The project shall provide instructions for installing, configuring, deploying, backing up, restoring, and updating the application.
 - `MNT-administrator-documentation`: The project shall provide instructions for routine administrator tasks and event preparation.
 - `MNT-diagnostics`: The system shall record sufficient diagnostic information to identify failed requests and external-service failures without recording authentication secrets or unnecessary sensitive information.
+- `MNT-error-notification`: The system shall automatically notify the designated operational recipient when an application error requiring attention is logged. Recipients, delivery channel, severity threshold, and escalation timing remain unresolved under `OI-23`.
+- `MNT-data-access-abstraction`: Application modules shall access Microsoft SQL Server through a documented persistence abstraction so EAP can maintain or replace database-specific implementation details without changing business-rule code.
 - `MNT-dependency-record`: The project shall document its runtime, external services, required service accounts, and third-party dependencies.
-- `MNT-operational-handoff`: Before production handoff, the project shall provide the designated maintenance owner with the source code, deployment instructions, administrator instructions, service-account ownership information, and recurring-cost information. The maintenance owner, hosting payer, service-account owner, and supported technology stack remain unresolved under `AS-operational-ownership`.
+- `MNT-operational-handoff`: Before production handoff, the project shall provide EAP with the source code, deployment instructions, administrator instructions, service-account ownership information, recurring-cost information, and documentation of the database abstraction. EAP is the designated post-graduation maintenance owner (`OI-12`, resolved 2026-11-04); hosting payer and service-account ownership remain unresolved.
 
 ---
 

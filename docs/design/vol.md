@@ -1,5 +1,7 @@
 # Volunteer Scheduling Design
 
+> **Stack revision required (2026-11-04):** `KD-tcu-it-stack` supersedes the Java/Spring/Vue/PostgreSQL assumptions in this design. Do not implement VOL until its framework, persistence, transaction, and locking details are revised for C# / ASP.NET Core, Blazor, and Microsoft SQL Server while preserving the cited requirements.
+
 **Project:** ReFrog
 **Team:** Team 3
 **Area:** `UC-VOL`
