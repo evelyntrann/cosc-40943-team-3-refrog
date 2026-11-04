@@ -500,7 +500,7 @@ The following dictionary identifies the core business data the system must manag
 | ReFrogEvent | eventId | String / UUID | Unique per event | Required; each record must map to one event season or event window. |
 |  | eventYear | Integer | Current academic year or move-out cycle | Required; should match the event's move-out period. |
 |  | scheduleWindow | Date range | Monday-Saturday during finals week, approx. 2:00 p.m. start | Must align with the operational schedule defined by the committee. |
-|  | status | Enum | planned, active, closed, archived | Required; only active records may accept live submissions, except volunteer shift sign-ups, which are accepted while the event is planned or active because recruitment precedes the event (`UC-VOL-signup`, [vol.md](../design/vol.md)). |
+|  | status | Enum | planned, active, closed, archived | Required; only active records may accept live submissions, except volunteer shift sign-ups, which are accepted while the event is planned or active because recruitment precedes the event (`UC-VOL-signup`, [VOL.md](../design/VOL.md)). |
 | DonationLocation | locationId | String | Unique site identifier | Required; one location per operational site. |
 |  | name | String | Site name or code | Required; human readable and unique within the event. |
 |  | status | Enum | open, closed, maintenance, capacity | Required; a closed location must not accept new activity. |
@@ -511,7 +511,7 @@ The following dictionary identifies the core business data the system must manag
 | VolunteerShift | shiftId | String | Unique shift identifier | Required. |
 |  | date | Date | Event date | Required; must fall within the active event window. |
 |  | startTime / endTime | Time | HH:MM local time | Required for a scheduled shift; end time must be after start time. |
-|  | assignmentStatus | — | Not a shift field | Each volunteer's assignment to a shift carries its own status (pending, active, cancelled, denied); "filled" is derived from the count of held assignments against the shift's required volunteer count ([vol.md](../design/vol.md) Data model). |
+|  | assignmentStatus | — | Not a shift field | Each volunteer's assignment to a shift carries its own status (pending, active, cancelled, denied); "filled" is derived from the count of held assignments against the shift's required volunteer count ([VOL.md](../design/VOL.md) Data model). |
 | Donator | donatorId | String | Unique donor identifier if personal data is retained | Optional; keep only if needed for follow-up and not as a raw ID unless approved. |
 |  | name | String | Free text | Optional for anonymous or low-friction drop-off records. |
 |  | affiliation | Enum | TCU student, faculty, staff, community, unknown | Optional; used only where it affects the donation process. |

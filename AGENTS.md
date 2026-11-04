@@ -10,7 +10,7 @@ ReFrog: a phone-first progressive web app for TCU's finals-week move-out donatio
 
 - Requirements: `docs/requirements/` — use cases (`use-cases.md`), business rules (`business-rules.md`), specification (`software-requirements-specification.md`), glossary, open issues (`OPEN-ISSUES.md`).
 - Architecture-of-record: `docs/design/architectural-design.md`. Crosscutting rules are its §8.2.
-- Design-of-record, one per area: `docs/design/<area>.md` (`adm`, `vol`, `don`, `shp`, `ABU`, `IDV`, `INF`).
+- Design-of-record, one per area: `docs/design/<area>.md` (`ADM`, `VOL`, `DON`, `SHP`, `ABU`, `IDV`, `INF`).
 
 ## How to work
 
