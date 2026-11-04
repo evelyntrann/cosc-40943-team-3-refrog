@@ -29,6 +29,7 @@ _Within one use case, `PRE-1`, `POST-1`, and the step numbers are local and may 
 
 | Area | Feature area | From |
 |---|---|---|
+| `AUTH` | Authentication | Enabling area for every protected participant and administrator workflow |
 | `VOL` | Volunteer scheduling | `FEAT-volunteer-scheduling`, `FEAT-volunteer-notification` |
 | `IDV` | Identity verification | `FEAT-identity-verification` |
 | `INF` | Event & location information | `FEAT-event-info` (formerly `FEAT-location-info`) |
@@ -45,6 +46,7 @@ _Within one use case, `PRE-1`, `POST-1`, and the step numbers are local and may 
 |---|---|---|---|
 | 2026-09-23 | 0.1 | Initial use cases derived from the vision and scope feature list and the first client meeting | Evelyn Tran |
 | 2026-10-16 | 0.2 | `UC-SHP-log-item-taken`: category is now required, one per item taken (was optional extension 2a); added extension 3b | Alfonsotomax |
+| 2026-11-04 | 0.3 | Added `UC-AUTH-register-account`, `UC-AUTH-sign-in`, and `UC-AUTH-recover-account`; exact `tcu.edu` registration verification also establishes persisted TCU email verification | Team 3 |
 
 ---
 
@@ -52,7 +54,7 @@ _Within one use case, `PRE-1`, `POST-1`, and the step numbers are local and may 
 
 ### 1.1 Purpose
 
-This document specifies the goals a donor, shopper, volunteer, or administrator can accomplish with the ReFrog application, in enough detail that a developer knows what to build and a tester knows what to check. It covers volunteer shift scheduling, TCU-affiliation verification, viewing location and event information, logging donations and shopping activity, the administrator dashboard, and reviewing potential shopping abuse.
+This document specifies the goals an account holder, donor, shopper, volunteer, or administrator can accomplish with the ReFrog application, in enough detail that a developer knows what to build and a tester knows what to check. It covers account registration and access, volunteer shift scheduling, TCU-affiliation verification, viewing location and event information, logging donations and shopping activity, the administrator dashboard, and reviewing potential shopping abuse.
 
 ### 1.2 Scope
 
@@ -117,6 +119,7 @@ _Data fields are specified as a table:_
 
 | Area code | Feature area | Use cases |
 |---|---|---|
+| `AUTH` | Authentication, enabling protected workflows | `UC-AUTH-register-account`, `UC-AUTH-sign-in`, `UC-AUTH-recover-account` |
 | `VOL` | Volunteer scheduling, from `FEAT-volunteer-scheduling` | `UC-VOL-signup`, `UC-VOL-cancel-shift`, `UC-VOL-view-schedule`, `UC-VOL-request-access` |
 | `IDV` | Identity verification, from `FEAT-identity-verification` | `UC-IDV-verify-affiliation` |
 | `LOC` | Location info, from `FEAT-location-info` | `UC-LOC-view-locations` |
@@ -344,6 +347,177 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 **Related Use Cases:** `UC-ADM-review-volunteer-request`, `UC-IDV-verify-affiliation`
 **Assumptions:** Approval grants a role, not a shift assignment.
 **Policy:** Declined requests may be resubmitted for the next annual event; Wendy may manually approve earlier. See `BR-volunteer-request-resubmission`. Shift approval belongs to the scheduling owner.
+
+---
+## Area: Authentication (`AUTH`)
+
+### UC-AUTH-register-account: Register an account
+
+**UC ID and Name:** `UC-AUTH-register-account`: Register an account
+**Created By:** Team 3
+**Date Created:** 2026-11-04
+**Primary Actor:** App user
+**Secondary Actors:** Email delivery channel
+**Trigger:** A person wants an account for a protected ReFrog workflow.
+**Description:** A person registers with an email address and password, proves control of that email with a one-time code, and only then receives a ReFrog account. Registration establishes identity only; it does not prove TCU affiliation or grant a volunteer or administrator role.
+
+**Preconditions:**
+
+- PRE-1. The person is not signed in.
+
+**Postconditions:**
+
+- POST-1. On success, exactly one account exists for the verified sign-in email and the person is signed in to that account. If the verified sign-in email has the exact domain `tcu.edu`, the account also has persisted TCU email verification; otherwise it remains unverified for TCU affiliation.
+- POST-2. On failure or abandonment, no account exists and no protected role or TCU-affiliation state is granted.
+
+**Main Success Scenario:**
+
+1. The person chooses to register.
+2. The person enters an email address and a password that satisfies `FR-AUTH-password-policy`.
+3. The system validates the submitted values and confirms the email is not already registered.
+4. The system creates a pending registration and sends a one-time code to the submitted email under `FR-AUTH-verification-code` and `FR-AUTH-verification-limits`.
+5. The person enters the code.
+6. The system verifies the code, creates the account, and marks the sign-in email as verified in one completed operation.
+7. If the verified sign-in email has the exact domain `tcu.edu` under `BR-tcu-email-domain`, the system also saves TCU email verification on the new account. Registration with any other domain leaves TCU affiliation unverified.
+8. The system establishes an ordinary authenticated session and displays registration confirmation, including “TCU email verified” when step 7 applied.
+9. Use case ends.
+
+**Extensions:**
+
+- **3a. The email is already registered:**
+    - 3a1. The system does not create a pending registration or another account and directs the person to sign in or recover the existing account.
+    - 3a2. Use case ends.
+- **3b. The email or password is invalid:**
+    - 3b1. The system identifies the invalid field, preserves the other valid input, and requests a correction.
+    - 3b2. Use case resumes at step 2.
+- **4a. A code request is refused by a verification limit:**
+    - 4a1. The system sends nothing, reports when another request is allowed, and preserves the pending registration.
+    - 4a2. Use case resumes at step 4 after the stated time.
+- **4b. Email delivery is unavailable or has an unknown outcome:**
+    - 4b1. The system does not report that the message was sent, preserves the pending registration, and offers a safe retry under the verification limits.
+    - 4b2. Use case resumes at step 4.
+- **5a. The code is malformed, incorrect, expired, superseded, or already used:**
+    - 5a1. The system rejects the code without creating an account and applies the attempt rules in `FR-AUTH-verification-limits`.
+    - 5a2. The person may retry or request a new code when the applicable limit permits.
+    - 5a3. Use case resumes at step 4 or step 5.
+- **6a. Another request completed registration first:**
+    - 6a1. The system creates no duplicate account and directs the person to sign in.
+    - 6a2. Use case ends.
+- **6b. Account creation fails:**
+    - 6b1. The system creates no partial account, does not establish a session, and reports that registration was not completed.
+    - 6b2. Use case ends with a retry available.
+
+**Priority:** High — Authentication is a prerequisite for volunteer, shopping, administration, and IDV workflows.
+**Frequency of Use:** Once per account.
+**Business Rules:** None. Registration policy is owned by the `FR-AUTH-*` requirements.
+**Related Use Cases:** `UC-AUTH-sign-in`, `UC-AUTH-recover-account`, `UC-IDV-verify-affiliation`, `UC-VOL-signup`
+
+---
+
+### UC-AUTH-sign-in: Sign in to an account
+
+**UC ID and Name:** `UC-AUTH-sign-in`: Sign in to an account
+**Created By:** Team 3
+**Date Created:** 2026-11-04
+**Primary Actor:** Registered app user
+**Secondary Actors:** None
+**Trigger:** A registered person wants to use a protected ReFrog workflow.
+**Description:** A person signs in with a verified account email and password. Authentication establishes trusted account identity; authorization and TCU affiliation remain separate checks.
+
+**Preconditions:**
+
+- PRE-1. A verified account exists.
+- PRE-2. The person is not signed in to that account in the current browser session.
+
+**Postconditions:**
+
+- POST-1. On success, the system has established a secure authenticated session for the account.
+- POST-2. On failure, no authenticated session is established and the response does not reveal whether the submitted email exists.
+
+**Main Success Scenario:**
+
+1. The person chooses to sign in.
+2. The person enters their sign-in email and password.
+3. The system validates the credentials without exposing whether the email exists.
+4. The system establishes the session required by `FR-AUTH-session-policy`.
+5. The system returns the person to the protected workflow they requested, or to their account view when no destination was requested.
+6. Use case ends.
+
+**Extensions:**
+
+- **3a. The credentials are not accepted:**
+    - 3a1. The system displays the same safe failure for an unknown email and a wrong password and establishes no session.
+    - 3a2. Use case resumes at step 2 or the person begins `UC-AUTH-recover-account`.
+- **3b. Authentication state cannot be established:**
+    - 3b1. The system reports that sign-in is temporarily unavailable, establishes no session, and offers retry.
+    - 3b2. Use case resumes at step 3.
+- **4a. The account is an administrator:**
+    - 4a1. The system establishes an administrator session governed by the four-hour inactivity limit in `FR-AUTH-session-policy`.
+    - 4a2. Use case continues at step 5.
+- **5a. The requested destination is not authorized:**
+    - 5a1. The system keeps the authenticated session but denies the protected operation under `FR-AUTH-enforce-permissions`.
+    - 5a2. Use case ends without granting the missing permission.
+- **6a. The signed-in person chooses to sign out:**
+    - 6a1. The system invalidates the current session and returns the person to public information.
+    - 6a2. A later protected request requires sign-in again.
+
+**Priority:** High — protected workflows depend on trusted account identity.
+**Frequency of Use:** At registration, after sign-out or expiry, and on new browsers or devices.
+**Business Rules:** None. Authentication and session policies are owned by the `FR-AUTH-*` and `SEC-*` requirements.
+**Related Use Cases:** `UC-AUTH-register-account`, `UC-AUTH-recover-account`, `UC-IDV-verify-affiliation`
+
+---
+
+### UC-AUTH-recover-account: Recover account access
+
+**UC ID and Name:** `UC-AUTH-recover-account`: Recover account access
+**Created By:** Team 3
+**Date Created:** 2026-11-04
+**Primary Actor:** Registered app user
+**Secondary Actors:** Email delivery channel
+**Trigger:** A person cannot remember their account password.
+**Description:** A person requests a password-reset link without the system revealing whether the submitted email is registered. A valid, one-time reset token allows the person to choose a new password and invalidates existing sessions.
+
+**Preconditions:** None. The request is accepted from a signed-out person whether or not the submitted email exists.
+
+**Postconditions:**
+
+- POST-1. On success, the account has a new password and its earlier authenticated sessions are invalid.
+- POST-2. On failure, the existing password and sessions are unchanged.
+
+**Main Success Scenario:**
+
+1. The person chooses account recovery.
+2. The person enters an email address.
+3. The system displays the same acknowledgement whether or not an account exists.
+4. If a matching account exists, the system sends a one-time password-reset link valid for 30 minutes.
+5. The person opens the link and enters a new password satisfying `FR-AUTH-password-policy`.
+6. The system verifies and consumes the token, changes the password, and invalidates existing sessions in one completed operation.
+7. The system confirms the reset and directs the person to `UC-AUTH-sign-in`.
+8. Use case ends.
+
+**Extensions:**
+
+- **4a. No account matches the submitted email:**
+    - 4a1. The system sends nothing and retains the same acknowledgement from step 3.
+    - 4a2. Use case ends without revealing that no account exists.
+- **4b. Email delivery fails or has an unknown outcome:**
+    - 4b1. The public response remains the same acknowledgement and no password or session state changes.
+    - 4b2. The person may make another recovery request.
+- **5a. The new password is invalid:**
+    - 5a1. The system identifies the password-policy failure without consuming the reset token.
+    - 5a2. Use case resumes at step 5 while the token remains valid.
+- **6a. The token is invalid, expired, or already used:**
+    - 6a1. The system changes nothing and asks the person to request a new recovery link.
+    - 6a2. Use case resumes at step 1.
+- **6b. The password change fails:**
+    - 6b1. The system keeps the old password and existing sessions unchanged and reports that recovery was not completed.
+    - 6b2. Use case ends with retry available while the token remains valid.
+
+**Priority:** High — an application-owned password system needs a supported recovery path.
+**Frequency of Use:** Infrequent, when a registered person loses account access.
+**Business Rules:** None. Recovery policy is owned by `FR-AUTH-password-recovery`.
+**Related Use Cases:** `UC-AUTH-register-account`, `UC-AUTH-sign-in`
 
 ---
 ## Area: Identity Verification (`IDV`)
