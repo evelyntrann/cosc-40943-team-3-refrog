@@ -40,6 +40,7 @@ _[These are slugs, like every other identifier in your project, so an inserted d
 | 0.4 | 2026-10-30 | Uyen Tran | Removed Google Sign-In; own email-and-password accounts verified by code at sign-up (`KD-own-accounts`) |
 | 0.5 | 2026-11-04 | Team 3 | Recorded TCU IT's required stack (`KD-tcu-it-stack`), EAP ownership, automated error notification, and database abstraction |
 | 0.6 | 2026-11-04 | Team 3 | Added AUTH for registration, sign-in, sign-out, and recovery; exact `tcu.edu` registration verification establishes persisted affiliation while later verification remains in IDV |
+| 0.7 | 2026-11-04 | Team 3 | Recorded AUTH's design, shared API envelope, verification ownership, and administrator bootstrap |
 | 0.7 | 2026-11-04 | Alfonsotomax | §5.1: the Web Front End is Blazor WebAssembly hosted by the Application; §8.2.8: Entity Framework Core is the persistence library behind per-area store interfaces ([IDV.md](IDV.md) stack revision) |
 
 ---
@@ -157,7 +158,7 @@ C4Context
 
 - **The application is divided by use case area** — Volunteer Scheduling, Identity Verification, Location Info, Administration, Shopping-Abuse Monitoring, Shopping, and Donation — with shared Authentication and Notifications components for concerns used across multiple areas (section 5.2).
 
-- **The application runs its own email-and-password accounts, each email confirmed by a one-time code at sign-up, while TCU affiliation is verified separately through a one-time code sent to a TCU email address** (section 8.1, `KD-own-accounts`, `SEC-authentication-provider`, `UC-IDV-verify-affiliation`), keeping identity and ReFrog-specific shopping eligibility as separate concerns (quality goal 2).
+- **The application runs its own email-and-password accounts, each email confirmed by a one-time registration code; verifying an exact `tcu.edu` registration email also establishes persisted TCU affiliation, while other accounts may prove a TCU email later** (section 8.1, `KD-own-accounts`, `SEC-authentication-provider`, `UC-AUTH-register-account`, `UC-IDV-verify-affiliation`), keeping account identity, affiliation evidence, and ReFrog-specific shopping eligibility as separate concerns (quality goal 2).
 
 - **Public and participant-facing workflows remain separated from protected administrative operations at the Application trust boundary**, where authentication, authorization, and role-based access are enforced before protected data is returned or changed (section 8.1, `SEC-authenticated-administration`, `SEC-role-based-access`, `SEC-least-privilege`).
 
@@ -265,16 +266,16 @@ _[Check before Checkpoint 1: every area in your use case file appears in the fir
 | Use case area | Component | Responsibility | Depends on | Status |
 |---|---|---|---|---|
 | `VOL` | Volunteer Scheduling | Owns a volunteer's shift sign-ups, cancellations, and their own schedule and hours | Administration, Authentication | provisional |
-| `IDV` | Identity Verification | Owns determining whether a signed-in shopper is eligible to shop — TCU-affiliated (confirmed 2026-10-02 via a one-time code sent to a TCU email, not a sign-in domain check) or a registered volunteer | Authentication, Email delivery channel | provisional |
+| `IDV` | Identity Verification | Owns determining whether a signed-in shopper is eligible to shop from Authentication's persisted TCU verification and current volunteer-access state | Authentication | [IDV.md](IDV.md) (stack revision required) |
 | `LOC` | Location Info | Owns the list of active ReFrog locations, hours, and event info shown to every participant | Administration | provisional |
 | `ADM` | Administration | Owns annual volunteer access review and renewal approval, volunteer access request decisions and manual email-based role grants and removals (team design decision, 2026-10-16), shift creation and configuration, manually triggering a notification to volunteers about open shifts (confirmed 2026-10-02, not an automatic alert), and the cross-location dashboard of donation, shopping, and volunteer-coverage activity | Authentication, Volunteer Scheduling, Shopping, Donation, Shopping-Abuse Monitoring, Email delivery channel | provisional |
 | `ABU` | Shopping-Abuse Monitoring | Owns flagging and administrator review of potentially-excessive shopping activity | Shopping, Authentication | provisional |
 | `SHP` | Shopping | Owns recording what a shopper takes during a visit | Identity Verification, Administration | provisional |
 | `DON` | Donation | Owns recording what a donor drops off at a location | Administration | provisional |
-| `AUTH` | Authentication | Owns account registration, sign-in, sign-out, password recovery, stable account identity, trusted current roles and explicit revoked/expired restrictions, event-scoped access and renewal state, and administrator recognition | Email delivery channel (registration and recovery messages) | [authentication.md](authentication.md) (planned) |
+| `AUTH` | Authentication | Owns account registration, sign-in, sign-out, password recovery, stable account identity, persisted TCU email verification, shared verification challenges, trusted current roles and explicit revoked/expired restrictions, event-scoped access and renewal state, and administrator recognition | Email delivery channel (registration, affiliation-verification, and recovery messages) | [AUTH.md](AUTH.md) |
 | _(cross-cutting)_ | Notifications | Owns every reminder and alert the system sends — shift reminders, understaffed-shift alerts | Volunteer Scheduling, an external delivery channel (not yet chosen) | provisional |
 
-Volunteer role handling is detailed in [Administration](ADM.md) and [Authentication](authentication.md). Administrators approve requests or manually approve verified sign-in emails; IDV checks the current role through Authentication. These team-selected workflows still require supporting use cases and SRS alignment.
+Volunteer role handling is detailed in [Administration](ADM.md) and [Authentication](AUTH.md). Administrators approve requests or manually approve verified sign-in emails; IDV checks the current role through Authentication. These team-selected workflows still require supporting use cases and SRS alignment.
 
 `IDV` is kept separate from `Authentication` deliberately: Authentication owns `UC-AUTH-register-account`, `UC-AUTH-sign-in`, and `UC-AUTH-recover-account` and answers who signed in; Identity Verification is the ReFrog-specific eligibility logic built on top of that identity (TCU-affiliation-or-volunteer-status). Collapsing the two would bury that business rule inside generic account plumbing.
 
@@ -350,7 +351,7 @@ Due: Checkpoint 1. These conventions apply across all components and remain prov
 
 **8.2.2 Time and time zones.** ReFrog event dates and times shall use the `America/Chicago` time zone, timestamps shall be stored in a consistent machine-readable form, and user-facing times shall be converted to the configured event time zone and displayed using a 12-hour clock with `a.m.` or `p.m.`. Tests shall be able to provide a fixed clock when behavior depends on a deadline. This supports `LOC-event-time-zone`, `LOC-time-storage`, and `LOC-time-display`. Shown in: the first time utility and time-dependent tests.
 
-**8.2.3 API conventions.** Public information and protected participant workflows shall use consistent resource naming, structured success and error responses, documented status codes, and an API contract generated or maintained from the implementation. The framework is ASP.NET Core (`KD-tcu-it-stack`); endpoint names, response schema, and API documentation location remain provisional. The contract shall preserve the validation and failure behavior required by `FR-VAL-server-validation`, `FR-VAL-field-feedback`, `FR-SAVE-confirmed-success`, and `ROB-submission-status`. Shown in: the API contract and the first endpoint integration tests.
+**8.2.3 API conventions.** Public information and protected participant workflows shall use consistent resource naming, documented status codes, and the shared `ApiResponse<T>` contract fixed by [AUTH.md](AUTH.md): exactly one of `data` or `error` is present; an error contains a category (`VALIDATION`, `AUTHORIZATION`, `UNAVAILABLE`, or `UNEXPECTED`), stable code, safe message, optional field messages, and optional retry time. The framework is ASP.NET Core (`KD-tcu-it-stack`), and implementation shall maintain an API contract from these designs. The contract shall preserve `FR-VAL-server-validation`, `FR-VAL-field-feedback`, `FR-SAVE-confirmed-success`, and `ROB-submission-status`. Shown in: shared response types, the application error handler, the generated or maintained API contract, and endpoint integration tests.
 
 **8.2.4 Code conventions.** The implementation shall use one agreed formatter, linter, naming convention, dependency-management approach, and test organization across components. Shared business rules shall not be duplicated between participant interfaces and server-side operations. The language and frameworks are recorded in `KD-tcu-it-stack` (C# / ASP.NET Core and Blazor); the formatter, linter, and banned-library list remain provisional until the team records them. This supports `MNT-automated-tests`, `MNT-dependency-record`, and `MNT-operational-handoff`. Shown in: the repository formatter/linter configuration and contribution instructions.
 
@@ -422,10 +423,10 @@ _Example:]_
 **`KD-own-accounts`: the application runs its own email-and-password accounts, with no external identity provider.** _Accepted._
 
 - **Driving requirements:** `SEC-authentication-provider`, `FR-AUTH-account-signup`, `BR-volunteer-role-approval`.
-- **Context:** Users sign up with any email domain. A volunteer approval granted by email must reach only the person who controls that email, so the sign-up email has to be proven, not just typed.
-- **Decision:** Sign-up takes an email and a password and creates the account only after the user enters the one-time code sent to that email (`FR-AUTH-verification-code`, `FR-AUTH-verification-limits`). Sign-in is email and password. Passwords are stored only as a salted, slow one-way hash. Team decision, 2026-10-30 (`OI-17`).
-- **Rejected:** Google Sign-In, optional or required, because the team wants one sign-in path for every user, whatever their email provider. Also rejected: accounts without a sign-up code, because anyone could register with someone else's email.
-- **Trade-off:** The application now stores password hashes and owns the sign-up code flow, so password rules and account recovery must be specified before Authentication is built.
+- **Context:** Users register with any email domain. A volunteer approval granted by email must reach only the person who controls that email, so the registration email has to be proven, not just typed.
+- **Decision:** Registration takes an email and a password and creates the account only after the user enters the one-time code sent to that email (`FR-AUTH-verification-code`, `FR-AUTH-verification-limits`). Verifying an exact `tcu.edu` registration email also creates the account's persisted TCU-verification status; it does not create a role. Sign-in is email and password. Passwords are stored only as a salted, slow one-way hash. Team decision, 2026-10-30, amended 2026-11-04 (`OI-17`, `BR-tcu-email-domain`).
+- **Rejected:** Google Sign-In, optional or required, because the team wants one sign-in path for every user, whatever their email provider. Also rejected: accounts without a registration code, because anyone could register with someone else's email.
+- **Trade-off:** The application stores password hashes and owns registration verification and account recovery, increasing its security and operational responsibilities.
 
 ## 10. Quality Requirements
 
