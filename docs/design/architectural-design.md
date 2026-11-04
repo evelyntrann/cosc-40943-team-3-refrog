@@ -36,7 +36,7 @@ _[These are slugs, like every other identifier in your project, so an inserted d
 |---|---|---|---|
 | 0.1 | | | Initial draft for Checkpoint 1 |
 | 0.2 | 2026-10-28 | Alfonsotomax | Recorded the technology stack (`KD-tech-stack`); named container technologies in §5.1 |
-| 0.3 | 2026-10-30 | Alfonsotomax | §5.2 `VOL` *Depends on*: removed Notifications (Notifications depends on VOL, `OI-7`); locations come from Administration ([vol.md](vol.md)) |
+| 0.3 | 2026-10-30 | Alfonsotomax | §5.2 `VOL` *Depends on*: removed Notifications (Notifications depends on VOL, `OI-7`); locations come from Administration ([VOL.md](VOL.md)) |
 | 0.4 | 2026-10-30 | Uyen Tran | Removed Google Sign-In; own email-and-password accounts verified by code at sign-up (`KD-own-accounts`) |
 | 0.5 | 2026-11-04 | Team 3 | Recorded TCU IT's required stack (`KD-tcu-it-stack`), EAP ownership, automated error notification, and database abstraction |
 
@@ -272,7 +272,7 @@ _[Check before Checkpoint 1: every area in your use case file appears in the fir
 | _(cross-cutting)_ | Authentication | Owns sign-in, stable account identity, trusted current roles and explicit revoked/expired restrictions, event-scoped access and renewal state, and administrator recognition | Email delivery channel (sign-up codes) | provisional |
 | _(cross-cutting)_ | Notifications | Owns every reminder and alert the system sends — shift reminders, understaffed-shift alerts | Volunteer Scheduling, an external delivery channel (not yet chosen) | provisional |
 
-Volunteer role handling is detailed in [Administration](adm.md) and [Authentication](authentication.md). Administrators approve requests or manually approve verified sign-in emails; IDV checks the current role through Authentication. These team-selected workflows still require supporting use cases and SRS alignment.
+Volunteer role handling is detailed in [Administration](ADM.md) and [Authentication](authentication.md). Administrators approve requests or manually approve verified sign-in emails; IDV checks the current role through Authentication. These team-selected workflows still require supporting use cases and SRS alignment.
 
 `IDV` is kept separate from `Authentication` deliberately: Authentication answers only "who signed in"; Identity Verification is the ReFrog-specific eligibility logic built on top of that (TCU-affiliation-or-volunteer-status), and collapsing the two would bury that business rule inside generic sign-in plumbing.
 
@@ -404,7 +404,7 @@ _Example:]_
 **`KD-tech-stack`: Java / Spring Boot application, Vue.js PWA, PostgreSQL database.** _Superseded by `KD-tcu-it-stack`._
 
 - **Driving requirements:** `MNT-operational-handoff`, `MNT-dependency-record`, `CO-operational-ownership`, `ROB-duplicate-submission`, and `USE-mobile-responsive`.
-- **Context:** `KD-deployment-shape` fixes one application, one PWA front end built into its package, and one database, but left the technologies open. Volunteer Scheduling must lock a shift while it changes that shift's assignments (`UC-VOL-signup`, [vol.md](vol.md)), which needs a relational database with transactions and row locks. The long-term maintenance owner is unresolved, so the stack must be mainstream and well documented. `CO-azure-database-hosting` may require the production database to run on Azure.
+- **Context:** `KD-deployment-shape` fixes one application, one PWA front end built into its package, and one database, but left the technologies open. Volunteer Scheduling must lock a shift while it changes that shift's assignments (`UC-VOL-signup`, [VOL.md](VOL.md)), which needs a relational database with transactions and row locks. The long-term maintenance owner is unresolved, so the stack must be mainstream and well documented. `CO-azure-database-hosting` may require the production database to run on Azure.
 - **Decision:** Build the Application container in Java with Spring Boot, the Web Front End as a Vue.js progressive web app built into the application's package, and the Database container on PostgreSQL. Production hosting remains open (`DE-tcu-azure-hosting`); Azure offers managed services for all three, so the choice holds if `CO-azure-database-hosting` applies.
 - **Rejected:** TypeScript end to end (a Node.js server framework with an ORM such as Prisma). One language across client and server is an advantage, but the common ORMs need raw SQL for the row lock Volunteer Scheduling depends on, and the team has less course support for it than for Spring Boot and Vue.js.
 - **Trade-off:** The repository carries two languages and two toolchains (Java and JavaScript), so §8.2.4 must name a formatter, linter, and test layout for each. This decision must be revisited if TCU IT or the eventual maintenance owner requires a different supported stack (`CO-tcu-it-approval`, `CO-operational-ownership`).
