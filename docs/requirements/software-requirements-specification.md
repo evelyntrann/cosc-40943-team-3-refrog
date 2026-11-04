@@ -39,6 +39,7 @@ _Requirements cited from elsewhere keep their own identifiers: `UC-*` from [use-
 | Date | Version | Description | Author |
 |---|---|---|---|
 | _[YYYY-MM-DD]_ | 0.1 | Initial draft | _[Name]_ |
+| 2026-11-04 | 0.2 | Added explicit password, session, and account-recovery requirements for AUTH; exact `tcu.edu` registration verification also establishes persisted TCU email verification | Team 3 |
 
 ---
 
@@ -216,15 +217,39 @@ When a user requests volunteer scheduling data, shopping activity, or an adminis
 
 **`FR-AUTH-account-signup`**
 
-A user shall sign up with an email address of any domain and a password. The system shall create the account only after the user enters the one-time code sent to that email (`FR-AUTH-verification-code`, `FR-AUTH-verification-limits`); until then no account exists and nothing can be signed in to. A signed-up user shall sign in with that email and password. The system shall use no external identity provider, shall store passwords only as a salted, slow one-way hash, and shall never log or return them. An email that already belongs to an account shall not create a second account.
+A user shall register under `UC-AUTH-register-account` with an email address of any domain and a password. The system shall create the account only after the user enters the one-time code sent to that email (`FR-AUTH-verification-code`, `FR-AUTH-verification-limits`); until then no account exists and nothing can be signed in to. When that successfully verified sign-in email has the exact domain `tcu.edu` under `BR-tcu-email-domain`, the same proof of email control shall also create persisted TCU email verification on the new account. Registration with any other domain shall leave TCU affiliation unverified. A registered user shall sign in under `UC-AUTH-sign-in` with that email and password. The system shall use no external identity provider, shall store passwords only as a salted, slow one-way hash, and shall never log or return them. An email that already belongs to an account shall not create a second account.
 
-**Verification:** Sign up with a non-TCU email; sign-in fails until the emailed code is entered, then succeeds with the password. Entering a wrong or expired code creates no account. Signing up again with the same email does not create a second account. The stored password is not readable as plain text.
+**Verification:** Register with a non-TCU email; sign-in fails until the emailed code is entered, then succeeds with the password and TCU affiliation remains unverified. Register with an exact `tcu.edu` email, complete the code, and confirm the new account has persisted TCU email verification without a second code. Entering a wrong or expired code creates no account or affiliation state. Registering again with the same email does not create a second account. The stored password is not readable as plain text.
 
 **Source:** Team decision, October 30, 2026 (`OI-17`, `KD-own-accounts`); not a recorded client approval.
 
+**`FR-AUTH-password-policy`**
+
+Account passwords shall follow the explicitly configured .NET 10 ASP.NET Core Identity policy: at least 6 characters, at least one unique character, and at least one uppercase letter, one lowercase letter, one digit, and one non-alphanumeric character. Passwords shall be stored only as salted, slow one-way hashes and shall never appear in source, logs, exports, error responses, or administrator views.
+
+**Verification:** Attempt registration and password reset at every rule boundary. Confirm accepted passwords are not readable from persistence and rejected responses contain neither the submitted password nor its hash.
+
+**Source:** Team decision, November 4, 2026; selected as the pinned ASP.NET Core Identity policy for .NET 10, not a client business rule.
+
+**`FR-AUTH-session-policy`**
+
+Authentication shall use server-issued secure, HttpOnly, same-site cookies over HTTPS. Ordinary-user sessions shall have a 30-day absolute lifetime and no inactivity timeout. Administrator sessions shall expire after four hours of inactivity. Signing out shall invalidate the current session. A password reset shall invalidate all earlier sessions for the affected account. State-changing cookie-authenticated requests shall require antiforgery protection. Authorization shall continue to use current trusted server state rather than treating an unexpired cookie as proof of a current role.
+
+**Verification:** Inspect cookie security attributes; reject a state-changing request without valid antiforgery proof; cross each expiry boundary with a fixed clock; sign out and confirm the cookie no longer authorizes; reset a password and confirm earlier sessions fail; remove a role and confirm an existing session cannot continue using it.
+
+**Source:** Team decision, November 4, 2026; administrator inactivity limit and ordinary-user session lifetime are not recorded client business rules.
+
+**`FR-AUTH-password-recovery`**
+
+Account recovery shall return the same public acknowledgement for registered and unregistered emails. For a registered account, the system shall send a one-time password-reset link that expires 30 minutes after server-side issuance. A successful reset shall atomically replace the password, consume the reset token, and invalidate all earlier sessions. An invalid, expired, or reused token shall change neither password nor session state.
+
+**Verification:** Compare public responses for known and unknown emails; use a fixed clock to accept a token immediately before 30 minutes and reject it at 30 minutes; confirm a token works once; confirm a successful reset invalidates old credentials and sessions; simulate a failed password write and confirm the old password and sessions remain valid.
+
+**Source:** Team decision, November 4, 2026; not a client business rule.
+
 **`FR-AUTH-affiliation-from-signin`**
 
-Confirmed with the client 2026-10-02 (resolves `OI-10`): the system shall verify a shopper's TCU affiliation by sending a one-time code to a TCU email address the shopper provides, and shall persist that verified status on their account rather than repeating the check on every visit, consistent with `UC-IDV-verify-affiliation`. This replaces an earlier draft of this requirement that assumed affiliation could be derived directly from a sign-in provider's email domain — that depended on TCU's email running on the same provider used for sign-in, which was never confirmed and is not what the client chose.
+Confirmed with the client 2026-10-02 (resolves `OI-10`): the system shall verify a shopper's TCU affiliation only after a one-time code proves control of an email allowed by `BR-tcu-email-domain`, and shall persist that verified status on the account rather than repeating the check on every visit. If the account is registered with that qualifying email, the successful registration code satisfies both sign-in-email verification and TCU email verification (`UC-AUTH-register-account`). Otherwise the signed-in shopper completes the later profile flow in `UC-IDV-verify-affiliation`. A typed domain without successful code verification never proves affiliation.
 
 **Verification:** Enter a TCU email, receive and submit the code, and confirm affiliation shows verified. Sign out and back in, and confirm the verified status persists without repeating the email-code step.
 
@@ -246,7 +271,7 @@ The system shall enforce these limits on the server, across sessions, for sign-u
 
 **`FR-AUTH-verification-ownership`**
 
-Saved TCU email verification shall belong to the account that completed it. Any other account, including a new account using the same email, shall complete its own verification. Changing the sign-in email on the same account shall keep the saved verification and shall not mark the new sign-in email as TCU-verified.
+Saved TCU email verification shall belong to the account that completed it, whether completed during `UC-AUTH-register-account` or `UC-IDV-verify-affiliation`. Any other account, including a new account using the same email, shall complete its own verification. Changing the sign-in email on the same account shall keep the saved verification and shall not mark the new sign-in email as TCU-verified.
 
 **Verification:** Verify on one account, then sign in with a second account and enter the same TCU email; the second account is not verified until it completes its own code. Change the first account's sign-in email; it stays verified without a new code.
 
@@ -475,7 +500,7 @@ The following dictionary identifies the core business data the system must manag
 | ReFrogEvent | eventId | String / UUID | Unique per event | Required; each record must map to one event season or event window. |
 |  | eventYear | Integer | Current academic year or move-out cycle | Required; should match the event's move-out period. |
 |  | scheduleWindow | Date range | Monday-Saturday during finals week, approx. 2:00 p.m. start | Must align with the operational schedule defined by the committee. |
-|  | status | Enum | planned, active, closed, archived | Required; only active records may accept live submissions, except volunteer shift sign-ups, which are accepted while the event is planned or active because recruitment precedes the event (`UC-VOL-signup`, [vol.md](../design/vol.md)). |
+|  | status | Enum | planned, active, closed, archived | Required; only active records may accept live submissions, except volunteer shift sign-ups, which are accepted while the event is planned or active because recruitment precedes the event (`UC-VOL-signup`, [VOL.md](../design/VOL.md)). |
 | DonationLocation | locationId | String | Unique site identifier | Required; one location per operational site. |
 |  | name | String | Site name or code | Required; human readable and unique within the event. |
 |  | status | Enum | open, closed, maintenance, capacity | Required; a closed location must not accept new activity. |
@@ -486,7 +511,7 @@ The following dictionary identifies the core business data the system must manag
 | VolunteerShift | shiftId | String | Unique shift identifier | Required. |
 |  | date | Date | Event date | Required; must fall within the active event window. |
 |  | startTime / endTime | Time | HH:MM local time | Required for a scheduled shift; end time must be after start time. |
-|  | assignmentStatus | — | Not a shift field | Each volunteer's assignment to a shift carries its own status (pending, active, cancelled, denied); "filled" is derived from the count of held assignments against the shift's required volunteer count ([vol.md](../design/vol.md) Data model). |
+|  | assignmentStatus | — | Not a shift field | Each volunteer's assignment to a shift carries its own status (pending, active, cancelled, denied); "filled" is derived from the count of held assignments against the shift's required volunteer count ([VOL.md](../design/VOL.md) Data model). |
 | Donator | donatorId | String | Unique donor identifier if personal data is retained | Optional; keep only if needed for follow-up and not as a raw ID unless approved. |
 |  | name | String | Free text | Optional for anonymous or low-friction drop-off records. |
 |  | affiliation | Enum | TCU student, faculty, staff, community, unknown | Optional; used only where it affects the donation process. |
@@ -500,7 +525,7 @@ The following dictionary identifies the core business data the system must manag
 |  | condition | Enum | usable, damaged, uncertain | Required when item quality is recorded; otherwise may default to usable if not assessed. |
 | Shopper | name / shopperId | String | Unique shopper identifier | Required if the system tracks repeat visits or abuse patterns. |
 |  | affiliationType | — | Not collected | The TCU email code cannot tell student, faculty, or staff apart, and shopping eligibility does not need it (§7.4.5). Eligibility comes from `verificationStatus` or the volunteer role (`FR-AUTH-shopping-eligibility`). |
-|  | verificationStatus | Enum | verified, unverified | Required; verified only after a successful TCU email one-time code (`UC-IDV-verify-affiliation`). There is no rejected or review state, because no visual-ID review exists (`OI-19`). |
+|  | verificationStatus | Enum | verified, unverified | Required; verified only after a successful one-time code for an exact `tcu.edu` email during `UC-AUTH-register-account` or `UC-IDV-verify-affiliation`. There is no rejected or review state, because no visual-ID review exists (`OI-19`). |
 | ShoppingRecord | shoppingRecordId | String | Unique record identifier | Required. |
 |  | shoppingDateTime | DateTime | Local time | Required. |
 |  | locationId | String | Existing DonationLocation.locationId | Required. |
@@ -798,8 +823,8 @@ _Example: `SEC-authentication`: The system shall authenticate every request to a
 - `SEC-administrator-review`: The system shall restrict access to suspected shopping-abuse information to authorized ReFrog administrators, consistent with `BR-shopping-abuse-review`.
 - `SEC-transport-encryption`: The system shall encrypt network communication containing authentication credentials, affiliation information, or participant records by using HTTPS.
 - `SEC-audit-log`: The system shall record successful and unsuccessful administrator authentication attempts and administrator changes to event, schedule, and participant records.
-- `SEC-authentication-provider`: The system shall authenticate users with its own email-and-password accounts, each email verified by a one-time code at sign-up, and no external identity provider (`FR-AUTH-account-signup`). Before accepting digital shopping activity, the system shall require a signed-in account with either verified control of a TCU-issued email address or an administrator-granted volunteer role. General sign-in email alone shall not establish TCU affiliation; role eligibility shall not imply email verification.
-- `SEC-session-expiration`: The system shall expire an administrator session after the team-approved period of inactivity.
+- `SEC-authentication-provider`: The system shall authenticate users with its own email-and-password accounts, each email verified by a one-time code at registration, and no external identity provider (`FR-AUTH-account-signup`). Before accepting digital shopping activity, the system shall require a signed-in account with either verified control of a TCU-issued email address or an administrator-granted volunteer role. A successfully code-verified registration email with the exact `tcu.edu` domain establishes TCU email verification; a typed or unverified sign-in email does not. Role eligibility shall not imply email verification.
+- `SEC-session-expiration`: The system shall expire an administrator session after four hours of inactivity, consistent with `FR-AUTH-session-policy`.
 
 ### 9.4 Safety
 

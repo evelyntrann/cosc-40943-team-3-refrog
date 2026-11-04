@@ -71,10 +71,48 @@ _In week 8 the spine extends past the use case: **business objective → feature
 
 ## 4. Use case to design, code, and tests
 
-| Use case | Design | Build | Code | Tests | Verify |
-|---|---|---|---|---|---|
-| `UC-VOL-signup` | [design/vol.md](design/vol.md#uc-vol-signup-signing-up-for-a-shift) | 📐 Designed | | | |
-| `UC-IDV-verify-affiliation` | [design/IDV.md](design/IDV.md#uc-idv-verify-affiliation-verifying-shopping-eligibility) | 📐 Designed | | | |
+Release values follow the course's release plan: `v0.1.0` is the proving slice (Checkpoint 2), `v0.2.0` is Checkpoint 3, `v1.0.0` is the December MVP, `Spring` is before the late-April go-live, and `Out` is not planned. Rows are ordered by release. Risk comes first, then the client's volunteer-first priority (`AS-volunteer-first`), then dependencies. `UC-IDV-verify-affiliation` ships before its only consumer, `UC-SHP-log-item-taken`, because it is the highest-risk use case (issue #60).
+
+| Use case or FR | Design | Release | Build | Code | Tests | Verify |
+|---|---|---|---|---|---|---|
+| `UC-IDV-verify-affiliation` | [design/IDV.md](design/IDV.md#uc-idv-verify-affiliation-verifying-shopping-eligibility) | v0.1.0 | 📐 Designed | | | |
+| `FR-AUTH-affiliation-from-signin` | [design/IDV.md](design/IDV.md) | v0.1.0 | 📐 Designed | | | |
+| `FR-AUTH-verification-code` | [design/IDV.md](design/IDV.md) | v0.1.0 | 📐 Designed | | | |
+| `FR-AUTH-verification-limits` | [design/IDV.md](design/IDV.md) | v0.1.0 | 📐 Designed | | | |
+| `FR-AUTH-verification-ownership` | [design/IDV.md](design/IDV.md) | v0.1.0 | 📐 Designed | | | |
+| `FR-VAL-server-validation` | | v0.1.0 | ❌ Not started | | | |
+| `FR-VAL-field-feedback` | | v0.1.0 | ❌ Not started | | | |
+| `FR-VAL-preserve-input` | | v0.1.0 | ❌ Not started | | | |
+| `FR-SAVE-confirmed-success` | | v0.1.0 | ❌ Not started | | | |
+| `UC-ADM-manage-shifts` | [design/ADM.md](design/ADM.md) | v0.2.0 | 📐 Designed | | | |
+| `UC-VOL-signup` | [design/VOL.md](design/VOL.md#uc-vol-signup-signing-up-for-a-shift) | v0.2.0 | 📐 Designed | | | |
+| `UC-VOL-cancel-shift` | [design/VOL.md](design/VOL.md) | v0.2.0 | 📐 Designed | | | |
+| `UC-ADM-review-volunteer` | [design/ADM.md](design/ADM.md) | v0.2.0 | 📐 Designed | | | |
+| `FR-AUTH-account-signup` | | v0.2.0 | ❌ Not started | | | |
+| `FR-AUTH-enforce-permissions` | | v0.2.0 | ❌ Not started | | | |
+| `FR-SAVE-duplicate-submission` | | v0.2.0 | ❌ Not started | | | |
+| `FR-SAVE-unknown-outcome` | | v0.2.0 | ❌ Not started | | | |
+| `UC-VOL-view-schedule` | [design/VOL.md](design/VOL.md) | v1.0.0 | 📐 Designed | | | |
+| `UC-VOL-request-access` | | v1.0.0 | ❌ Not started | | | |
+| `UC-ADM-review-volunteer-request` | | v1.0.0 | ❌ Not started | | | |
+| `UC-ADM-grant-volunteer-access` | | v1.0.0 | ❌ Not started | | | |
+| `UC-ADM-remove-volunteer-access` | | v1.0.0 | ❌ Not started | | | |
+| `UC-ADM-view-dashboard` | [design/ADM.md](design/ADM.md) | v1.0.0 | 📐 Designed | | | |
+| `UC-ADM-notify-volunteers` | [design/ADM.md](design/ADM.md) | v1.0.0 | 📐 Designed | | | |
+| `UC-INF-view-event-info` | [design/INF.md](design/INF.md) | v1.0.0 | 📐 Designed | | | |
+| `UC-INF-view-locations` | [design/INF.md](design/INF.md) | v1.0.0 | 📐 Designed | | | |
+| `UC-INF-view-role-guides` | [design/INF.md](design/INF.md) | v1.0.0 | 📐 Designed | | | |
+| `FR-AUTH-volunteer-role` | | v1.0.0 | ❌ Not started | | | |
+| `FR-AUTH-volunteer-lifecycle` | | v1.0.0 | ❌ Not started | | | |
+| `FR-NOTIFY-in-app-inbox` | | v1.0.0 | ❌ Not started | | | |
+| `FR-NOTIFY-preserve-business-state` | | v1.0.0 | ❌ Not started | | | |
+| `FR-DISPLAY-unavailable-data` | | v1.0.0 | ❌ Not started | | | |
+| `UC-DON-log-donation` | [design/DON.md](design/DON.md) | Spring | 📐 Designed | | | |
+| `UC-SHP-log-item-taken` | [design/SHP.md](design/SHP.md) | Spring | 📐 Designed | | | |
+| `UC-ABU-review-alert` | [design/ABU.md](design/ABU.md) | Spring | 📐 Designed | | | |
+| `FR-AUTH-shopping-eligibility` | [design/IDV.md](design/IDV.md) (IDV's part only) | Spring | ❌ Not started | | | |
+| `FR-NOTIFY-shift-reminder` | | Spring | ❌ Not started | | | |
+| `FR-NOTIFY-current-state` | | Spring | ❌ Not started | | | |
 
 ---
 
@@ -100,5 +138,5 @@ Team decision with Alexa Mercado, October 16, 2026. This table supplements the t
 |---|---|---|
 | `BR-volunteer-role-approval` | Team decision with Alexa Mercado, 2026-10-16 | `UC-VOL-request-access`, `UC-ADM-review-volunteer-request`, `UC-ADM-grant-volunteer-access`, `UC-ADM-remove-volunteer-access`, `FR-AUTH-volunteer-role` |
 | `BR-volunteer-role-approval` claim by email | Team decision, 2026-10-30 (`OI-17`) | `FR-AUTH-account-signup` (sign-in email verified by code at sign-up) |
-| `BR-tcu-email-domain` | Client meeting 2026-10-02 (`OI-10`); exact-domain rule, team decision 2026-10-16 | `UC-IDV-verify-affiliation` step 3 and extension 3a, `FR-AUTH-verification-code` |
+| `BR-tcu-email-domain` | Client meeting 2026-10-02 (`OI-10`); exact-domain rule, team decision 2026-10-16 | `UC-AUTH-register-account` step 7, `UC-IDV-verify-affiliation` step 3 and extension 3a, `FR-AUTH-account-signup`, `FR-AUTH-verification-code` |
 | `BR-shopper-verification` | Client email-verification decision 2026-10-02; team volunteer-role clarification 2026-10-16; Wendy exclusion of visual-ID checks, reported 2026-10-26 (`OI-19`) | `UC-IDV-verify-affiliation` step 2 and extensions 2b/5b, `UC-SHP-log-item-taken` PRE-1, `FR-AUTH-shopping-eligibility` |

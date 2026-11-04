@@ -13,7 +13,13 @@
       "Read(**/.env.*)",
       "Read(**/secrets/**)",
       "Read(**/*.pem)",
-      "Read(**/*.key)"
+      "Read(**/*.key)",
+      "Read(**/*.pfx)",
+      "Read(**/*.p12)",
+      "Read(**/secrets.json)",
+      "Read(**/appsettings.Production.json)",
+      "Read(~/.microsoft/usersecrets/**)",
+      "Read(~/AppData/Roaming/Microsoft/UserSecrets/**)"
     ]
   }
 }

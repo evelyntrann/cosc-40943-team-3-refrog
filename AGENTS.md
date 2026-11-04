@@ -10,7 +10,7 @@ ReFrog: a phone-first progressive web app for TCU's finals-week move-out donatio
 
 - Requirements: `docs/requirements/` — use cases (`use-cases.md`), business rules (`business-rules.md`), specification (`software-requirements-specification.md`), glossary, open issues (`OPEN-ISSUES.md`).
 - Architecture-of-record: `docs/design/architectural-design.md`. Crosscutting rules are its §8.2.
-- Design-of-record, one per area: `docs/design/<area>.md` (`adm`, `vol`, `don`, `shp`, `ABU`, `IDV`, `INF`).
+- Design-of-record, one per area: `docs/design/<area>.md` (`ADM`, `VOL`, `DON`, `SHP`, `ABU`, `IDV`, `INF`).
 
 ## How to work
 
@@ -25,7 +25,7 @@ ReFrog: a phone-first progressive web app for TCU's finals-week move-out donatio
 - Add a dependency until a person confirms it exists and is the one we meant (course Agent Setup; `.claude/commands/implement.md`).
 - Remove the `Co-Authored-By` trailer from a commit (`.claude/commands/implement.md`).
 - Merge a pull request, force-push, or delete the repository (`.claude/settings.json` deny rules).
-- Read secrets: `.env` files, `secrets/`, `*.pem`, `*.key` (`.claude/settings.json` deny rules).
+- Read secrets: `.env` files, `secrets/`, `*.pem`, `*.key`, `*.pfx`, `*.p12`, .NET user-secrets (`secrets.json`), `appsettings.Production.json` (`.claude/settings.json` deny rules).
 
 ## Parallel agents (course Agent Setup)
 
@@ -39,7 +39,7 @@ ReFrog: a phone-first progressive web app for TCU's finals-week move-out donatio
 - One deployable: PWA front end and application modules ship together, one database (architecture §9.2 `KD-deployment-shape`).
 - Technology stack: C# / ASP.NET Core application, Blazor PWA, Microsoft SQL Server database (architecture §9.2 `KD-tcu-it-stack`); do not add another language, framework, or database on your own.
 - Hosting: **unresolved**, TCU IT vs. paid (`OI-15`); keep hosting specifics out of code.
-- Sign-in: the app's own email-and-password accounts, email confirmed by a one-time code at sign-up; no Google or other external identity provider (architecture §9.2 `KD-own-accounts`). Sign-in proves identity only, never TCU affiliation (architecture §8.1).
+- Sign-in: the app's own email-and-password accounts, email confirmed by a one-time code at registration; no Google or other external identity provider (architecture §9.2 `KD-own-accounts`). A successfully code-verified exact `tcu.edu` registration email also establishes persisted TCU email verification; other sign-in emails prove identity only (architecture §8.1, `FR-AUTH-account-signup`).
 - TCU affiliation is proven only by the email one-time code (`UC-IDV-verify-affiliation`, `OI-10`).
 - Donors do not sign in (`OI-4`); donation partners get no app access (`OI-3`).
 - Email goes through one shared delivery adapter; the provider is not chosen — code against the adapter (architecture §3, §5.1).
