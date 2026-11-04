@@ -114,6 +114,7 @@ Release values follow the course's release plan: `v0.1.0` is the proving slice (
 | `UC-INF-view-event-info` | [design/INF.md](design/INF.md) | v1.0.0 | 📐 Designed | | | |
 | `UC-INF-view-locations` | [design/INF.md](design/INF.md) | v1.0.0 | 📐 Designed | | | |
 | `UC-INF-view-role-guides` | [design/INF.md](design/INF.md) | v1.0.0 | 📐 Designed | | | |
+| `UC-INF-view-install-guide` | [design/INF.md](design/INF.md#uc-inf-view-install-guide-view-app-installation-guide-and-device-instructions) | v1.0.0 | 📐 Designed | | | |
 | `FR-AUTH-volunteer-role` | | v1.0.0 | ❌ Not started | | | |
 | `FR-AUTH-volunteer-lifecycle` | | v1.0.0 | ❌ Not started | | | |
 | `FR-AUTH-password-recovery` | | v1.0.0 | ❌ Not started | | | |
