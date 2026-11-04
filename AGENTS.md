@@ -25,7 +25,7 @@ ReFrog: a phone-first progressive web app for TCU's finals-week move-out donatio
 - Add a dependency until a person confirms it exists and is the one we meant (course Agent Setup; `.claude/commands/implement.md`).
 - Remove the `Co-Authored-By` trailer from a commit (`.claude/commands/implement.md`).
 - Merge a pull request, force-push, or delete the repository (`.claude/settings.json` deny rules).
-- Read secrets: `.env` files, `secrets/`, `*.pem`, `*.key` (`.claude/settings.json` deny rules).
+- Read secrets: `.env` files, `secrets/`, `*.pem`, `*.key`, `*.pfx`, `*.p12`, .NET user-secrets (`secrets.json`), `appsettings.Production.json` (`.claude/settings.json` deny rules).
 
 ## Parallel agents (course Agent Setup)
 
