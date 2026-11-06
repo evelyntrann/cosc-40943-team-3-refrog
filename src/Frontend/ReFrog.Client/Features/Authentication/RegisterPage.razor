@@ -1,4 +1,5 @@
 @page "/register"
+@implements IDisposable
 @inject HttpClient Http
 
 <PageTitle>Register | ReFrog</PageTitle>
@@ -43,7 +44,11 @@ else
         }
         <button type="submit" disabled="@form.Busy">Verify and create account</button>
     </form>
-    <button type="button" disabled="@form.Busy" @onclick="form.ResendAsync">Send a new code</button>
+    <button type="button" disabled="@(form.Busy || !form.CanResend)" @onclick="form.ResendAsync">Send a new code</button>
+    @if (!form.CanResend)
+    {
+        <p>You can request a new code after @ChicagoTime(form.Pending.ResendAvailableAt).</p>
+    }
 }
 
 @if (form.Error is not null)
@@ -58,7 +63,41 @@ else
 @code {
     private RegistrationForm form = null!;
 
+    private CancellationTokenSource? resendTimer;
+
     protected override void OnInitialized() => form = new RegistrationForm(Http);
+
+    // Re-render when the server's resend time passes so the button enables itself.
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (resendTimer is null && form.Pending is not null && !form.CanResend)
+        {
+            resendTimer = new CancellationTokenSource();
+            _ = RefreshWhenResendOpensAsync(form.ResendWait, resendTimer.Token);
+        }
+    }
+
+    private async Task RefreshWhenResendOpensAsync(TimeSpan wait, CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(wait, token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        resendTimer?.Dispose();
+        resendTimer = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        resendTimer?.Cancel();
+        resendTimer?.Dispose();
+    }
 
     private static string ChicagoTime(DateTimeOffset instant)
     {

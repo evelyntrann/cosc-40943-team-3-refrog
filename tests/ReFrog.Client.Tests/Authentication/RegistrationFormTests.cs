@@ -111,6 +111,29 @@ public sealed class RegistrationFormTests
     }
 
     [TestMethod]
+    public async Task ResendWaitsForTheServersResendTime()
+    {
+        var server = new ScriptedServer { Clock = new ManualClock(Challenge.ResendAvailableAt.AddSeconds(-30)) };
+        server.Reply(HttpStatusCode.Accepted, ApiResponse.Success(Challenge));
+        server.Reply(HttpStatusCode.Accepted, ApiResponse.Success(Challenge));
+        var form = server.Form();
+        form.Email = "person@example.org";
+        form.Password = "Password1!";
+        await form.StartAsync();
+
+        Assert.IsFalse(form.CanResend);
+        Assert.AreEqual(TimeSpan.FromSeconds(30), form.ResendWait);
+        await form.ResendAsync();
+        Assert.IsEmpty(server.ResendRequestIds);
+
+        server.Clock.Advance(TimeSpan.FromSeconds(30));
+        Assert.IsTrue(form.CanResend);
+        Assert.AreEqual(TimeSpan.Zero, form.ResendWait);
+        await form.ResendAsync();
+        Assert.HasCount(1, server.ResendRequestIds);
+    }
+
+    [TestMethod]
     public async Task SuccessfulVerificationClearsPasswordAndCode()
     {
         var server = new ScriptedServer();
@@ -138,7 +161,10 @@ public sealed class RegistrationFormTests
 
         public List<Guid> ResendRequestIds { get; } = [];
 
-        public RegistrationForm Form() => new(new HttpClient(this) { BaseAddress = new Uri("https://localhost/") });
+        // Defaults to after the resend time, so resend tests are not blocked by the wait.
+        public ManualClock Clock { get; init; } = new(Challenge.ResendAvailableAt.AddMinutes(1));
+
+        public RegistrationForm Form() => new(new HttpClient(this) { BaseAddress = new Uri("https://localhost/") }, Clock);
 
         public void Reply<T>(HttpStatusCode status, ApiResponse<T> body) =>
             replies.Enqueue(() => new HttpResponseMessage(status) { Content = JsonContent.Create(body) });
@@ -161,5 +187,14 @@ public sealed class RegistrationFormTests
 
             return replies.Dequeue()();
         }
+    }
+
+    private sealed class ManualClock(DateTimeOffset start) : TimeProvider
+    {
+        private DateTimeOffset now = start;
+
+        public override DateTimeOffset GetUtcNow() => now;
+
+        public void Advance(TimeSpan elapsed) => now += elapsed;
     }
 }

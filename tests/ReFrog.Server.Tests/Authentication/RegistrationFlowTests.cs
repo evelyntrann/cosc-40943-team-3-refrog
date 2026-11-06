@@ -502,6 +502,56 @@ public sealed partial class RegistrationFlowTests
     }
 
     [TestMethod]
+    public async Task EmailIsKeptAsTypedForSendingAndDisplay()
+    {
+        await using var fixture = await RegistrationFixture.CreateAsync();
+        var pending = await fixture.StartAsync("Student.Name@TCU.edu");
+        Assert.AreEqual("Student.Name@TCU.edu", fixture.Email.LastDestination);
+
+        fixture.Clock.Advance(TimeSpan.FromSeconds(60));
+        var resend = await fixture.Client.PostAsJsonAsync($"/api/v1/auth/registrations/{pending.RegistrationId}/codes",
+            new ResendRegistrationCodeRequest(Guid.NewGuid()));
+        Assert.AreEqual(HttpStatusCode.Accepted, resend.StatusCode);
+        Assert.AreEqual("Student.Name@TCU.edu", fixture.Email.LastDestination);
+
+        var completed = await fixture.VerifyAsync(pending.RegistrationId, fixture.Email.LastCode);
+        var body = await completed.Content.ReadFromJsonAsync<ApiResponse<RegisteredAccountResponse>>();
+        Assert.AreEqual("Student.Name@TCU.edu", body?.Data?.Email);
+        Assert.IsTrue(body?.Data?.TcuEmailVerified);
+    }
+
+    [TestMethod]
+    public async Task ConcurrentWrongCodesAreAllCountedAndInvalidateAtFive()
+    {
+        await using var fixture = await RegistrationFixture.CreateAsync();
+        var pending = await fixture.StartAsync("person@example.org");
+        var wrong = fixture.Email.LastCode == "000000" ? "111111" : "000000";
+        var clients = Enumerable.Range(0, 6).Select(_ => fixture.Factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost/"),
+            AllowAutoRedirect = false,
+        })).ToList();
+        var route = $"/api/v1/auth/registrations/{pending.RegistrationId}/verification";
+
+        var responses = await Task.WhenAll(clients.Select(client => client.PostAsJsonAsync(route, new VerifyRegistrationRequest(wrong))));
+
+        foreach (var client in clients)
+        {
+            client.Dispose();
+        }
+
+        Assert.IsTrue(responses.All(response => response.StatusCode == HttpStatusCode.UnprocessableEntity));
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+        var challenge = await db.VerificationChallenges.SingleAsync();
+        Assert.AreEqual(5, challenge.FailedAttempts);
+        Assert.IsNotNull(challenge.SupersededAt);
+        Assert.AreEqual(5, await db.VerificationFailures.CountAsync());
+        var correct = await fixture.VerifyAsync(pending.RegistrationId, fixture.Email.LastCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, correct.StatusCode);
+    }
+
+    [TestMethod]
     public async Task EmailWithApostropheCompletesRegistration()
     {
         await using var fixture = await RegistrationFixture.CreateAsync();
@@ -592,10 +642,13 @@ public sealed partial class RegistrationFlowTests
         public int Count { get; private set; }
         public string LastCode { get; private set; } = string.Empty;
 
+        public string LastDestination { get; private set; } = string.Empty;
+
         public Task<EmailDeliveryOutcome> SendAsync(EmailMessage message, CancellationToken cancellationToken)
         {
             Count++;
             LastCode = CodePattern().Match(message.PlainTextBody).Value;
+            LastDestination = message.Destination;
             return Task.FromResult(Outcome);
         }
     }

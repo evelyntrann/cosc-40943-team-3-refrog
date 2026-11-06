@@ -94,7 +94,7 @@ classDiagram
     CurrentUser --> AuthRepository
 ```
 
-- `src/Frontend/ReFrog.Client/Features/Authentication/RegisterPage.razor` (new): registration, code entry, resend timing, field feedback, and preserved valid input.
+- `src/Frontend/ReFrog.Client/Features/Authentication/RegisterPage.razor` (new): registration, code entry, resend timing (the resend button stays disabled until the server's `resendAvailableAt` and shows that time in `America/Chicago`; the client does not repeat the spacing rule), field feedback, and preserved valid input. Its state and server calls live in `RegistrationForm`.
 - `src/Frontend/ReFrog.Client/Features/Authentication/SignInPage.razor` (new): sign-in, safe credential failure, unavailable retry, and return-path handling. Sign-out is exposed from the authenticated account navigation.
 - `src/Frontend/ReFrog.Client/Features/Authentication/RecoverAccountPage.razor` and `ResetPasswordPage.razor` (new): recovery acknowledgement and reset-token completion without account enumeration.
 - `src/Backend/ReFrog.Server/Features/Authentication/AuthEndpoints.cs` (new): maps the API contract below to services. It never accepts an account ID, role, verification status, or administrator flag from the browser.
@@ -258,7 +258,7 @@ The allowlist is only a bootstrap source, never continuing authorization evidenc
 
 **Registration start is idempotent without making pending registration an account.** `PendingRegistration.start_request_id` is unique. Repeating the same ID and input returns its first send outcome; changing email or password under the same ID returns `REQUEST_ID_REUSED`. Different request IDs may create competing pending registrations for one normalized email, subject to the shared destination-email limits. The unique account-email constraint decides the winner at completion, so abandoned pending records do not block a legitimate registration indefinitely.
 
-**SQL Server concurrency uses conditional writes and constraints.** A filtered unique index permits one unconsumed, unsuperseded challenge per `(purpose, subject_id)`. `(purpose, subject_id, request_id)` is unique for idempotent sends. Verification uses an atomic conditional update; exactly one concurrent submission consumes the challenge. Unique normalized account email prevents duplicate completion. Rejected: PostgreSQL lock syntax and SQL Server lock hints in application services.
+**SQL Server concurrency uses conditional writes and constraints.** A filtered unique index permits one unconsumed, unsuperseded challenge per `(purpose, subject_id)`. `(purpose, subject_id, request_id)` is unique for idempotent sends. Verification uses atomic conditional updates at the default isolation level: consuming the code, counting a wrong code (increment, and supersede on the fifth), and completing the pending registration each succeed only while the row is still in the expected state, so exactly one concurrent submission wins and the others see no row changed. Code requests (start and resend) run in a serializable transaction so the rolling request limits are counted exactly. Unique normalized account email prevents duplicate completion. Rejected: PostgreSQL lock syntax, raw SQL, and SQL Server lock hints in the repository or services.
 
 **Send after challenge commit.** A challenge is committed before the email adapter runs. Delivery acceptance is then recorded. Failure or timeout leaves the new challenge live and prior challenges superseded, returns the documented unavailable outcome where disclosure is permitted, and never claims success. Same-request retries return the recorded outcome and never dispatch twice.
 
@@ -293,6 +293,7 @@ erDiagram
     }
     PENDING_REGISTRATION {
         uniqueidentifier id PK
+        string email
         string normalized_email
         string password_hash
         uniqueidentifier start_request_id UK
@@ -335,7 +336,7 @@ erDiagram
 ```
 
 - ASP.NET Core Identity supplies the physical account, role, account-role, password, lockout, and security-stamp columns; the diagram shows only fields relevant to these use cases.
-- Pending registration stores a password hash, never plaintext. `account_id` is populated only on successful completion. Competing pending registrations are allowed, but all challenges for their normalized destination email share the same email request limit and the account's normalized email remains unique.
+- Pending registration keeps the email as the person typed it, used as the send destination and as the new account's email; the normalized email is used only for uniqueness, limits, and matching. It stores a password hash, never plaintext. `account_id` is populated only on successful completion. Competing pending registrations are allowed, but all challenges for their normalized destination email share the same email request limit and the account's normalized email remains unique.
 - A verification challenge has either `pending_registration_id` or `account_id`, never both. Foreign keys and a purpose/owner check constraint prevent orphaned or cross-purpose ownership.
 - Verification challenges contain no plaintext code. `send_outcome` is `ACCEPTED`, `FAILED`, or temporarily null while dispatch outcome is unknown.
 - TCU email verification is separate from account email confirmation and volunteer/admin roles. The normalized TCU email is not unique across accounts because verification ownership is account-specific.
@@ -371,6 +372,9 @@ erDiagram
 | Registration start idempotency | integration | Same start request ID and input returns one pending registration/send; changed input under that ID is `REQUEST_ID_REUSED`; separate pending registrations for one email still obey the shared destination limit |
 | Registration 5a code failures | integration | Malformed code does not consume attempts; wrong code does; fifth wrong invalidates; expired/superseded/used codes fail; no account is created |
 | Registration 6a concurrency | SQL Server concurrency integration | Two correct concurrent completions create one account, one consumed challenge, and at most one TCU verification |
+| Registration wrong-code concurrency | SQL Server concurrency integration | Concurrent wrong codes are each counted once; the fifth invalidates the code and no count is lost |
+| Registration email as typed | integration | The code, any resend, and the returned account use the email as typed; uniqueness and limits use the normalized email |
+| Registration resend timing | unit | The page keeps resend disabled until the server's `resendAvailableAt`, then allows it; no request is sent early |
 | Registration 6b save failure | integration | Account/affiliation transaction failure creates no partial account, session, or completed registration |
 | Shared code isolation | integration | A code cannot cross subject, purpose, email, registration, or account; replacement differs from the superseded code |
 | Shared code idempotency | integration | Same request ID/email returns one outcome and sends once; same request ID with changed email is rejected |

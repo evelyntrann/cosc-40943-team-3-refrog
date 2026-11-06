@@ -11,8 +11,9 @@ namespace ReFrog.Client.Features.Authentication;
 /// retry after a dropped connection replays the stored outcome instead of starting a second
 /// registration or sending a second code (docs/design/AUTH.md, API contract).
 /// </summary>
-public sealed class RegistrationForm(HttpClient http)
+public sealed class RegistrationForm(HttpClient http, TimeProvider? clock = null)
 {
+    private readonly TimeProvider time = clock ?? TimeProvider.System;
     private Guid? startRequestId;
     private (string Email, string Password)? startInput;
     private Guid? resendRequestId;
@@ -30,6 +31,14 @@ public sealed class RegistrationForm(HttpClient http)
     public ApiError? Error { get; private set; }
 
     public bool Busy { get; private set; }
+
+    /// <summary>
+    /// True once the server's <c>resendAvailableAt</c> has passed. The wait itself comes from the
+    /// server, so the client does not repeat the request-spacing rule (architecture §8.2.4).
+    /// </summary>
+    public bool CanResend => Pending is not null && time.GetUtcNow() >= Pending.ResendAvailableAt;
+
+    public TimeSpan ResendWait => Pending is null || CanResend ? TimeSpan.Zero : Pending.ResendAvailableAt - time.GetUtcNow();
 
     public string? FieldError(string name) =>
         Error?.Fields?.TryGetValue(name, out var message) == true ? message : null;
@@ -56,7 +65,7 @@ public sealed class RegistrationForm(HttpClient http)
 
     public async Task ResendAsync()
     {
-        if (Pending is null)
+        if (Pending is null || !CanResend)
         {
             return;
         }
