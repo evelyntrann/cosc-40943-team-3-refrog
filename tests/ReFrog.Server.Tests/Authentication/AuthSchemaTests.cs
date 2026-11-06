@@ -26,6 +26,8 @@ public sealed class AuthSchemaTests
         Assert.IsNotNull(challenge);
         Assert.IsTrue(pending.GetIndexes().Any(index => index.IsUnique &&
             index.Properties.Select(property => property.Name).SequenceEqual([nameof(PendingRegistration.StartRequestId)])));
+        Assert.IsTrue(pending.GetIndexes().Any(index => index.IsUnique &&
+            index.Properties.Select(property => property.Name).SequenceEqual([nameof(PendingRegistration.AccountId)])));
         Assert.IsTrue(account.GetIndexes().Any(index => index.IsUnique &&
             index.Properties.Select(property => property.Name).SequenceEqual([nameof(AuthAccount.NormalizedEmail)])));
         Assert.IsTrue(challenge.GetCheckConstraints().Any(constraint => constraint.Name == "CK_VerificationChallenge_Owner"));

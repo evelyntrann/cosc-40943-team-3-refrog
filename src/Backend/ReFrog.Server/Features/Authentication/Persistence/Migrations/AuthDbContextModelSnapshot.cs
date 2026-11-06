@@ -252,7 +252,9 @@ namespace ReFrog.Server.Features.Authentication.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AccountId");
+                    b.HasIndex("AccountId")
+                        .IsUnique()
+                        .HasFilter("[AccountId] IS NOT NULL");
 
                     b.HasIndex("StartRequestId")
                         .IsUnique();

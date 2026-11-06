@@ -73,6 +73,7 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options)
         {
             entity.HasKey(x => x.Id);
             entity.HasIndex(x => x.StartRequestId).IsUnique();
+            entity.HasIndex(x => x.AccountId).IsUnique().HasFilter("[AccountId] IS NOT NULL");
             entity.Property(x => x.NormalizedEmail).HasMaxLength(256);
             entity.Property(x => x.State).HasMaxLength(32);
             entity.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
