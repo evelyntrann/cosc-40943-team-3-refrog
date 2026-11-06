@@ -71,7 +71,7 @@ _In week 8 the spine extends past the use case: **business objective → feature
 
 ## 4. Use case to design, code, and tests
 
-Release values follow the course's release plan: `v0.1.0` is the proving slice (Checkpoint 2), `v0.2.0` is Checkpoint 3, `v1.0.0` is the December MVP, `Spring` is before the late-April go-live, and `Out` is not planned. Rows are ordered by release. Risk comes first, then the client's volunteer-first priority (`AS-volunteer-first`), then dependencies. `UC-IDV-verify-affiliation` ships before its only consumer, `UC-SHP-log-item-taken`, because it is the highest-risk use case (issue #60).
+Release values follow the course's release plan: `v0.1.0` is the proving slice (Checkpoint 2), `v0.2.0` is Checkpoint 3, `v1.0.0` is the December MVP, `Spring` is before the late-April go-live, and `Out` is not planned. Rows are ordered by release. Risk comes first, then the client's volunteer-first priority (`AS-volunteer-first`), then dependencies. Authentication is the highest-risk area, and `UC-AUTH-register-account` is the proving slice (issue #79). Every other area depends on its accounts and sessions, and `UC-IDV-verify-affiliation` reads the TCU email verification it records ([design/AUTH.md](design/AUTH.md)). `UC-IDV-verify-affiliation` ships before its only consumer, `UC-SHP-log-item-taken`.
 
 | Use case or FR | Design | Release | Build | Code | Tests | Verify |
 |---|---|---|---|---|---|---|
@@ -91,20 +91,14 @@ Release values follow the course's release plan: `v0.1.0` is the proving slice (
 | `FR-VAL-field-feedback` | | v0.1.0 | ❌ Not started | | | |
 | `FR-VAL-preserve-input` | | v0.1.0 | ❌ Not started | | | |
 | `FR-SAVE-confirmed-success` | | v0.1.0 | ❌ Not started | | | |
-| `UC-AUTH-register-account` | | v0.2.0 | ❌ Not started | | | |
-| `UC-AUTH-sign-in` | | v0.2.0 | ❌ Not started | | | |
 | `UC-ADM-manage-shifts` | [design/ADM.md](design/ADM.md) | v0.2.0 | 📐 Designed | | | |
 | `UC-VOL-signup` | [design/VOL.md](design/VOL.md#uc-vol-signup-signing-up-for-a-shift) | v0.2.0 | 📐 Designed | | | |
 | `UC-VOL-cancel-shift` | [design/VOL.md](design/VOL.md) | v0.2.0 | 📐 Designed | | | |
 | `UC-ADM-review-volunteer` | [design/ADM.md](design/ADM.md) | v0.2.0 | 📐 Designed | | | |
-| `FR-AUTH-account-signup` | | v0.2.0 | ❌ Not started | | | |
 | `FR-AUTH-enforce-permissions` | | v0.2.0 | ❌ Not started | | | |
-| `FR-AUTH-password-policy` | | v0.2.0 | ❌ Not started | | | |
-| `FR-AUTH-session-policy` | | v0.2.0 | ❌ Not started | | | |
 | `FR-SAVE-duplicate-submission` | | v0.2.0 | ❌ Not started | | | |
 | `FR-SAVE-unknown-outcome` | | v0.2.0 | ❌ Not started | | | |
 | `UC-VOL-view-schedule` | [design/VOL.md](design/VOL.md) | v1.0.0 | 📐 Designed | | | |
-| `UC-AUTH-recover-account` | | v1.0.0 | ❌ Not started | | | |
 | `UC-VOL-request-access` | | v1.0.0 | ❌ Not started | | | |
 | `UC-ADM-review-volunteer-request` | | v1.0.0 | ❌ Not started | | | |
 | `UC-ADM-grant-volunteer-access` | | v1.0.0 | ❌ Not started | | | |
@@ -117,7 +111,6 @@ Release values follow the course's release plan: `v0.1.0` is the proving slice (
 | `UC-INF-view-install-guide` | [design/INF.md](design/INF.md#uc-inf-view-install-guide-view-app-installation-guide-and-device-instructions) | v1.0.0 | 📐 Designed | | | |
 | `FR-AUTH-volunteer-role` | | v1.0.0 | ❌ Not started | | | |
 | `FR-AUTH-volunteer-lifecycle` | | v1.0.0 | ❌ Not started | | | |
-| `FR-AUTH-password-recovery` | | v1.0.0 | ❌ Not started | | | |
 | `FR-NOTIFY-in-app-inbox` | | v1.0.0 | ❌ Not started | | | |
 | `FR-NOTIFY-preserve-business-state` | | v1.0.0 | ❌ Not started | | | |
 | `FR-DISPLAY-unavailable-data` | | v1.0.0 | ❌ Not started | | | |

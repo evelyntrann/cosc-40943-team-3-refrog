@@ -15,11 +15,12 @@ One row per **estimate**, so a finished use case usually has a coarse row and a 
 
 | Use case | Estimate | Made | Range (h) | Midpoint (h) | Actual (h) | Ratio | Biggest miss |
 |---|---|---|---|---|---|---|---|
+| `UC-AUTH-register-account` | Coarse | — | — | — | — | — | — |
+| `UC-AUTH-register-account` | Refined | — | — | — | — | — | — |
 | `UC-IDV-verify-affiliation` | Coarse | 2026-10-23 (#60) | 29–50 | 39.5 | | | |
 | `UC-IDV-verify-affiliation` | Refined | _not yet written on #60_ | | | | | |
 | `UC-VOL-signup` | Coarse | 2026-10-23 (#59) | 48–80 | 64 | | | |
 | `UC-VOL-view-schedule` | Coarse | 2026-10-26 (#62) | 9–16 | 12.5 | | | |
-| `UC-AUTH-register-account` | — | — | — | — | — | — | — |
 | `UC-AUTH-sign-in` | — | — | — | — | — | — | — |
 | `UC-AUTH-recover-account` | — | — | — | — | — | — | — |
 | `UC-VOL-request-access` | — | — | — | — | — | — | — |
@@ -33,10 +34,16 @@ How the ranges were added up from the issues:
 - **#59:** specify 6–10, build and review 30–50, verify 12–20.
 - **#62:** clarify and design 1–2, build and review 6–10, verify 2–4.
 
-Rows marked — are waiting for a coarse estimate from planning poker. Fill them in once the range is on the issue:
+Rows marked — are waiting for an estimate. Fill them in once the range is on the issue:
 
-- The AUTH use cases go in the coarse-estimate comment on #79. The Estimate section in #79's body covers the design work for all three AUTH use cases together, not each use case, so it is not used here.
+- The AUTH use cases go on #79. The Estimate section in #79's body covers the design work for all three AUTH use cases together, not each use case, so it is not used here.
 - `UC-VOL-request-access` is on #82, `UC-ADM-review-volunteer-request` on #83, `UC-ADM-grant-volunteer-access` on #84, and `UC-ADM-remove-volunteer-access` on #85.
+
+## Status at Checkpoint 2 (2026-11-06)
+
+- **No use case has finished,** so no row has an Actual, a Ratio, or a Biggest miss yet.
+- **The slice, `UC-AUTH-register-account`, is being built in PR #92** without a coarse or refined estimate. When it closes, its Actual will still be recorded, and the retrospective should say that it had no estimate to compare against.
+- **The slice changed from `UC-IDV-verify-affiliation` to `UC-AUTH-register-account`** ([traceability.md §4](traceability.md#4-use-case-to-design-code-and-tests)). The IDV rows stay because their estimates were made and will be calibrated when IDV closes.
 
 ## Ratios by person and team
 
