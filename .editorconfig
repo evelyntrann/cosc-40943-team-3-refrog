@@ -1,0 +1,8 @@
+root = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+
+[**/Migrations/*.cs]
+generated_code = true

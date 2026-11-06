@@ -1,0 +1,110 @@
+@page "/register"
+@implements IDisposable
+@inject HttpClient Http
+
+<PageTitle>Register | ReFrog</PageTitle>
+
+<h1>Register</h1>
+
+@if (form.Completed is not null)
+{
+    <p role="status">Your account is ready. @(form.Completed.TcuEmailVerified ? "TCU email verified." : "")</p>
+}
+else if (form.Pending is null)
+{
+    <form @onsubmit="form.StartAsync" @onsubmit:preventDefault>
+        <label for="registration-email">Email</label>
+        <input id="registration-email" type="email" autocomplete="email" @bind="form.Email" required />
+        @if (form.FieldError("email") is { } emailError)
+        {
+            <p role="alert">@emailError</p>
+        }
+
+        <label for="registration-password">Password</label>
+        <input id="registration-password" type="password" autocomplete="new-password" @bind="form.Password" required />
+        @if (form.FieldError("password") is { } passwordError)
+        {
+            <p role="alert">@passwordError</p>
+        }
+
+        <p>Use six or more characters with uppercase, lowercase, a number, and a symbol.</p>
+        <button type="submit" disabled="@form.Busy">Send verification code</button>
+    </form>
+}
+else
+{
+    <p>Enter the six-digit code sent to @form.Email.</p>
+    <form @onsubmit="form.VerifyAsync" @onsubmit:preventDefault>
+        <label for="registration-code">Verification code</label>
+        <input id="registration-code" type="text" inputmode="numeric" autocomplete="one-time-code"
+               maxlength="6" pattern="[0-9]{6}" @bind="form.Code" required />
+        @if (form.FieldError("code") is { } codeError)
+        {
+            <p role="alert">@codeError</p>
+        }
+        <button type="submit" disabled="@form.Busy">Verify and create account</button>
+    </form>
+    <button type="button" disabled="@(form.Busy || !form.CanResend)" @onclick="form.ResendAsync">Send a new code</button>
+    @if (!form.CanResend)
+    {
+        <p>You can request a new code after @ChicagoTime(form.Pending.ResendAvailableAt).</p>
+    }
+}
+
+@if (form.Error is not null)
+{
+    <p role="alert">@form.Error.Message</p>
+    @if (form.Error.RetryAt is not null)
+    {
+        <p>Try again after @ChicagoTime(form.Error.RetryAt.Value).</p>
+    }
+}
+
+@code {
+    private RegistrationForm form = null!;
+
+    private CancellationTokenSource? resendTimer;
+
+    protected override void OnInitialized() => form = new RegistrationForm(Http);
+
+    // Re-render when the server's resend time passes so the button enables itself.
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (resendTimer is null && form.Pending is not null && !form.CanResend)
+        {
+            resendTimer = new CancellationTokenSource();
+            _ = RefreshWhenResendOpensAsync(form.ResendWait, resendTimer.Token);
+        }
+    }
+
+    private async Task RefreshWhenResendOpensAsync(TimeSpan wait, CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(wait, token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        resendTimer?.Dispose();
+        resendTimer = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        resendTimer?.Cancel();
+        resendTimer?.Dispose();
+    }
+
+    private static string ChicagoTime(DateTimeOffset instant)
+    {
+        var chicago = TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
+        var local = TimeZoneInfo.ConvertTime(instant, chicago);
+        return local.ToString("MMM d, yyyy h:mm tt", System.Globalization.CultureInfo.InvariantCulture)
+            .Replace("AM", "a.m.", StringComparison.Ordinal)
+            .Replace("PM", "p.m.", StringComparison.Ordinal);
+    }
+}

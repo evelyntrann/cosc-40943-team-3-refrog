@@ -94,10 +94,10 @@ classDiagram
     CurrentUser --> AuthRepository
 ```
 
-- `src/ReFrog.Client/Features/Authentication/RegisterPage.razor` (new): registration, code entry, resend timing, field feedback, and preserved valid input.
-- `src/ReFrog.Client/Features/Authentication/SignInPage.razor` (new): sign-in, safe credential failure, unavailable retry, and return-path handling. Sign-out is exposed from the authenticated account navigation.
-- `src/ReFrog.Client/Features/Authentication/RecoverAccountPage.razor` and `ResetPasswordPage.razor` (new): recovery acknowledgement and reset-token completion without account enumeration.
-- `src/ReFrog.Server/Features/Authentication/AuthEndpoints.cs` (new): maps the API contract below to services. It never accepts an account ID, role, verification status, or administrator flag from the browser.
+- `src/Frontend/ReFrog.Client/Features/Authentication/RegisterPage.razor` (new): registration, code entry, resend timing (the resend button stays disabled until the server's `resendAvailableAt` and shows that time in `America/Chicago`; the client does not repeat the spacing rule), field feedback, and preserved valid input. Its state and server calls live in `RegistrationForm`.
+- `src/Frontend/ReFrog.Client/Features/Authentication/SignInPage.razor` (new): sign-in, safe credential failure, unavailable retry, and return-path handling. Sign-out is exposed from the authenticated account navigation.
+- `src/Frontend/ReFrog.Client/Features/Authentication/RecoverAccountPage.razor` and `ResetPasswordPage.razor` (new): recovery acknowledgement and reset-token completion without account enumeration.
+- `src/Backend/ReFrog.Server/Features/Authentication/AuthEndpoints.cs` (new): maps the API contract below to services. It never accepts an account ID, role, verification status, or administrator flag from the browser.
 - `RegistrationService` (new): validates registration, hashes the pending password, coordinates registration challenges, creates the Identity account only after successful code verification, and creates TCU verification for an exact `tcu.edu` registration email in the same transaction.
 - `SessionService` (new): validates credentials through ASP.NET Core Identity, applies lockout, issues the correct cookie lifetime, signs out, and records administrator sign-in attempts.
 - `RecoveryService` (new): returns the same acknowledgement for all recovery requests, applies recovery request limits, issues a 30-minute Identity reset token for existing accounts, resets the password, and rotates the security stamp.
@@ -105,8 +105,10 @@ classDiagram
 - `ICurrentUser` / `CurrentUser` (new): derives the stable account ID and administrator role only from the validated server principal and current database state. It asks `IVolunteerAccessStateProvider` for `ROLE_ACTIVE`, `NONE`, `RESTRICTED`, or unavailable; it never trusts browser claims for current authorization.
 - `IVolunteerAccessStateProvider` (new seam): the initial implementation returns `NONE` for an ordinary account. The future volunteer/administration implementation supplies current event-scoped state. Failures propagate as unavailable rather than `NONE`.
 - `IAuthRepository` and EF Core implementation (new): own AUTH persistence and hide SQL Server/Identity storage details from services.
-- `IEmailSender` (shared interface, new if no earlier area creates it): provider-neutral; provider choice remains unresolved. Verification codes and reset links are email-only and are never placed in the in-app inbox.
+- `IEmailSender` (shared interface, new if no earlier area creates it): provider-neutral; Microsoft 365 Outlook delivery uses a Microsoft Graph adapter when configured. Verification codes and reset links are email-only and are never placed in the in-app inbox.
 - .NET `TimeProvider` (injected): the only source of current time for codes, rolling limits, reset expiry, cookie/session boundaries, and tests.
+
+**Registration build note (issue #79).** The repository layout is `src/Frontend` and `src/Backend`. In the first registration increment, `RegistrationCode` owns code generation and versioned HMAC checks, while `EfAuthRepository` enforces challenge limits and completion inside SQL Server transactions. The separate shared `VerificationChallengeService` shown above is not yet present; IDV must reuse one AUTH-owned implementation when its flow is built. The user selected a Microsoft 365 work or school Outlook mailbox on 2026-11-06; `MicrosoftGraphEmailSender` sends through Graph with application credentials from deployment configuration, while an unconfigured deployment reports delivery unavailable. Graph's `202` means accepted for processing, not delivered. Registration issues the administrator session when bootstrap assigns that role, as clarified for `UC-AUTH-register-account` step 8. In the Development environment, when no provider is configured, `DevelopmentPickupEmailSender` writes each message to a local, git-ignored folder (`Email:DevelopmentPickupDirectory`) so the flow can be run end to end; it never logs the code. The registration client keeps one request ID per form fill and reuses it only when no server answer arrived.
 
 ## Shared API envelope
 
@@ -131,9 +133,9 @@ Exactly one of `data` or `error` is non-null. Timestamps are ISO-8601 instants; 
 
 | Operation | Caller/access | Request | Success | Errors |
 |---|---|---|---|---|
-| `POST /api/v1/auth/registrations` | Signed-out browser | `email`, `password`, client-generated `requestId` | `202`: opaque `registrationId`, `expiresAt`, `resendAvailableAt` after provider acceptance. Retrying the same request returns the stored outcome and never creates another pending registration or send | `422 VALIDATION_FAILED`; `409 EMAIL_ALREADY_REGISTERED`; reused request ID with changed input: `409 REQUEST_ID_REUSED`; `429 TOO_MANY_REQUESTS` with `retryAt`; `503 EMAIL_NOT_SENT`; `503 NOT_RECORDED` |
-| `POST /api/v1/auth/registrations/{registrationId}/codes` | Signed-out browser continuing the same registration | client-generated `requestId` | `202`: original or new `expiresAt`, `resendAvailableAt` | `404 REGISTRATION_NOT_FOUND`; `409 REGISTRATION_COMPLETED`; `429 TOO_MANY_REQUESTS`; `503 EMAIL_NOT_SENT`; `503 NOT_RECORDED` |
-| `POST /api/v1/auth/registrations/{registrationId}/verification` | Signed-out browser | six-digit `code` | `200`: account summary and authenticated cookie; `tcuEmailVerified` reflects the exact-domain registration rule | `422 VALIDATION_FAILED`, `CODE_INVALID`, or `CODE_EXPIRED`; `429 TOO_MANY_REQUESTS`; `409 REGISTRATION_COMPLETED`; `503 NOT_RECORDED` |
+| `POST /api/v1/auth/registrations` | Signed-out browser | `email`, `password`, client-generated `requestId` | `202`: opaque `registrationId`, `expiresAt`, `resendAvailableAt` after provider acceptance. Retrying the same request returns the stored outcome and never creates another pending registration or send | `422 VALIDATION_FAILED`; `409 EMAIL_ALREADY_REGISTERED`; reused request ID with changed input: `409 REQUEST_ID_REUSED`; `429 TOO_MANY_REQUESTS` with `retryAt`; `503 EMAIL_NOT_SENT`; `503 NOT_RECORDED`; already signed in: `403 ALREADY_SIGNED_IN` |
+| `POST /api/v1/auth/registrations/{registrationId}/codes` | Signed-out browser continuing the same registration | client-generated `requestId` | `202`: original or new `expiresAt`, `resendAvailableAt` | `404 REGISTRATION_NOT_FOUND`; `409 REGISTRATION_COMPLETED`; `429 TOO_MANY_REQUESTS`; `503 EMAIL_NOT_SENT`; `503 NOT_RECORDED`; `403 ALREADY_SIGNED_IN` |
+| `POST /api/v1/auth/registrations/{registrationId}/verification` | Signed-out browser | six-digit `code` | `200`: account summary and authenticated cookie; `tcuEmailVerified` reflects the exact-domain registration rule | `422 VALIDATION_FAILED`, `CODE_INVALID`, or `CODE_EXPIRED`; `429 TOO_MANY_REQUESTS`; `409 REGISTRATION_COMPLETED`; `503 NOT_RECORDED`; `403 ALREADY_SIGNED_IN` |
 | `POST /api/v1/auth/session` | Signed-out browser | `email`, `password`, optional local `returnPath` | `200`: account summary and authenticated cookie | `401 INVALID_CREDENTIALS` for unknown email, wrong password, or lockout; `503 AUTHENTICATION_UNAVAILABLE` |
 | `DELETE /api/v1/auth/session` | Signed-in account; antiforgery required | none | `200`: `{ signedOut: true }` in the shared envelope; current cookie invalidated | `401`; `400 ANTIFORGERY_INVALID`; `503 SIGN_OUT_UNAVAILABLE` |
 | `GET /api/v1/me/session` | Signed-in account | none | `200`: account ID, display-safe email, `isAdministrator`; no password, role source, or secrets | `401`; `503 AUTHENTICATION_UNAVAILABLE` |
@@ -256,7 +258,7 @@ The allowlist is only a bootstrap source, never continuing authorization evidenc
 
 **Registration start is idempotent without making pending registration an account.** `PendingRegistration.start_request_id` is unique. Repeating the same ID and input returns its first send outcome; changing email or password under the same ID returns `REQUEST_ID_REUSED`. Different request IDs may create competing pending registrations for one normalized email, subject to the shared destination-email limits. The unique account-email constraint decides the winner at completion, so abandoned pending records do not block a legitimate registration indefinitely.
 
-**SQL Server concurrency uses conditional writes and constraints.** A filtered unique index permits one unconsumed, unsuperseded challenge per `(purpose, subject_id)`. `(purpose, subject_id, request_id)` is unique for idempotent sends. Verification uses an atomic conditional update; exactly one concurrent submission consumes the challenge. Unique normalized account email prevents duplicate completion. Rejected: PostgreSQL lock syntax and SQL Server lock hints in application services.
+**SQL Server concurrency uses conditional writes and constraints.** A filtered unique index permits one unconsumed, unsuperseded challenge per `(purpose, subject_id)`. `(purpose, subject_id, request_id)` is unique for idempotent sends. Verification uses atomic conditional updates at the default isolation level: consuming the code, counting a wrong code (increment, and supersede on the fifth), and completing the pending registration each succeed only while the row is still in the expected state, so exactly one concurrent submission wins and the others see no row changed. Code requests (start and resend) run in a serializable transaction so the rolling request limits are counted exactly. Unique normalized account email prevents duplicate completion. Rejected: PostgreSQL lock syntax, raw SQL, and SQL Server lock hints in the repository or services.
 
 **Send after challenge commit.** A challenge is committed before the email adapter runs. Delivery acceptance is then recorded. Failure or timeout leaves the new challenge live and prior challenges superseded, returns the documented unavailable outcome where disclosure is permitted, and never claims success. Same-request retries return the recorded outcome and never dispatch twice.
 
@@ -291,6 +293,7 @@ erDiagram
     }
     PENDING_REGISTRATION {
         uniqueidentifier id PK
+        string email
         string normalized_email
         string password_hash
         uniqueidentifier start_request_id UK
@@ -333,7 +336,7 @@ erDiagram
 ```
 
 - ASP.NET Core Identity supplies the physical account, role, account-role, password, lockout, and security-stamp columns; the diagram shows only fields relevant to these use cases.
-- Pending registration stores a password hash, never plaintext. `account_id` is populated only on successful completion. Competing pending registrations are allowed, but all challenges for their normalized destination email share the same email request limit and the account's normalized email remains unique.
+- Pending registration keeps the email as the person typed it, used as the send destination and as the new account's email; the normalized email is used only for uniqueness, limits, and matching. It stores a password hash, never plaintext. `account_id` is populated only on successful completion. Competing pending registrations are allowed, but all challenges for their normalized destination email share the same email request limit and the account's normalized email remains unique.
 - A verification challenge has either `pending_registration_id` or `account_id`, never both. Foreign keys and a purpose/owner check constraint prevent orphaned or cross-purpose ownership.
 - Verification challenges contain no plaintext code. `send_outcome` is `ACCEPTED`, `FAILED`, or temporarily null while dispatch outcome is unknown.
 - TCU email verification is separate from account email confirmation and volunteer/admin roles. The normalized TCU email is not unique across accounts because verification ownership is account-specific.
@@ -369,6 +372,9 @@ erDiagram
 | Registration start idempotency | integration | Same start request ID and input returns one pending registration/send; changed input under that ID is `REQUEST_ID_REUSED`; separate pending registrations for one email still obey the shared destination limit |
 | Registration 5a code failures | integration | Malformed code does not consume attempts; wrong code does; fifth wrong invalidates; expired/superseded/used codes fail; no account is created |
 | Registration 6a concurrency | SQL Server concurrency integration | Two correct concurrent completions create one account, one consumed challenge, and at most one TCU verification |
+| Registration wrong-code concurrency | SQL Server concurrency integration | Concurrent wrong codes are each counted once; the fifth invalidates the code and no count is lost |
+| Registration email as typed | integration | The code, any resend, and the returned account use the email as typed; uniqueness and limits use the normalized email |
+| Registration resend timing | unit | The page keeps resend disabled until the server's `resendAvailableAt`, then allows it; no request is sent early |
 | Registration 6b save failure | integration | Account/affiliation transaction failure creates no partial account, session, or completed registration |
 | Shared code isolation | integration | A code cannot cross subject, purpose, email, registration, or account; replacement differs from the superseded code |
 | Shared code idempotency | integration | Same request ID/email returns one outcome and sends once; same request ID with changed email is rejected |

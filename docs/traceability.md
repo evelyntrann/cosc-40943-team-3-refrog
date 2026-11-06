@@ -75,7 +75,7 @@ Release values follow the course's release plan: `v0.1.0` is the proving slice (
 
 | Use case or FR | Design | Release | Build | Code | Tests | Verify |
 |---|---|---|---|---|---|---|
-| `UC-AUTH-register-account` | [design/AUTH.md](design/AUTH.md#uc-auth-register-account) | v0.1.0 | 📐 Designed | | | |
+| `UC-AUTH-register-account` | [design/AUTH.md](design/AUTH.md#uc-auth-register-account) | v0.1.0 | 🟡 In progress | `src/Backend/ReFrog.Server/Features/Authentication/`, `src/Frontend/ReFrog.Client/Features/Authentication/` | `tests/ReFrog.Server.Tests/Authentication/`, `tests/ReFrog.Client.Tests/Authentication/` | 🟡 Partial: 53 tests pass against SQL Server 2022 (2026-11-06). The HTTP sign-in refusal waits for `UC-AUTH-sign-in`, cross-purpose codes through the API wait for `UC-IDV-verify-affiliation`, and a rendered Blazor component test needs a component-testing package approved |
 | `UC-AUTH-sign-in` | [design/AUTH.md](design/AUTH.md#uc-auth-sign-in-and-sign-out) | v0.1.0 | 📐 Designed | | | |
 | `UC-AUTH-recover-account` | [design/AUTH.md](design/AUTH.md#uc-auth-recover-account) | v0.1.0 | 📐 Designed | | | |
 | `FR-AUTH-account-signup` | [design/AUTH.md](design/AUTH.md) | v0.1.0 | 📐 Designed | | | |

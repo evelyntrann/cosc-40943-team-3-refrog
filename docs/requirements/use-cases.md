@@ -379,7 +379,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 5. The person enters the code.
 6. The system verifies the code, creates the account, and marks the sign-in email as verified in one completed operation.
 7. If the verified sign-in email has the exact domain `tcu.edu` under `BR-tcu-email-domain`, the system also saves TCU email verification on the new account. Registration with any other domain leaves TCU affiliation unverified.
-8. The system establishes an ordinary authenticated session and displays registration confirmation, including “TCU email verified” when step 7 applied.
+8. The system establishes an authenticated session under `FR-AUTH-session-policy` and displays registration confirmation, including “TCU email verified” when step 7 applied. A newly bootstrapped administrator receives the administrator session; other new accounts receive the ordinary session.
 9. Use case ends.
 
 **Extensions:**

@@ -122,7 +122,7 @@ C4Context
 
     System(refrog, "ReFrog Application", "PWA that manages volunteer scheduling, donation and shopping forms, TCU-affiliation verification, and organizer reporting.")
 
-    System_Ext(notification, "Email delivery channel", "Sends sign-up and TCU verification codes and shift/staffing notifications; exact provider not yet chosen")
+    System_Ext(notification, "Microsoft 365 email delivery", "Sends sign-up and TCU verification codes and shift/staffing notifications through Microsoft Graph")
 
     Rel(admin, refrog, "Manages events, shifts, locations; reviews dashboard and abuse flags")
     Rel(volunteer, refrog, "Signs up for and cancels shifts; views schedule and hours")
@@ -146,9 +146,9 @@ C4Context
 
 - **TCU Community Visitor** — views public event information (`UC-LOC-view-locations`) without signing in. No data crosses the trust boundary beyond publicly displayed event details.
 
-**External systems.** One external system is shown. No external-system integration is committed for the initial release (`SRS §2.1`), but it is architecturally necessary for the features the specification requires. There is no external identity provider: the application creates and signs in its own accounts (section 8.1, `KD-own-accounts`, `OI-17`).
+**External systems.** One external system is shown. Email delivery is required for account registration. There is no external identity provider: the application creates and signs in its own accounts (section 8.1, `KD-own-accounts`, `OI-17`).
 
-- **Email delivery channel** — the channel through which the application sends the sign-up verification code (`FR-AUTH-account-signup`), a TCU affiliation verification code (`UC-IDV-verify-affiliation`, resolves `OI-10`), shift reminders (`FR-NOTIFY-shift-reminder`), and administrator-triggered volunteer notifications (`UC-ADM-notify-volunteers`). The specific provider is a team decision, not yet made. Every message except a verification code is also kept in the recipient's in-app inbox inside the application (`FR-NOTIFY-in-app-inbox`), so a user sees it even if the email is missed. The system must check notification accuracy before sending (`FR-NOTIFY-current-state`) and must not block business-state changes if a notification fails (`FR-NOTIFY-preserve-business-state`).
+- **Email delivery channel** — Microsoft 365 Outlook through Microsoft Graph sends the sign-up verification code (`FR-AUTH-account-signup`), a TCU affiliation verification code (`UC-IDV-verify-affiliation`, resolves `OI-10`), shift reminders (`FR-NOTIFY-shift-reminder`), and administrator-triggered volunteer notifications (`UC-ADM-notify-volunteers`). The user selected this provider on 2026-11-06. Every message except a verification code is also kept in the recipient's in-app inbox inside the application (`FR-NOTIFY-in-app-inbox`), so a user sees it even if the email is missed. The system must check notification accuracy before sending (`FR-NOTIFY-current-state`) and must not block business-state changes if a notification fails (`FR-NOTIFY-preserve-business-state`).
 
 **What is not on this diagram.** The current toolchain — SignUpGenius, Google Forms, Google Sheets, and the ReFrog website — does not appear because the application replaces rather than integrates with them (`OE-decentralized-tool-replacement`; `INT-integration-scope`). If any of those tools is later selected for integration rather than replacement, it becomes an external-system box here and needs a corresponding `SI-*` or `CI-*` entry in the specification. The Azure database (`CO-azure-database-hosting`) is internal to the system boundary and appears on the container diagram in section 5.1, not here.
 
@@ -225,7 +225,7 @@ C4Container
         ContainerDb(db, "Database", "Microsoft SQL Server", "Shifts, volunteer assignments, donations, shopping visits, administrator accounts")
     }
 
-    System_Ext(notify, "Email delivery channel", "Sends sign-up and TCU verification codes and shift notifications; exact provider not yet chosen")
+    System_Ext(notify, "Microsoft 365 email delivery", "Sends sign-up and TCU verification codes and shift notifications through Microsoft Graph")
 
     Rel(donor, web, "Logs a donation", "HTTPS")
     Rel(shopper, web, "Verifies affiliation, logs items taken", "HTTPS")
@@ -233,12 +233,12 @@ C4Container
     Rel(admin, web, "Manages shifts, views dashboard", "HTTPS")
     Rel(web, app, "Calls", "JSON/HTTPS")
     Rel(app, db, "Reads and writes through the persistence abstraction", "database adapter")
-    Rel(app, notify, "Sends sign-up and TCU email verification codes; sends shift reminders and administrator-triggered notifications", "not yet chosen")
+    Rel(app, notify, "Sends sign-up and TCU email verification codes; sends shift reminders and administrator-triggered notifications", "HTTPS")
 ```
 
 ReFrog ships as one deployable, reflecting the team's working direction for `KD-deployment-shape` (formal write-up pending §9.2): the three ReFrog founders cannot operate infrastructure, and the team's lack of mobile development experience already ruled out a native app in favor of a single web application. The front end is a separate container only because it runs in the browser as a PWA — it ships inside the application's package, not deployed independently, same as the worked example above.
 
-The container technologies (Blazor, C# / ASP.NET Core, Microsoft SQL Server) are recorded in `KD-tcu-it-stack` (section 9.2). The Web Front End uses the Blazor WebAssembly hosting model: it runs in the browser, is served by the Application, and calls the Application only through its JSON/HTTPS API. Blazor Server and server-side rendering are not used for participant screens, because the PWA must run in the browser and every area's design fixes an API contract between the two containers. The email delivery provider and the production hosting provider are still not chosen. External systems are provisional pending §3's context diagram.
+The container technologies (Blazor, C# / ASP.NET Core, Microsoft SQL Server) are recorded in `KD-tcu-it-stack` (section 9.2). The Web Front End uses the Blazor WebAssembly hosting model: it runs in the browser, is served by the Application, and calls the Application only through its JSON/HTTPS API. Blazor Server and server-side rendering are not used for participant screens, because the PWA must run in the browser and every area's design fixes an API contract between the two containers. Microsoft 365 Outlook through Microsoft Graph is the selected email delivery provider; the production hosting provider remains open.
 
 **Corrected 2026-10-02:** this diagram previously showed Google Sign-In itself deriving TCU affiliation directly from the sign-in email's domain. The client meeting required proof through a one-time code sent to a qualifying TCU email (`OI-10`, resolved). **Changed 2026-10-30:** Google Sign-In is removed; the application creates and signs in its own accounts (`KD-own-accounts`). **Changed 2026-11-04:** when registration itself successfully verifies an exact `tcu.edu` email by code, that proof also establishes persisted TCU email verification; other accounts use the separate IDV profile flow.
 
@@ -273,7 +273,7 @@ _[Check before Checkpoint 1: every area in your use case file appears in the fir
 | `SHP` | Shopping | Owns recording what a shopper takes during a visit | Identity Verification, Administration | provisional |
 | `DON` | Donation | Owns recording what a donor drops off at a location | Administration | provisional |
 | `AUTH` | Authentication | Owns account registration, sign-in, sign-out, password recovery, stable account identity, persisted TCU email verification, shared verification challenges, trusted current roles and explicit revoked/expired restrictions, event-scoped access and renewal state, and administrator recognition | Email delivery channel (registration, affiliation-verification, and recovery messages) | [AUTH.md](AUTH.md) |
-| _(cross-cutting)_ | Notifications | Owns every reminder and alert the system sends — shift reminders, understaffed-shift alerts | Volunteer Scheduling, an external delivery channel (not yet chosen) | provisional |
+| _(cross-cutting)_ | Notifications | Owns every reminder and alert the system sends — shift reminders, understaffed-shift alerts | Volunteer Scheduling, Microsoft 365 email delivery | provisional |
 
 Volunteer role handling is detailed in [Administration](ADM.md) and [Authentication](AUTH.md). Administrators approve requests or manually approve verified sign-in emails; IDV checks the current role through Authentication. These team-selected workflows still require supporting use cases and SRS alignment.
 
