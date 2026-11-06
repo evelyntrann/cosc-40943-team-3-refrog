@@ -1,0 +1,73 @@
+name: Pull Request
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet:
+    name: .NET / C# (Backend & Blazor)
+    runs-on: ubuntu-latest
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "Password123!"
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Password123! -C -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@3951f0dfe7a07e2313ec93c75700083e2005ddab # v4.3.0
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: 'preview'
+
+      - name: Check code formatting (whitespace)
+        run: dotnet format whitespace --verify-no-changes --verbosity normal
+
+      - name: Check code formatting (style)
+        run: dotnet format style --verify-no-changes --verbosity normal
+
+      - name: Run code analyzers (linter)
+        run: dotnet format analyzers --verify-no-changes --verbosity normal
+
+      - name: Build and type-check
+        run: dotnet build ReFrog.slnx --configuration Release --no-incremental
+
+      - name: Run automated test suite
+        run: dotnet test ReFrog.slnx --configuration Release --no-build --verbosity normal
+        env:
+          REFROG_TEST_SQL: "Server=127.0.0.1,1433;User Id=sa;Password=Password123!;TrustServerCertificate=True"
+
+  web:
+    name: Web Assets (CSS)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node.js runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      - name: Check CSS formatting
+        run: npx --yes prettier --check "src/**/*.css"
+
+      - name: Lint CSS
+        run: npx --yes stylelint "src/**/*.css"
