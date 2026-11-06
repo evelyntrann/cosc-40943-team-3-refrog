@@ -22,6 +22,9 @@ public static class ServiceCollectionExtensions
             options.Password.RequireDigit = true;
             options.Password.RequireNonAlphanumeric = true;
             options.User.RequireUniqueEmail = true;
+            // The user name is the verified email, which registration already validates
+            // (FR-AUTH-account-signup: any domain), so Identity's narrower character list must not apply.
+            options.User.AllowedUserNameCharacters = string.Empty;
         })
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<AuthDbContext>()

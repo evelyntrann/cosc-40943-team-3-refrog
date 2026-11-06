@@ -1,13 +1,16 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using ReFrog.Contracts.Api;
 using ReFrog.Contracts.Authentication;
 using ReFrog.Server.Features.Authentication;
@@ -413,6 +416,155 @@ public sealed partial class RegistrationFlowTests
     }
 
     [TestMethod]
+    public async Task AccountCannotSignInUntilCodeIsVerified()
+    {
+        // FR-AUTH-account-signup verification, checked at Identity's credential check;
+        // the HTTP sign-in refusal arrives with UC-AUTH-sign-in.
+        await using var fixture = await RegistrationFixture.CreateAsync();
+        var pending = await fixture.StartAsync("person@example.org");
+
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var accounts = scope.ServiceProvider.GetRequiredService<UserManager<AuthAccount>>();
+            Assert.IsNull(await accounts.FindByEmailAsync("person@example.org"));
+        }
+
+        var completed = await fixture.VerifyAsync(pending.RegistrationId, fixture.Email.LastCode);
+        Assert.AreEqual(HttpStatusCode.OK, completed.StatusCode);
+
+        await using var finalScope = fixture.Factory.Services.CreateAsyncScope();
+        var finalAccounts = finalScope.ServiceProvider.GetRequiredService<UserManager<AuthAccount>>();
+        var account = await finalAccounts.FindByEmailAsync("person@example.org");
+        Assert.IsNotNull(account);
+        Assert.IsTrue(await finalAccounts.CheckPasswordAsync(account, "Password1!"));
+        Assert.IsFalse(await finalAccounts.CheckPasswordAsync(account, "Wrong1!"));
+    }
+
+    [TestMethod]
+    public async Task ResendWithTheSameRequestIdSendsOnce()
+    {
+        await using var fixture = await RegistrationFixture.CreateAsync();
+        var pending = await fixture.StartAsync("person@example.org");
+        fixture.Clock.Advance(TimeSpan.FromSeconds(60));
+        var route = $"/api/v1/auth/registrations/{pending.RegistrationId}/codes";
+        var request = new ResendRegistrationCodeRequest(Guid.NewGuid());
+
+        var first = await fixture.Client.PostAsJsonAsync(route, request);
+        var codeAfterFirst = fixture.Email.LastCode;
+        fixture.Clock.Advance(TimeSpan.FromSeconds(5));
+        var retried = await fixture.Client.PostAsJsonAsync(route, request);
+
+        Assert.AreEqual(HttpStatusCode.Accepted, first.StatusCode);
+        Assert.AreEqual(HttpStatusCode.Accepted, retried.StatusCode);
+        Assert.AreEqual(2, fixture.Email.Count);
+        var firstBody = await first.Content.ReadFromJsonAsync<ApiResponse<RegistrationChallengeResponse>>();
+        var retriedBody = await retried.Content.ReadFromJsonAsync<ApiResponse<RegistrationChallengeResponse>>();
+        Assert.AreEqual(firstBody?.Data, retriedBody?.Data);
+        var verified = await fixture.VerifyAsync(pending.RegistrationId, codeAfterFirst);
+        Assert.AreEqual(HttpStatusCode.OK, verified.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task PasswordIsStoredOnlyAsHashAndNeverReturnedOrLogged()
+    {
+        const string password = "Sup3r-Secret!";
+        await using var fixture = await RegistrationFixture.CreateAsync();
+        var start = await fixture.Client.PostAsJsonAsync("/api/v1/auth/registrations",
+            new StartRegistrationRequest("hidden@example.org", password, Guid.NewGuid()));
+        var startBody = await start.Content.ReadAsStringAsync();
+        var pending = JsonSerializer.Deserialize<ApiResponse<RegistrationChallengeResponse>>(startBody, WebJson)!.Data!;
+        var code = fixture.Email.LastCode;
+        var verify = await fixture.VerifyAsync(pending.RegistrationId, code);
+        var verifyBody = await verify.Content.ReadAsStringAsync();
+        Assert.AreEqual(HttpStatusCode.OK, verify.StatusCode);
+
+        foreach (var body in new[] { startBody, verifyBody })
+        {
+            Assert.IsFalse(body.Contains(password, StringComparison.Ordinal));
+        }
+
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+        var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<AuthAccount>>();
+        var stored = new[] { (await db.PendingRegistrations.SingleAsync()).PasswordHash, (await db.Users.SingleAsync()).PasswordHash! };
+        foreach (var hash in stored)
+        {
+            Assert.IsFalse(hash.Contains(password, StringComparison.Ordinal));
+            Assert.AreNotEqual(PasswordVerificationResult.Failed, hasher.VerifyHashedPassword(new AuthAccount(), hash, password));
+        }
+
+        foreach (var line in fixture.Logs.Messages)
+        {
+            Assert.IsFalse(line.Contains(password, StringComparison.Ordinal), "Password was logged.");
+            Assert.IsFalse(line.Contains("hidden@example.org", StringComparison.OrdinalIgnoreCase), "Email was logged.");
+            Assert.IsFalse(line.Contains(code, StringComparison.Ordinal), "Verification code was logged.");
+        }
+    }
+
+    [TestMethod]
+    public async Task EmailWithApostropheCompletesRegistration()
+    {
+        await using var fixture = await RegistrationFixture.CreateAsync();
+        var pending = await fixture.StartAsync("o'brien@example.org");
+        var completed = await fixture.VerifyAsync(pending.RegistrationId, fixture.Email.LastCode);
+        Assert.AreEqual(HttpStatusCode.OK, completed.StatusCode);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        Assert.AreEqual(1, await scope.ServiceProvider.GetRequiredService<AuthDbContext>().Users.CountAsync());
+    }
+
+    [TestMethod]
+    public async Task EmailLongerThanStorageIsAValidationFailure()
+    {
+        await using var fixture = await RegistrationFixture.CreateAsync();
+        var label = new string('b', 60);
+        var tooLong = $"{new string('a', 64)}@{label}.{label}.{label}.example.org";
+        Assert.IsTrue(tooLong.Length > 256 && System.Net.Mail.MailAddress.TryCreate(tooLong, out _));
+        var response = await fixture.Client.PostAsJsonAsync("/api/v1/auth/registrations",
+            new StartRegistrationRequest(tooLong, "Password1!", Guid.NewGuid()));
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<RegistrationChallengeResponse>>();
+        Assert.IsTrue(body?.Error?.Fields?.ContainsKey("email"));
+        Assert.AreEqual(0, fixture.Email.Count);
+    }
+
+    [TestMethod]
+    public async Task ChallengeOwnerMustMatchItsPurpose()
+    {
+        // Shared code isolation at the storage level: a registration challenge cannot belong to an
+        // account and an affiliation challenge cannot belong to a pending registration.
+        // Crossing purposes through the API waits for UC-IDV-verify-affiliation.
+        await using var fixture = await RegistrationFixture.CreateAsync();
+        var pending = await fixture.StartAsync("person@example.org");
+        await fixture.VerifyAsync(pending.RegistrationId, fixture.Email.LastCode);
+
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+        var accountId = (await db.Users.SingleAsync()).Id;
+        foreach (var (purpose, registrationId, account) in new[]
+        {
+            ("TCU_AFFILIATION", (Guid?)pending.RegistrationId, (Guid?)null),
+            ("ACCOUNT_REGISTRATION", null, accountId),
+        })
+        {
+            db.ChangeTracker.Clear();
+            db.VerificationChallenges.Add(new VerificationChallenge
+            {
+                Id = Guid.NewGuid(),
+                Purpose = purpose,
+                PendingRegistrationId = registrationId,
+                AccountId = account,
+                NormalizedEmail = "PERSON@EXAMPLE.ORG",
+                CodeHmac = new byte[32],
+                KeyVersion = 1,
+                RequestId = Guid.NewGuid(),
+                CreatedAt = fixture.Clock.GetUtcNow(),
+                ExpiresAt = fixture.Clock.GetUtcNow().AddMinutes(10),
+            });
+            await Assert.ThrowsExactlyAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        }
+    }
+
+    [TestMethod]
     public async Task ServerServesBlazorShellForRegistrationRoute()
     {
         await using var fixture = await RegistrationFixture.CreateAsync();
@@ -421,6 +573,8 @@ public sealed partial class RegistrationFlowTests
         var content = await page.Content.ReadAsStringAsync();
         StringAssert.Contains(content, "ReFrog");
     }
+
+    private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
 
     [GeneratedRegex(@"\b\d{6}\b", RegexOptions.CultureInvariant)]
     private static partial Regex CodePattern();
@@ -446,6 +600,31 @@ public sealed partial class RegistrationFlowTests
         }
     }
 
+    private sealed class CapturingLoggerProvider : ILoggerProvider
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<string> messages = new();
+
+        public IEnumerable<string> Messages => messages;
+
+        public ILogger CreateLogger(string categoryName) => new CapturingLogger(messages);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class CapturingLogger(System.Collections.Concurrent.ConcurrentQueue<string> messages) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state)
+                where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+                Func<TState, Exception?, string> formatter) =>
+                messages.Enqueue(formatter(state, exception) + " " + exception);
+        }
+    }
+
     private sealed class ManualClock : TimeProvider
     {
         private DateTimeOffset now = new(2026, 11, 6, 12, 0, 0, TimeSpan.Zero);
@@ -457,13 +636,17 @@ public sealed partial class RegistrationFlowTests
 
     private sealed class RegistrationFixture : IAsyncDisposable
     {
-        private RegistrationFixture(WebApplicationFactory<Program> factory, HttpClient client, CaptureEmailSender email, ManualClock clock)
+        private RegistrationFixture(WebApplicationFactory<Program> factory, HttpClient client, CaptureEmailSender email,
+            ManualClock clock, CapturingLoggerProvider logs)
         {
             Factory = factory;
             Client = client;
             Email = email;
             Clock = clock;
+            Logs = logs;
         }
+
+        public CapturingLoggerProvider Logs { get; }
 
         public WebApplicationFactory<Program> Factory { get; }
         public HttpClient Client { get; }
@@ -495,6 +678,7 @@ public sealed partial class RegistrationFlowTests
             };
             var email = new CaptureEmailSender();
             var clock = new ManualClock();
+            var logs = new CapturingLoggerProvider();
             var key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
             var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(host =>
             {
@@ -516,6 +700,7 @@ public sealed partial class RegistrationFlowTests
                     services.RemoveAll<TimeProvider>();
                     services.AddSingleton<IEmailSender>(email);
                     services.AddSingleton<TimeProvider>(clock);
+                    services.AddSingleton<ILoggerProvider>(logs);
                 });
             });
             var client = factory.CreateClient(new WebApplicationFactoryClientOptions
@@ -525,7 +710,7 @@ public sealed partial class RegistrationFlowTests
             });
             await using var scope = factory.Services.CreateAsyncScope();
             await scope.ServiceProvider.GetRequiredService<AuthDbContext>().Database.MigrateAsync();
-            return new(factory, client, email, clock);
+            return new(factory, client, email, clock, logs);
         }
 
         public async ValueTask DisposeAsync()

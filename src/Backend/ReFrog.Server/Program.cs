@@ -1,11 +1,29 @@
 using ReFrog.Server.Configuration;
+using Microsoft.EntityFrameworkCore;
 using ReFrog.Server.Features.Authentication;
+using ReFrog.Server.Features.Authentication.Persistence;
 using ReFrog.Contracts.Api;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddReFrogCore(builder.Configuration);
 
+var pickupDirectory = builder.Configuration["Email:DevelopmentPickupDirectory"];
+if (builder.Environment.IsDevelopment() && !string.IsNullOrWhiteSpace(pickupDirectory) &&
+    string.IsNullOrWhiteSpace(builder.Configuration["Email:Provider"]))
+{
+    builder.Services.AddScoped<IEmailSender>(provider =>
+        new DevelopmentPickupEmailSender(Path.GetFullPath(pickupDirectory, builder.Environment.ContentRootPath),
+            provider.GetRequiredService<TimeProvider>()));
+}
+
 var app = builder.Build();
+
+if (args.Contains("--apply-migrations", StringComparer.Ordinal))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    await scope.ServiceProvider.GetRequiredService<AuthDbContext>().Database.MigrateAsync();
+    return;
+}
 
 var logUnexpected = LoggerMessage.Define(LogLevel.Error, new EventId(7902, "UnexpectedRequestFailure"),
     "Unexpected request failure");

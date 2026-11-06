@@ -23,11 +23,15 @@ public sealed class RegistrationService(
         LoggerMessage.Define(LogLevel.Warning, new EventId(7901, "RegistrationPersistenceFailure"),
             "Registration persistence failed");
 
+    // Matches the 256-character email columns; a longer address would pass here and fail at save.
+    private const int MaxEmailLength = 256;
+
     public async Task<RegistrationReply<RegistrationChallengeResponse>> StartAsync(
         StartRegistrationRequest request, CancellationToken cancellationToken)
     {
         var errors = new Dictionary<string, string>();
-        if (!MailAddress.TryCreate(request.Email?.Trim(), out var address) || address.Address != request.Email?.Trim())
+        if (!MailAddress.TryCreate(request.Email?.Trim(), out var address) || address.Address != request.Email?.Trim() ||
+            address.Address.Length > MaxEmailLength)
         {
             errors["email"] = "Enter a valid email address.";
         }
