@@ -1,0 +1,163 @@
+@page "/register"
+@using System.Net.Http.Json
+@using System.Text.Json
+@using ReFrog.Contracts.Api
+@using ReFrog.Contracts.Authentication
+@inject HttpClient Http
+
+<PageTitle>Register | ReFrog</PageTitle>
+
+<h1>Register</h1>
+
+@if (completed is not null)
+{
+    <p role="status">Your account is ready. @(completed.TcuEmailVerified ? "TCU email verified." : "")</p>
+}
+else if (pending is null)
+{
+    <form @onsubmit="StartAsync" @onsubmit:preventDefault>
+        <label for="registration-email">Email</label>
+        <input id="registration-email" type="email" autocomplete="email" @bind="email" required />
+        @if (FieldError("email") is { } emailError)
+        {
+            <p role="alert">@emailError</p>
+        }
+
+        <label for="registration-password">Password</label>
+        <input id="registration-password" type="password" autocomplete="new-password" @bind="password" required />
+        @if (FieldError("password") is { } passwordError)
+        {
+            <p role="alert">@passwordError</p>
+        }
+
+        <p>Use six or more characters with uppercase, lowercase, a number, and a symbol.</p>
+        <button type="submit" disabled="@busy">Send verification code</button>
+    </form>
+}
+else
+{
+    <p>Enter the six-digit code sent to @email.</p>
+    <form @onsubmit="VerifyAsync" @onsubmit:preventDefault>
+        <label for="registration-code">Verification code</label>
+        <input id="registration-code" type="text" inputmode="numeric" autocomplete="one-time-code"
+               maxlength="6" pattern="[0-9]{6}" @bind="code" required />
+        @if (FieldError("code") is { } codeError)
+        {
+            <p role="alert">@codeError</p>
+        }
+        <button type="submit" disabled="@busy">Verify and create account</button>
+    </form>
+    <button type="button" disabled="@busy" @onclick="ResendAsync">Send a new code</button>
+}
+
+@if (error is not null)
+{
+    <p role="alert">@error.Message</p>
+    @if (error.RetryAt is not null)
+    {
+        <p>Try again after @ChicagoTime(error.RetryAt.Value).</p>
+    }
+}
+
+@code {
+    private string email = string.Empty;
+    private string password = string.Empty;
+    private string code = string.Empty;
+    private RegistrationChallengeResponse? pending;
+    private RegisteredAccountResponse? completed;
+    private ApiError? error;
+    private bool busy;
+
+    private string? FieldError(string name) =>
+        error?.Fields?.TryGetValue(name, out var message) == true ? message : null;
+
+    private async Task StartAsync()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            using var response = await Http.PostAsJsonAsync("api/v1/auth/registrations",
+                new StartRegistrationRequest(email, password, Guid.NewGuid()));
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<RegistrationChallengeResponse>>();
+            pending = result?.Data;
+            error = result?.Error;
+        }
+        catch (Exception failure) when (failure is HttpRequestException or JsonException)
+        {
+            error = new(ApiErrorCategory.Unavailable, "NETWORK_UNAVAILABLE", "Registration could not be confirmed. Try again.");
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task ResendAsync()
+    {
+        if (pending is null)
+        {
+            return;
+        }
+
+        busy = true;
+        error = null;
+        try
+        {
+            using var response = await Http.PostAsJsonAsync($"api/v1/auth/registrations/{pending.RegistrationId}/codes",
+                new ResendRegistrationCodeRequest(Guid.NewGuid()));
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<RegistrationChallengeResponse>>();
+            pending = result?.Data ?? pending;
+            error = result?.Error;
+        }
+        catch (Exception failure) when (failure is HttpRequestException or JsonException)
+        {
+            error = new(ApiErrorCategory.Unavailable, "NETWORK_UNAVAILABLE", "The code request could not be confirmed. Try again.");
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task VerifyAsync()
+    {
+        if (pending is null)
+        {
+            return;
+        }
+
+        busy = true;
+        error = null;
+        try
+        {
+            using var response = await Http.PostAsJsonAsync($"api/v1/auth/registrations/{pending.RegistrationId}/verification",
+                new VerifyRegistrationRequest(code));
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<RegisteredAccountResponse>>();
+            completed = result?.Data;
+            error = result?.Error;
+            code = string.Empty;
+            if (completed is not null)
+            {
+                password = string.Empty;
+            }
+        }
+        catch (Exception failure) when (failure is HttpRequestException or JsonException)
+        {
+            error = new(ApiErrorCategory.Unavailable, "NETWORK_UNAVAILABLE", "Verification could not be confirmed. Try again.");
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string ChicagoTime(DateTimeOffset instant)
+    {
+        var chicago = TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
+        var local = TimeZoneInfo.ConvertTime(instant, chicago);
+        return local.ToString("MMM d, yyyy h:mm tt", System.Globalization.CultureInfo.InvariantCulture)
+            .Replace("AM", "a.m.", StringComparison.Ordinal)
+            .Replace("PM", "p.m.", StringComparison.Ordinal);
+    }
+}

@@ -1,0 +1,91 @@
+using System.Text.Json;
+using ReFrog.Contracts.Api;
+using ReFrog.Contracts.Authentication;
+
+namespace ReFrog.Server.Features.Authentication;
+
+public static class AuthEndpoints
+{
+    private static readonly JsonSerializerOptions WebJsonOptions = new(JsonSerializerDefaults.Web);
+
+    public static IEndpointRouteBuilder MapRegistrationEndpoints(this IEndpointRouteBuilder endpoints)
+    {
+        var registrations = endpoints.MapGroup("/api/v1/auth/registrations").AllowAnonymous();
+        registrations.MapPost("/", async (HttpRequest request, RegistrationService service, CancellationToken cancellationToken) =>
+        {
+            if (request.HttpContext.User.Identity?.IsAuthenticated == true)
+            {
+                return SignedIn<RegistrationChallengeResponse>();
+            }
+
+            var input = await ReadAsync<StartRegistrationRequest>(request, cancellationToken);
+            if (input is null)
+            {
+                return InvalidRequest<RegistrationChallengeResponse>();
+            }
+
+            var reply = await service.StartAsync(input, cancellationToken);
+            return Results.Json(reply.Response, statusCode: reply.StatusCode);
+        });
+        registrations.MapPost("/{registrationId:guid}/codes", async (
+            Guid registrationId, HttpRequest request, RegistrationService service, CancellationToken cancellationToken) =>
+        {
+            if (request.HttpContext.User.Identity?.IsAuthenticated == true)
+            {
+                return SignedIn<RegistrationChallengeResponse>();
+            }
+
+            var input = await ReadAsync<ResendRegistrationCodeRequest>(request, cancellationToken);
+            if (input is null)
+            {
+                return InvalidRequest<RegistrationChallengeResponse>();
+            }
+
+            var reply = await service.ResendAsync(registrationId, input, cancellationToken);
+            return Results.Json(reply.Response, statusCode: reply.StatusCode);
+        });
+        registrations.MapPost("/{registrationId:guid}/verification", async (
+            Guid registrationId, HttpRequest request, RegistrationService service, CancellationToken cancellationToken) =>
+        {
+            if (request.HttpContext.User.Identity?.IsAuthenticated == true)
+            {
+                return SignedIn<RegisteredAccountResponse>();
+            }
+
+            var input = await ReadAsync<VerifyRegistrationRequest>(request, cancellationToken);
+            if (input is null)
+            {
+                return InvalidRequest<RegisteredAccountResponse>();
+            }
+
+            var reply = await service.VerifyAsync(registrationId, input, cancellationToken);
+            return Results.Json(reply.Response, statusCode: reply.StatusCode);
+        });
+        return endpoints;
+    }
+
+    private static async Task<T?> ReadAsync<T>(HttpRequest request, CancellationToken cancellationToken)
+    {
+        if (!request.HasJsonContentType())
+        {
+            return default;
+        }
+
+        try
+        {
+            return await JsonSerializer.DeserializeAsync<T>(request.Body, WebJsonOptions, cancellationToken);
+        }
+        catch (JsonException)
+        {
+            return default;
+        }
+    }
+
+    private static IResult InvalidRequest<T>() => Results.Json(
+        ApiResponse.Failure<T>(new ApiError(ApiErrorCategory.Validation, "VALIDATION_FAILED", "Enter a valid request.")),
+        statusCode: StatusCodes.Status422UnprocessableEntity);
+
+    private static IResult SignedIn<T>() => Results.Json(
+        ApiResponse.Failure<T>(new ApiError(ApiErrorCategory.Authorization, "ALREADY_SIGNED_IN", "Sign out before registering another account.")),
+        statusCode: StatusCodes.Status403Forbidden);
+}

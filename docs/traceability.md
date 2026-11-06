@@ -75,7 +75,7 @@ Release values follow the course's release plan: `v0.1.0` is the proving slice (
 
 | Use case or FR | Design | Release | Build | Code | Tests | Verify |
 |---|---|---|---|---|---|---|
-| `UC-AUTH-register-account` | [design/AUTH.md](design/AUTH.md#uc-auth-register-account) | v0.1.0 | 📐 Designed | | | |
+| `UC-AUTH-register-account` | [design/AUTH.md](design/AUTH.md#uc-auth-register-account) | v0.1.0 | 🟡 In progress | `src/Backend/ReFrog.Server/Features/Authentication/`, `src/Frontend/ReFrog.Client/Features/Authentication/RegisterPage.razor` | `tests/ReFrog.Server.Tests/Authentication/` (main flow, 3a–6b; latest additions pending execution) | 🟡 Partial — SQL Server integration tests passed before the latest edits; Windows Code Integrity blocks the current test assembly |
 | `UC-AUTH-sign-in` | [design/AUTH.md](design/AUTH.md#uc-auth-sign-in-and-sign-out) | v0.1.0 | 📐 Designed | | | |
 | `UC-AUTH-recover-account` | [design/AUTH.md](design/AUTH.md#uc-auth-recover-account) | v0.1.0 | 📐 Designed | | | |
 | `FR-AUTH-account-signup` | [design/AUTH.md](design/AUTH.md) | v0.1.0 | 📐 Designed | | | |

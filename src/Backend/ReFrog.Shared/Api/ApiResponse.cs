@@ -1,9 +1,17 @@
+using System.Text.Json.Serialization;
+
 namespace ReFrog.Contracts.Api;
 
 public sealed record ApiResponse<T>
 {
-    internal ApiResponse(T? data, ApiError? error)
+    [JsonConstructor]
+    public ApiResponse(T? data, ApiError? error)
     {
+        if ((data is null) == (error is null))
+        {
+            throw new ArgumentException("Exactly one of data or error is required.");
+        }
+
         Data = data;
         Error = error;
     }

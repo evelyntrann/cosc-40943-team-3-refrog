@@ -94,10 +94,10 @@ classDiagram
     CurrentUser --> AuthRepository
 ```
 
-- `src/ReFrog.Client/Features/Authentication/RegisterPage.razor` (new): registration, code entry, resend timing, field feedback, and preserved valid input.
-- `src/ReFrog.Client/Features/Authentication/SignInPage.razor` (new): sign-in, safe credential failure, unavailable retry, and return-path handling. Sign-out is exposed from the authenticated account navigation.
-- `src/ReFrog.Client/Features/Authentication/RecoverAccountPage.razor` and `ResetPasswordPage.razor` (new): recovery acknowledgement and reset-token completion without account enumeration.
-- `src/ReFrog.Server/Features/Authentication/AuthEndpoints.cs` (new): maps the API contract below to services. It never accepts an account ID, role, verification status, or administrator flag from the browser.
+- `src/Frontend/ReFrog.Client/Features/Authentication/RegisterPage.razor` (new): registration, code entry, resend timing, field feedback, and preserved valid input.
+- `src/Frontend/ReFrog.Client/Features/Authentication/SignInPage.razor` (new): sign-in, safe credential failure, unavailable retry, and return-path handling. Sign-out is exposed from the authenticated account navigation.
+- `src/Frontend/ReFrog.Client/Features/Authentication/RecoverAccountPage.razor` and `ResetPasswordPage.razor` (new): recovery acknowledgement and reset-token completion without account enumeration.
+- `src/Backend/ReFrog.Server/Features/Authentication/AuthEndpoints.cs` (new): maps the API contract below to services. It never accepts an account ID, role, verification status, or administrator flag from the browser.
 - `RegistrationService` (new): validates registration, hashes the pending password, coordinates registration challenges, creates the Identity account only after successful code verification, and creates TCU verification for an exact `tcu.edu` registration email in the same transaction.
 - `SessionService` (new): validates credentials through ASP.NET Core Identity, applies lockout, issues the correct cookie lifetime, signs out, and records administrator sign-in attempts.
 - `RecoveryService` (new): returns the same acknowledgement for all recovery requests, applies recovery request limits, issues a 30-minute Identity reset token for existing accounts, resets the password, and rotates the security stamp.
@@ -107,6 +107,8 @@ classDiagram
 - `IAuthRepository` and EF Core implementation (new): own AUTH persistence and hide SQL Server/Identity storage details from services.
 - `IEmailSender` (shared interface, new if no earlier area creates it): provider-neutral; provider choice remains unresolved. Verification codes and reset links are email-only and are never placed in the in-app inbox.
 - .NET `TimeProvider` (injected): the only source of current time for codes, rolling limits, reset expiry, cookie/session boundaries, and tests.
+
+**Registration build note (issue #79).** The repository layout is `src/Frontend` and `src/Backend`. In the first registration increment, `RegistrationCode` owns code generation and versioned HMAC checks, while `EfAuthRepository` enforces challenge limits and completion inside SQL Server transactions. The separate shared `VerificationChallengeService` shown above is not yet present; IDV must reuse one AUTH-owned implementation when its flow is built. The default `IEmailSender` implementation reports delivery unavailable until the provider adapter is selected. Registration issues the administrator session when bootstrap assigns that role, as clarified for `UC-AUTH-register-account` step 8.
 
 ## Shared API envelope
 
