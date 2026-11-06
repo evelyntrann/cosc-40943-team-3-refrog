@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/Backend/">
+    <Project Path="src/Backend/ReFrog.Server/ReFrog.Server.csproj" />
+    <Project Path="src/Backend/ReFrog.Shared/ReFrog.Shared.csproj" />
+  </Folder>
+  <Folder Name="/src/Frontend/">
+    <Project Path="src/Frontend/ReFrog.Client/ReFrog.Client.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ReFrog.Server.Tests/ReFrog.Server.Tests.csproj" />
+  </Folder>
+</Solution>
