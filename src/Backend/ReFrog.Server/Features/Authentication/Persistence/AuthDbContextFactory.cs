@@ -7,8 +7,14 @@ public sealed class AuthDbContextFactory : IDesignTimeDbContextFactory<AuthDbCon
 {
     public AuthDbContext CreateDbContext(string[] args)
     {
+        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__ReFrog");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException("Set ConnectionStrings__ReFrog before running EF Core tools.");
+        }
+
         var options = new DbContextOptionsBuilder<AuthDbContext>()
-            .UseSqlServer("Server=localhost;Database=ReFrogDesign;Integrated Security=True;TrustServerCertificate=True")
+            .UseSqlServer(connectionString)
             .Options;
 
         return new AuthDbContext(options);

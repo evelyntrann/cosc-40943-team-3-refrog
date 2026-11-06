@@ -15,3 +15,5 @@ Supply these settings through deployment configuration or a secret store:
 | `Email:MicrosoftGraph:SenderAddress` | Authorized Microsoft 365 mailbox address |
 
 The adapter requests a client-credentials token and submits one message. It treats Graph `202 Accepted` as accepted for processing; this is not a delivery receipt. A failed or uncertain submission does not trigger an automatic resend, preserving the registration request's idempotency. No tenant credential or mailbox is committed to the repository, and live delivery requires administrator setup and a controlled end-to-end check.
+
+For local SQL Server migration, set the `ConnectionStrings__ReFrog` environment variable to the same connection string used by the running application. The EF Core design-time factory requires this setting and does not contain a database credential. Run the checked-in migrations with `dotnet-ef database update` before submitting registration requests.
