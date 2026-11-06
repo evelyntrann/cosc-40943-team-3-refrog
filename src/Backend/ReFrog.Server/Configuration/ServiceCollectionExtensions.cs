@@ -43,7 +43,14 @@ public static class ServiceCollectionExtensions
         services.AddAntiforgery();
         services.AddScoped<IAuthRepository, EfAuthRepository>();
         services.AddScoped<RegistrationService>();
-        services.AddScoped<IEmailSender, UnavailableEmailSender>();
+        if (string.Equals(configuration["Email:Provider"], "MicrosoftGraph", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddHttpClient<IEmailSender, MicrosoftGraphEmailSender>();
+        }
+        else
+        {
+            services.AddScoped<IEmailSender, UnavailableEmailSender>();
+        }
         services.AddSingleton(provider =>
         {
             var activeVersion = configuration.GetValue<int>("Authentication:ActiveVerificationKeyVersion");
