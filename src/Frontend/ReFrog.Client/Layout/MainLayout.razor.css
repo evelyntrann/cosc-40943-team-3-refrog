@@ -1,13 +1,13 @@
 header,
 main {
-    margin: 0 auto;
-    max-width: 48rem;
-    padding: 1rem;
+  margin: 0 auto;
+  max-width: 48rem;
+  padding: 1rem;
 }
 
 header a {
-    color: inherit;
-    font-size: 1.25rem;
-    font-weight: 700;
-    text-decoration: none;
+  color: inherit;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-decoration: none;
 }
