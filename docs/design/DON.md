@@ -86,7 +86,7 @@ sequenceDiagram
     participant LOC as LocationQueryService (ADM)
     participant DB as DonationRepository / Database
     D->>UI: Open donation form (step 1)
-    UI-->>D: Show active-location choice, positive item count, optional fixed category (step 2, 2a)
+    UI-->>D: Show active-location choice, non-negative item count, optional fixed category (step 2, 2a)
     D->>UI: Enter information and confirm (step 3)
     UI->>API: POST /api/donations with stable submissionKey
     API->>SVC: recordDonation(command)
@@ -148,7 +148,7 @@ _Name who may call each operation, its meaningful inputs and outputs, and every 
 | Endpoint or job | Caller (who may) | Request | Success | Errors, by extension |
 |---|---|---|---|---|
 | `GET /api/donation-options` | Public; no sign-in | Optional event context from the entry route | `200`: locations currently accepting donation activity and the configured fixed category set | `503 OPTIONS_UNAVAILABLE`; the form must not invent locations or categories |
-| `POST /api/donations` | Public donor or volunteer acting for a donor; no sign-in | Opaque `submissionKey`; active `locationId`; positive whole-number `itemCount`; optional one value from the configured fixed category set; entry source context (`QR_SCAN` or `MANUAL_ENTRY`) | `201`: Donation identifier, server-recorded time, accepted location/count/category, `recorded: true`, `replay: false`. A retry of the same key and same logical request returns `200` with the same Donation identifier and `replay: true` | 3a: `422 VALIDATION_FAILED` with field-level errors. Same key/different logical request: `409 SUBMISSION_KEY_REUSED`. 4a: `503 SAVE_NOT_CONFIRMED`; never return success unless a committed record is found. Malformed request: shared `400` response |
+| `POST /api/donations` | Public donor or volunteer acting for a donor; no sign-in | Opaque `submissionKey`; active `locationId`; non-negative whole-number `itemCount`; optional one value from the configured fixed category set; entry source context (`QR_SCAN` or `MANUAL_ENTRY`) | `201`: Donation identifier, server-recorded time, accepted location/count/category, `recorded: true`, `replay: false`. A retry of the same key and same logical request returns `200` with the same Donation identifier and `replay: true` | 3a: `422 VALIDATION_FAILED` with field-level errors. Same key/different logical request: `409 SUBMISSION_KEY_REUSED`. 4a: `503 SAVE_NOT_CONFIRMED`; never return success unless a committed record is found. Malformed request: shared `400` response |
 
 `submissionKey` identifies one user's submit action, not a naturally unique donation. DON must not deduplicate on location, count, category, timestamp, browser, or network address: two real donors can legitimately submit identical donations. The success response echoes accepted values so the interface can confirm the stored record rather than merely confirm receipt of a request.
 
@@ -158,7 +158,7 @@ _Record only decisions whose alternatives could not safely be recovered from cod
 
 **1. Duplicate safety uses one stable submission key plus a database uniqueness constraint.** Choose: the client creates an opaque key for a new form submission, sends it on every retry, and the database uniquely constrains it. The service checks for an existing key before time-sensitive active-location validation, so a retry can confirm a record after the location closes. A repeated key with the same logical donation returns the existing record; the same key with different location, item count, category, or source is a conflict. The insert still handles a concurrent unique-key conflict by loading and comparing the winning record. Reject: comparing donation fields or timestamps, because separate legitimate drop-offs can have identical values; reject: relying only on a disabled button, because concurrent requests and interrupted responses still occur. This realizes extension 4b, `FR-SAVE-duplicate-submission`, and `ROB-duplicate-submission` under concurrency.
 
-**2. Validation precedes persistence and is authoritative on the server.** Choose: validate required fields, positive whole-number count, configured category, and active location before opening the Donation insert transaction; client checks exist only for immediate feedback. Reject: trusting the browser or storing a record to validate later, because direct requests could bypass the form and invalid data would affect dashboard totals (`FR-VAL-server-validation`, `ROB-invalid-input`).
+**2. Validation precedes persistence and is authoritative on the server.** Choose: validate required fields, non-negative whole-number count, configured category, and active location before opening the Donation insert transaction; client checks exist only for immediate feedback. Reject: trusting the browser or storing a record to validate later, because direct requests could bypass the form and invalid data would affect dashboard totals (`FR-VAL-server-validation`, `ROB-invalid-input`).
 
 **3. A Donation is committed atomically before success is reported.** Choose: insert the record in the smallest transaction and return success only after commit. On an indeterminate write outcome, look up the same submission key before responding; if persistence cannot be confirmed, return `SAVE_NOT_CONFIRMED` and preserve the retry state. Reject: returning success when the request reaches the server, and reject: inserting a second record on retry. This satisfies `FR-SAVE-confirmed-success` and `FR-SAVE-unknown-outcome`.
 
@@ -186,7 +186,7 @@ erDiagram
     }
 ```
 
-`DONATION_RECORD.submission_key` has a unique constraint. `location_id` references the authoritative location identifier; the service also checks current active status because a foreign key alone cannot prove the location is accepting submissions. `item_count > 0` is protected by service validation and, where the selected database supports it, a check constraint. `recorded_at` is stored as a UTC instant. No mutable duplicate counter, donor table, per-item table, or status column is added.
+`DONATION_RECORD.submission_key` has a unique constraint. `location_id` references the authoritative location identifier; the service also checks current active status because a foreign key alone cannot prove the location is accepting submissions. `item_count >= 0` is protected by service validation and a SQL Server check constraint. `recorded_at` is stored as a UTC instant. No mutable duplicate counter, donor table, per-item table, or status column is added.
 
 The initial migration creates `donation_record` and indexes `location_id, recorded_at` for event/location dashboard aggregation. The category's allowed values come from the same configured set returned by `GET /api/donation-options`; implementation must not allow front-end and server lists to drift.
 
@@ -209,10 +209,10 @@ _One row covers the main flow and every extension, including concurrency and fai
 
 | Use case, flow | Level | Asserts |
 |---|---|---|
-| UC-DON-log-donation main | Integration | A public valid request returns `201`; exactly one Donation is committed with the requested active location, positive item count, optional configured category/source, and server time; no donor account is created |
+| UC-DON-log-donation main | Integration | A public valid request returns `201`; exactly one Donation is committed with the requested active location, non-negative item count, optional configured category/source, and server time; no donor account is created |
 | UC-DON-log-donation step 2 | Integration | Donation options contain only locations currently accepting activity and the configured fixed category set |
 | UC-DON-log-donation 2a | Unit (front end) | Category is optional, displayed as click-box choices rather than free text, and a selected value is submitted |
-| UC-DON-log-donation 3a, missing/invalid count | Integration | Missing, zero, negative, fractional, or nonnumeric item count returns `422` naming `itemCount`; nothing is written |
+| UC-DON-log-donation 3a, missing/invalid count | Integration | Missing, negative, fractional, or nonnumeric item count returns `422` naming `itemCount`; zero is accepted |
 | UC-DON-log-donation 3a, location | Integration | Missing, unknown, closed, or inactive location returns `422` naming `locationId`; nothing is written |
 | UC-DON-log-donation 3a, category | Integration | A category outside the configured set returns `422` naming `category`; nothing is written |
 | UC-DON-log-donation 3a, preserve input | Unit (front end) | After one field fails, valid location/count/category values remain and the same submission key is retained |
@@ -238,8 +238,8 @@ None. This design implements the existing `DON -> Administration` dependency for
 _Record unsettled matters, who can settle them, and accepted risks. Client questions also belong in `OPEN-ISSUES.md`._
 
 1. **The fixed category values are not final.** The client confirmed the 5–6-option shape but not the final list. The list must be deployment/application configuration shared by options and validation, not hard-coded independently in the UI and API. The product owner/client must approve it before implementation is accepted.
-2. **`BR-donation-ease` is cited by `UC-DON-log-donation` but is not defined in `business-rules.md`.** The existing `USE-donation-completion` and `UI-donation-form` capture measurable low-friction behavior, but the owning requirements documents must either define `BR-donation-ease` or remove that dangling citation before this design is approved.
-3. **The SRS data dictionary says `DonationRecord.itemCount` may be zero, while the use case requires a positive whole number.** This design follows the use case and architecture section 8.2.5 (`item_count > 0`). The SRS owner should correct the data dictionary so future implementers do not weaken validation.
+2. **`BR-donation-ease` resolved 2026-11-11.** The business-rules record now defines the approved no-sign-in donation flow, required location and non-negative whole-number count, and optional category. `USE-donation-completion` and `UI-donation-form` continue to provide the measurable usability requirements.
+3. **Donation item-count minimum resolved 2026-11-11.** The SRS data dictionary, use case, and architecture section 8.2.5 allow zero and require a non-negative whole number (`item_count >= 0`).
 4. **Location acceptance semantics are shared with ADM.** DON needs an authoritative query that answers whether a location accepts donation activity now. ADM's design must provide that contract when location configuration is implemented; DON must not infer it from a stale list.
 5. **Browser-close persistence remains intentionally unresolved.** `ROB-connectivity-loss` requires preserving form values while the interface stays open and explicitly leaves survival across closing/reopening to the team. This design requires in-memory form retention and stable retry keys for the open interface only; it does not add local durable storage without a team privacy decision.
 

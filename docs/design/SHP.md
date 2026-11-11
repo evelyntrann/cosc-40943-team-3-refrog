@@ -4,7 +4,7 @@
 **Team:** 03
 **Area:** `UC-SHP`
 
-> **Realizes:** `UC-SHP-log-item-taken`; proposed `FR-SHP-estimated-weight` (**⚠ not yet in the specification**, see [Changes to the specification](#changes-to-the-specification-team-decision-2026-10-16))
+> **Realizes:** `UC-SHP-log-item-taken`; `FR-SHP-estimated-weight`
 > **Depends on:** Business rules `BR-shopping-activity-recorded`, `BR-free-shopping`, `BR-shopper-tcu-affiliation`, `BR-shopper-verification`, `BR-shopping-abuse-review`, `BR-event-schedule`, `BR-event-in-person`. Cross-cutting requirements `FR-AUTH-enforce-permissions`, `FR-AUTH-affiliation-from-signin`, `FR-VAL-server-validation`, `FR-VAL-field-feedback`, `FR-VAL-preserve-input`, `FR-SAVE-confirmed-success`, `FR-SAVE-unknown-outcome`, `FR-SAVE-duplicate-submission`. Quality attributes `ROB-duplicate-submission`, `ROB-connectivity-loss`, `ROB-invalid-input`, `ROB-submission-status`, `PER-form-submission`, `SEC-authentication-provider`, `SEC-role-based-access`, `SEC-least-privilege`, `USE-mobile-responsive`. User interface `UI-shopping-form`.
 > **See:** [use case](../requirements/use-cases.md#uc-shp-log-item-taken-record-items-taken-while-shopping), [specification](../requirements/software-requirements-specification.md), [business rules](../requirements/business-rules.md), [architecture-of-record](architectural-design.md)
 > **Designed against:** `d8893c1` (local `main`). No application code exists at this commit, so every class below is new.
@@ -51,7 +51,7 @@ Shopping also reads the shared **item category list with each category's estimat
 Shopping writes `ShoppingVisit` records. The Administration dashboard (`UC-ADM-view-dashboard`) reads visit counts and the event's estimated total weight, and Shopping-Abuse Monitoring (`UC-ABU-review-alert`) will read the same records later. Category and count together are the signal `OI-11` points at ("20 mirrors would raise a red flag"), but SHP itself flags nothing (`BR-shopping-abuse-review`). Every visit is free, so nothing is priced or charged (`BR-free-shopping`, `LOC-currency-not-applicable`).
 
 > [!IMPORTANT]
-> **The weight feature is confirmed but not yet in the specification.** Wendy confirmed she wants the estimated weight of items taken (record the date of that confirmation in `OI-18`). It still does not appear in the use case (where category is optional extension 2a), in the SRS, or in a business rule. See [Changes to the specification](#changes-to-the-specification-team-decision-2026-10-16) for what to change before this design is approved.
+> **The weight feature is confirmed and specified.** `UC-SHP-log-item-taken`, `FR-SHP-estimated-weight`, SRS §7.2, the reporting requirements, and `UI-shopping-form` now require the server-calculated estimate. The final categories, weights, evidence, unit, and rounding remain unresolved under `OI-26`.
 
 This design proposes changes to the architecture-of-record; see [Changes to the architecture-of-record](#changes-to-the-architecture-of-record).
 
@@ -64,9 +64,9 @@ _**If your repository has no code for this area yet**, which is the normal case 
 ```mermaid
 classDiagram
     direction LR
-    class ShoppingController {
+    class ShoppingEndpoints {
         <<new>>
-        +recordVisit(RecordVisitRequest) Response
+        +MapShoppingEndpoints(RouteGroupBuilder)
     }
     class ShoppingService {
         <<new>>
@@ -90,31 +90,31 @@ classDiagram
     }
     class AffiliationService {
         <<reused, idv>>
-        +isVerified(userId) boolean
+        +checkShoppingEligibility(userId) EligibilityResult
     }
     class LocationService {
         <<reused, administration>>
         +findActiveLocation(locationId) Location
         +currentEvent() Event
     }
-    class Clock {
+    class TimeProvider {
         <<reused, cross-cutting 8.2.2>>
-        +now() Instant
+        +GetUtcNow() DateTimeOffset
     }
     class DashboardService {
         <<future, administration>>
     }
-    ShoppingController --> ShoppingService
+    ShoppingEndpoints --> ShoppingService
     ShoppingService --> ShoppingVisitRepository
     ShoppingService --> WeightEstimator
     ShoppingService --> CategoryService
     ShoppingService --> AffiliationService
     ShoppingService --> LocationService
-    ShoppingService --> Clock
+    ShoppingService --> TimeProvider
     DashboardService --> ShoppingService
 ```
 
-- `shopping/ShoppingController` (new): the HTTP entry point. It checks only the request's shape and takes the shopper's identity from the session (`FR-AUTH-enforce-permissions`), never from the request body.
+- `src/backend/ReFrog.Server/Features/Shopping/ShoppingEndpoints.cs` (new): the ASP.NET Core HTTP entry point. It checks only the request's shape and takes the shopper's identity from the session (`FR-AUTH-enforce-permissions`), never from the request body.
 - `shopping/ShoppingService` (new): checks, in order, that the shopper is affiliated, that the location is active, that the count is valid, that there is exactly one category per item, and that every category is active. It then either returns the stored visit for a repeated submission id, or asks `WeightEstimator` for the weight and saves the visit and its items in one transaction. It also gives Administration the event's estimated total weight.
 - `shopping/WeightEstimator` (new): the one place the estimate is calculated (the sum of each item's category weight). It is a pure function with no I/O, so the formula has one home and can be unit tested.
 - `shopping/ShoppingVisitRepository` (new): the only class that touches the `shopping_visit` and `shopping_visit_item` tables. It totals an event's weight with one sum query.
@@ -122,10 +122,9 @@ classDiagram
 - `idv/AffiliationService` (reused, but IDV is not built yet): called only through its service, never its repository. If IDV is not built when SHP is, SHP's build creates this one-method interface and IDV fills it in.
 - `administration/LocationService` (reused, but Administration is not built yet): same arrangement as `AffiliationService`.
 - `administration/DashboardService` (future, built with `UC-ADM-view-dashboard`): shown only to make clear that the dashboard calls `ShoppingService.estimatedWeightForEvent`. It does not read SHP's table directly.
-- `Clock` (cross-cutting, arch §8.2.2): injected so tests can fix the time.
+- .NET `TimeProvider` (cross-cutting, arch §8.2.2): injected so tests can fix the time.
 
-> [!WARNING]
-> **GUESS — needs team review: package layout.** The package and file paths (`shopping/`, `shared/`, `idv/`, `administration/`) and the class names are proposals only. The technology stack is still "not yet chosen" (arch §5.1, §8.2.4), and the architecture-of-record gives no layout convention yet. Once the stack is chosen, rename these to match its conventions and record that layout in arch §8.2.4.
+**Stack and source roots resolved.** SHP uses C# / ASP.NET Core, Blazor WebAssembly, Entity Framework Core, and Microsoft SQL Server under `KD-tcu-it-stack`. Server implementation belongs under `src/backend/ReFrog.Server/Features/Shopping`, shared API contracts under `src/backend/ReFrog.Shared`, and Blazor UI under `src/frontend/ReFrog.Client/Features/Shopping`, matching the existing solution. Class names other than the endpoint named above remain proposals for the SHP build-context review.
 
 > [!WARNING]
 > **GUESS — needs team review: who owns and edits the category weights.** This design stores categories and weights as **seed data in the database**, loaded by a migration. Changing a weight means a developer runs a new migration, and no screen exists for it, because no use case lets anyone edit categories. If administrators should edit weights themselves (`CO-nontechnical-administration` suggests they will want to), that needs a new use case such as `UC-ADM-manage-categories` and moves ownership of categories to Administration. Decide before Donation is designed, because Donation shares the list.
@@ -140,7 +139,7 @@ _[One sequence diagram per use case for its main success scenario, plus one for 
 sequenceDiagram
     actor S as Shopper
     participant WEB as Web Front End
-    participant SC as ShoppingController
+    participant SC as ShoppingEndpoints
     participant SS as ShoppingService
     participant AS as AffiliationService
     participant LS as LocationService
@@ -168,10 +167,10 @@ sequenceDiagram
         else new submission
             SS->>LS: findActiveLocation(locationId)
             SS->>CS: findActiveCategories()
-            alt count not a positive whole number, categories not one per item, a category unknown, or location not active (3a)
+            alt count not a non-negative whole number, categories not one per item, a category unknown, or location not active (3a)
                 SS-->>SC: refused, VALIDATION_FAILED naming the field
             else valid
-                SS->>WE: estimate(item categories) (FR-SHP-estimated-weight, proposed)
+                SS->>WE: estimate(item categories) (FR-SHP-estimated-weight)
                 WE-->>SS: sum of each item's category weight
                 SS->>R: save(visit with location, count, estimated weight, event, now, plus one item row per category pick) (step 4)
                 alt save fails (4a)
@@ -189,7 +188,7 @@ sequenceDiagram
 ```
 
 Notes on the diagram:
-- **2a, category, now required, one per item.** In the use case, category is an optional extension. Under the team decision, the shopper enters the number of items and then picks a category for each one (steps 2 and 3), so a visit with clothes and a lamp is one visit with two categories. The use case needs updating to match; see [Changes to the specification](#changes-to-the-specification-team-decision-2026-10-16).
+- **Category is required, one per item.** The shopper enters the number of items and then picks a category for each one (steps 2 and 3), so a visit with clothes and a lamp is one visit with two categories. A zero-item visit has an empty category list.
 - **3a, invalid input.** The front end may check the count and category too, for quicker feedback, but the server check is the one that counts (`FR-VAL-server-validation`, arch §8.2.5). The error names the field (`FR-VAL-field-feedback`), and the form keeps what was entered (`FR-VAL-preserve-input`).
 - **Weight is calculated on the backend only.** The client sends only `itemCount` and one category id per item, never a weight, so the estimate cannot be changed from the browser.
 - **4a, save failure.** The shopper never sees a confirmation unless the save is confirmed (`FR-SAVE-confirmed-success`), and no weight is counted for a failed save. If the response never arrives, the front end resends the **same** submission id. That returns either the stored visit or a real failure (`FR-SAVE-unknown-outcome`).
@@ -225,12 +224,11 @@ _[One row per endpoint, scheduled job, or message this area adds or changes, app
 | Endpoint or job | Caller (who may) | Request | Success | Errors, by extension |
 |---|---|---|---|---|
 | `GET /api/item-categories` **⚠ GUESS** (path; shared with Donation) | Any signed-in user. **⚠ GUESS:** Donation needs it without sign-in (`OI-4`), so it may need to be public. | None | `200`: active categories, each with its id and display name, in display order. Weights are not needed by the form. | Not signed in (if sign-in is required): `401` |
-| `POST /api/shopping-visits` **⚠ GUESS** (path) | A signed-in shopper, recording for themselves only. The shopper comes from the session, never from the body; a `shopperId` in the body is ignored. | `submissionId` (generated by the client, one per form fill, reused on retry), `locationId`, `itemCount`, `itemCategoryIds` (required, one category id per item, so exactly `itemCount` entries; repeats allowed). **No weight is accepted from the client.** | `201`: visit id, location, item count, the categories, estimated weight with its unit, recorded time. Repeated `submissionId` (4b): `200` with the **already stored** visit, nothing saved or weighed again. | Not signed in: `401`. PRE-1 not verified: `403 AFFILIATION_NOT_VERIFIED`. 3a: a count that is not a positive whole number, a number of categories that does not match the count, an unknown or retired category, or a missing, unknown, or inactive location: `422 VALIDATION_FAILED`, naming each failing field. 4a save failure: `503 NOT_RECORDED`, saying nothing was recorded. All codes **⚠ GUESS** |
+| `POST /api/shopping-visits` **⚠ GUESS** (path) | A signed-in shopper, recording for themselves only. The shopper comes from the session, never from the body; a `shopperId` in the body is ignored. | `submissionId` (generated by the client, one per form fill, reused on retry), `locationId`, `itemCount`, `itemCategoryIds` (required, one category id per item, so exactly `itemCount` entries; repeats allowed). **No weight or verification method is accepted from the client.** | `201`: visit id, location, item count, the categories, server-derived verification method, estimated weight with its unit, recorded time. Repeated `submissionId` (4b): `200` with the **already stored** visit, nothing saved or weighed again. | Not signed in: `401`. PRE-1 not verified: `403 AFFILIATION_NOT_VERIFIED`. 3a: a count that is not a non-negative whole number, a number of categories that does not match the count, an unknown or retired category, or a missing, unknown, or inactive location: `422 VALIDATION_FAILED`, naming each failing field. 4a save failure: `503 NOT_RECORDED`, saying nothing was recorded. All codes **⚠ GUESS** |
 | `GET` active locations (owned by `ADM` / `LOC`, **not added here**) | Any user | None | List of active locations, used to fill the location picker | Owned by that area's design. This row is listed only so the front end knows SHP depends on it. |
 | Event estimated weight: `ShoppingService.estimatedWeightForEvent(eventId)`, an **in-process call, not an HTTP endpoint** | Administration's dashboard only | Event id | Total estimated weight with its unit; zero if the event has no visits | None from SHP. The dashboard shows "unavailable" if the call fails (`FR-DISPLAY-unavailable-data`) |
 
-> [!WARNING]
-> **GUESS — needs team review: the error shape and status codes.** Arch §8.2.1 and §8.2.3 say errors must separate validation, authorization, unavailable-service, and unexpected failures, but they do not fix a JSON shape or the status codes yet. The codes above (`401`, `403`, `422`, `503`) and the error names are placeholders. When §8.2.3 fixes the shape, update this table to match. Do not invent a shape just for SHP.
+**Shared API contract resolved.** Every SHP response uses the shared `ApiResponse<T>` contract from architecture §8.2.3 and `ReFrog.Contracts.Api`: exactly one of `data` or `error`, with error category `VALIDATION`, `AUTHORIZATION`, `UNAVAILABLE`, or `UNEXPECTED`, a stable code, safe message, optional field messages, and optional retry time. The status codes and stable SHP-specific codes in the table are part of this area contract and must be reviewed with the design before implementation.
 
 ## Key decisions
 
@@ -248,16 +246,15 @@ _A decision that affects the whole system rather than this area is an architectu
 
 **How a repeated submission is recognized.** **⚠ GUESS** (the team's call). The front end generates a `submissionId` when the form opens and sends the same id on every retry. The database enforces it as unique. A repeated id returns the stored visit, which covers 4b, `FR-SAVE-duplicate-submission`, `ROB-duplicate-submission`, and `FR-SAVE-unknown-outcome` with one mechanism, and it keeps the weight from being counted twice. Rejected: treating identical (shopper, location, count, categories) within a few minutes as a duplicate, because a shopper who really makes two trips with the same items would lose a record, and `BR-shopping-activity-recorded` requires every visit recorded. If DON and VOL adopt the same mechanism, it should move to arch §8.2.8 as a system-wide convention.
 
-**Where affiliation is enforced.** On the server, on every submission, through `AffiliationService.isVerified`. Rejected: relying on `UI-shopping-form` hiding the form from unverified shoppers. The browser is outside the trust boundary (arch §8.1), so a hidden form only advises, and `BR-shopper-tcu-affiliation` would be unenforced against a direct request.
+**Where eligibility is enforced and recorded.** On every submission, the server obtains the current eligibility result and its basis from Identity Verification. The saved visit records `TCU_EMAIL` or `VOLUNTEER_ROLE` as `verification_method`; the browser cannot supply or override it. Rejected: relying on `UI-shopping-form` hiding the form from ineligible shoppers or accepting a claimed basis from the request. The browser is outside the trust boundary (arch §8.1), so either approach would leave `BR-shopper-tcu-affiliation` unenforced against a direct request and make the saved basis untrustworthy.
 
 **Verification lasts per shopper, not per visit.** SHP asks whether the shopper has *ever* completed the TCU email check, following `UC-IDV-verify-affiliation` ("once per shopper, not once per visit") and `FR-AUTH-affiliation-from-signin`. Rejected: requiring a new check on each visit, which would contradict both.
 
-> [!WARNING]
-> **GUESS — needs team review: PRE-1 wording conflict.** `UC-SHP-log-item-taken` PRE-1 says affiliation is verified "**for this visit**", but IDV says verification happens once and persists. This design follows IDV. The use case author should change PRE-1 to "The shopper's TCU affiliation has been verified (`UC-IDV-verify-affiliation`)". The in-person volunteer glance at the verified screen (`BR-shopper-verification`) happens at the location and is not recorded by SHP.
+**PRE-1 wording resolved.** `UC-SHP-log-item-taken` now requires a signed-in account with either persisted TCU email verification or an active administrator-granted volunteer role, matching `FR-AUTH-shopping-eligibility` and IDV's persisted verification behavior.
 
 **Every visit stores the shopper's id.** Each `ShoppingVisit` keeps `shopperId` so Shopping-Abuse Monitoring can later find repeat visits and category-and-quantity patterns (`BR-shopping-abuse-review`, `OI-11`, SRS §7.3.4). SHP itself flags nothing. Rejected: anonymous visits, as today's Google Form keeps them, because then `UC-ABU-review-alert` could never be built without changing the data. The trade-off is that SHP keeps a person-linked record, so it falls under `SEC-least-privilege`: only that shopper and administrators may read it. How long it is kept is `OI-6`.
 
-**The event and the time are set on the server.** `eventId` comes from `LocationService.currentEvent()`, and `recordedAt` comes from the injected `Clock` (arch §8.2.2, `America/Chicago` for display). Rejected: taking either from the client, because a phone's clock and a stale page would put visits, and their weight, in the wrong event or day, and the dashboard counts visits by day.
+**The event and the time are set on the server.** `eventId` comes from `LocationService.currentEvent()`, and `recordedAt` comes from injected .NET `TimeProvider` (arch §8.2.2, `America/Chicago` for display). Rejected: taking either from the client, because a phone's clock and a stale page would put visits, and their weight, in the wrong event or day, and the dashboard counts visits by day.
 
 ## Data model
 
@@ -282,7 +279,8 @@ erDiagram
         id shopper_id
         id location_id
         id event_id
-        int item_count "at least 1"
+        int item_count "at least 0"
+        string verification_method "TCU_EMAIL or VOLUNTEER_ROLE"
         decimal estimated_weight "sum of its items' weights"
         datetime recorded_at
     }
@@ -296,7 +294,7 @@ erDiagram
 | Table | Column | Meaning | Constraint |
 |---|---|---|---|
 | `item_category` (shared with Donation) | `id`, `name` | One category from the fixed list | Required. Name unique |
-| | `estimated_weight` | Estimated weight of **one** item in this category | Required, greater than 0. Unit **⚠ GUESS** (pounds) |
+| | `estimated_weight` | Estimated weight of **one** item in this category | Required, greater than 0. Unit unresolved under `OI-26` |
 | | `active` | Whether shoppers and donors can pick it | Required. A retired category stays so old visits still resolve |
 | | `display_order` | Order in the picker | Required |
 | `shopping_visit` | `id` | Visit identifier (`shoppingRecordId`) | Primary key |
@@ -304,7 +302,8 @@ erDiagram
 | | `shopper_id` | The signed-in shopper | Required, references the user account |
 | | `location_id` | Where the items were taken (`BR-shopping-activity-recorded`) | Required, references an active location at save time |
 | | `event_id` | The event this visit belongs to | Required, set on the server, indexed for the event total |
-| | `item_count` | Number of items taken (`quantityTaken`, `BR-shopping-activity-recorded`) | Required, whole number ≥ 1, equal to the number of its item rows |
+| | `item_count` | Number of items taken (`quantityTaken`, `BR-shopping-activity-recorded`) | Required, whole number ≥ 0, equal to the number of its item rows |
+| | `verification_method` | Eligibility basis at submission time | Required; server-derived `TCU_EMAIL` or `VOLUNTEER_ROLE`, never accepted from the client |
 | | `estimated_weight` | Sum of its items' `weight` | Required, calculated by the backend, never sent by the client |
 | | `recorded_at` | When it was saved (`shoppingDateTime`) | Required, set by the server clock |
 | `shopping_visit_item` | `visit_id` | The visit this item belongs to | Required |
@@ -313,19 +312,19 @@ erDiagram
 
 **An event's estimated weight** is calculated, not stored: the sum of `estimated_weight` over every visit in the event.
 
-The migration that adds these tables, and the one that seeds the categories and their weights, come with the first SHP pull request. They cannot be named until the stack is chosen.
+The EF Core migration that adds these SQL Server tables, and the migration or approved seed step that supplies categories and weights, come with the first SHP pull request. Their generated names are assigned during that implementation.
 
 > [!WARNING]
-> **GUESS — needs team review: the category weights and unit.** This design has no actual weight values. Someone has to choose an estimated weight for each category and say where it came from (a weighed sample, a published average, Wendy's estimate). Under `business-rules.md`, a weight the client supplies is a **computation rule** that needs a source. A weight the team picks is a design choice and belongs in the specification. The unit is assumed to be **pounds**. Also decide on rounding: this design keeps decimals and leaves rounding to display.
+> **OPEN — `OI-26`: category weights and unit.** This design has no approved weight values, source, unit, or rounding rule. The client and ReFrog committee must approve them; the implementation must not assume pounds or invent values.
 
 > [!WARNING]
-> **GUESS — needs team review: the category list.** The categories are shared with DON, but the client has not finalized the list ("5–6 click-box options, e.g., mattress toppers, headboards, large furniture"). SRS §7.2's `Item.category` lists a different set (furniture, appliance, clothing, linens, household goods, other). Each category now needs a weight, so a vague one like "other" or "household goods" will make the estimate rough. Confirm the list with Wendy.
+> **OPEN — `OI-26`: category list.** The categories are shared with DON, but the client has not finalized the list ("5–6 click-box options, e.g., mattress toppers, headboards, large furniture"). Each category needs an approved weight, source, unit, and rounding rule.
 
 > [!WARNING]
 > **GUESS — needs team review: the specification disagrees with this design.**
-> - **Item count.** SRS §7.2 gives `ShoppingRecord.quantityTaken` as "0 or greater". The use case (3a) and `FR-VAL-server-validation` reject zero. This design follows the use case (≥ 1).
-> - **`verificationMethod`.** SRS §7.2 requires this field (visual ID check / digital check / admin override). SHP only accepts digitally verified shoppers, so the value would always be "digital". This design **leaves the column out**. Add it back only if the 4a2 volunteer fallback or a visual-ID fallback ever records visits in the app.
-> - **Category and weight.** SRS §7.2's `ShoppingRecord` has no categories or estimated weight, and `Item` has no weight. These need adding, along with the fact that one visit has a category per item.
+> - **Item count resolved 2026-11-11.** SRS §7.2 now matches the use case (3a), `FR-VAL-server-validation`, and this design: `ShoppingRecord.quantityTaken` must be a non-negative whole number (≥ 0).
+> - **`verificationMethod` resolved 2026-11-11.** The design stores the authoritative eligibility basis returned by Identity Verification: `TCU_EMAIL` or `VOLUNTEER_ROLE`. The server derives it for every accepted visit; the browser does not send it.
+> - **Category and weight resolved in the specification 2026-11-11.** SRS §7.2 and `FR-SHP-estimated-weight` require one category per item, stored weight snapshots, and a server-calculated visit total. The actual category values, weights, source, unit, and rounding remain open under `OI-26`.
 
 ## Reuse & cross-cutting
 
@@ -337,7 +336,7 @@ _[Which existing services, components, and conventions this area uses rather tha
 - **Item categories and weights:** `CategoryService` and the `item_category` table, shared with Donation. **⚠ GUESS:** whether Donation also records weight (for a "weight donated" total) is not decided. The shared table supports it either way.
 - **Error handling:** the shared application error handler (arch §8.2.1 Error handling), so a 4a failure reports "not recorded" and exposes no internal details.
 - **Time and time zones:** the injected clock and the stored timestamp format (arch §8.2.2 Time and time zones).
-- **API conventions:** response and error shape (arch §8.2.3 API conventions). See the error-shape GUESS under API contract.
+- **API conventions:** the shared `ApiResponse<T>` success/error envelope and categories from arch §8.2.3 and `ReFrog.Contracts.Api`.
 - **Validation:** server-side and authoritative, with feedback naming the field (arch §8.2.5 Validation).
 - **Logging:** log failed saves and refusals with the visit's `submissionId`, but no TCU email or other unneeded personal data (arch §8.2.7 Logging, `SEC-affiliation-data`).
 - **Persistence and concurrency:** one transaction per visit, covering the visit and its item rows, and a failed write is never reported as saved (arch §8.2.8 Persistence and concurrency). Event totals are read by summing, so there is no shared counter to fight over.
@@ -350,15 +349,16 @@ _[One row per flow: the main success scenario and **every** extension of every u
 
 | Use case, flow | Level | Asserts |
 |---|---|---|
-| UC-SHP-log-item-taken main | integration | A verified shopper's visit with an active location, a count of 3, and categories A, A, B is saved once, with the right shopper, location, event, count, three item rows, and estimated weight, and `201` is returned |
+| UC-SHP-log-item-taken main | integration | A TCU-email-verified shopper's visit with an active location, a count of 3, and categories A, A, B is saved once, with the right shopper, location, event, count, `TCU_EMAIL` verification method, three item rows, and estimated weight, and `201` is returned |
+| UC-SHP-log-item-taken volunteer eligibility | integration | An eligible shopper whose access comes from an approved volunteer role is saved with `VOLUNTEER_ROLE`; a verification-method value supplied by the client is ignored or rejected |
 | UC-SHP-log-item-taken 2a, categories don't match count | unit | A count of 3 with 2 categories, or with 4, is refused, naming `itemCategoryIds`, and nothing is saved |
 | UC-SHP-log-item-taken 2a, bad category | unit | A visit where any item has an unknown or retired category is refused, naming `itemCategoryIds`, and nothing is saved |
 | UC-SHP-log-item-taken 3a, negative | unit | A count of −1 is refused, naming `itemCount`, and nothing is saved |
-| UC-SHP-log-item-taken 3a, zero | unit | A count of 0 is refused, naming `itemCount`, and nothing is saved |
+| UC-SHP-log-item-taken, zero | unit | A count of 0 is accepted with an empty category list and records a zero-item visit |
 | UC-SHP-log-item-taken 3a, non-numeric | unit | A count of `"abc"` or `2.5` is refused, naming `itemCount`, and nothing is saved |
 | UC-SHP-log-item-taken 3a, bypassing the interface | integration | An invalid count, missing category, or missing location sent straight to the endpoint is refused and nothing is saved (`FR-VAL-server-validation` verification) |
 | Location not active | integration | A visit for an unknown or closed location is refused, naming `locationId`, and nothing is saved |
-| Weight estimate | unit | With category A at 2.5 and B at 10.0 per item, items A, A, B give an estimated weight of 15.0 (`WeightEstimator`, `FR-SHP-estimated-weight` proposed) |
+| Weight estimate | unit | With category A at 2.5 and B at 10.0 per item, items A, A, B give an estimated weight of 15.0 (`WeightEstimator`, `FR-SHP-estimated-weight`) |
 | Weight from the client ignored | integration | A request that includes a weight field is saved with the backend-calculated weight, not the client's |
 | Weight kept at save time | integration | After a visit is saved, changing category A's weight does not change that visit's weight or the event total for it |
 | Event total | integration | Three visits across two locations in one event, plus one visit in another event, give the first event's total as the sum of exactly its three visits' weights |
@@ -388,22 +388,9 @@ _[Designing an area against real code is when the architecture's guesses meet re
 
 ## Changes to the specification (team decision, 2026-10-16)
 
-The template says that what the team knew but the agent could not is context the specification is missing. Requiring a category and estimating weight is that kind of context, so these changes belong in the requirements documents, not only here. **None of them is made yet.**
+Completed 2026-11-11. `UC-SHP-log-item-taken`, `FR-SHP-estimated-weight`, SRS §7.2, the activity reports, `UI-shopping-form`, and `UI-admin-dashboard` now consistently require one category per item, stored category-weight snapshots, a server-calculated visit total, and reported event totals. A zero-item visit has no item categories and a zero estimated weight.
 
-> [!WARNING]
-> **GUESS — needs team review: proposed specification changes.**
-> - **`use-cases.md`, `UC-SHP-log-item-taken`:**
->   - Move category from optional extension 2a into steps 2 and 3: the shopper enters the number of items, then a category for each item.
->   - Add "categories missing or not one per item" to 3a.
->   - Add the estimated weight to POST-1.
->   - Change `category` in Associated Information from Optional to Required.
->   - Add `estimated weight` as a derived field.
-> - **`software-requirements-specification.md` §5.2:** add a candidate **`FR-SHP-estimated-weight`**. For example: "When a shopping visit is recorded, the system shall calculate its estimated weight as the sum of the configured estimated weight of each item's selected category, and shall report the event's estimated total weight as the sum over its visits." Verification: the weight-estimate and event-total test rows above.
-> - **SRS §7.2:** add `category` and `estimatedWeight` to `ShoppingRecord`, add `estimatedWeight` to `Item.category`, and fix `quantityTaken` to ≥ 1.
-> - **SRS §7.3 and `UI-admin-dashboard`:** add the event's estimated weight taken to the summary report and dashboard.
-> - **`UI-shopping-form`:** category becomes required.
-> - **`business-rules.md`:** only if Wendy supplies the weights. Then they become a computation rule with her as the source (for example `BR-category-estimated-weight`). If the team picks them, they stay in the specification and no rule is added.
-> - **`OPEN-ISSUES.md`:** `OI-18` is partly answered: Wendy confirmed she wants the estimate. The per-category weights and unit are still open.
+The final category list, per-category weight values, supporting evidence, measurement unit, and rounding rule remain open under `OI-26`. Ownership and editing of those configured values remain open under `OI-20`. No implementation may invent either set of decisions.
 
 ## Open questions & risks
 
@@ -412,7 +399,7 @@ _[What this design could not settle and who can, and what could go wrong that yo
 | # | Question or risk | Current guess in this design | Who can answer | Could a wrong guess break a requirement? |
 |---|---|---|---|---|
 | 1 | ~~Does the client want the weight estimate?~~ **Answered:** yes, Wendy confirmed it. Whether she has weights per category is question 2 | Build it | Answered by Wendy | — |
-| 2 | What is each category's estimated weight, where does it come from, and in what unit? | No values yet; pounds; decimals kept | Team or Wendy (see the business-rule note) | Yes: wrong weights make the reported total wrong |
+| 2 | What is each category's estimated weight, where does it come from, and in what unit? (`OI-26`) | No values, source, unit, or rounding rule assumed | Client: Wendy / ReFrog committee | Yes: wrong weights make the reported total wrong |
 | 3 | Who maintains categories and weights: developers through seed data, or administrators through a screen? | Seed data; no admin screen | Team, then Wendy | Yes, for `CO-nontechnical-administration`, if admins must change weights mid-event |
 | 4 | ~~What does a shopper who took items from several categories do?~~ **Answered:** one visit, a category per item | Request carries `itemCount` plus one category id per item; one `shopping_visit_item` row per item. **⚠ GUESS:** the exact form, and a shortcut for large counts | Team (form design) | Low: the API stays the same whatever the form looks like |
 | 5 | Should correcting a weight recalculate past visits? | No; each visit keeps the weight it was saved with | Team | Low, if the reporting purpose is understood |
@@ -422,13 +409,13 @@ _[What this design could not settle and who can, and what could go wrong that yo
 | 9 | How is the 4a2 "report to a volunteer" fallback recorded? | Outside the app; no SHP endpoint, so those visits are missing from the weight total | Team, then Wendy if it should be in the app | Yes, if those visits must reach the dashboard and total |
 | 10 | What happens when a shopper who is not verified submits? | `403 AFFILIATION_NOT_VERIFIED`, and the shopper is sent to IDV | Use case author (add an extension) | No: the refusal itself is required by `BR-shopper-tcu-affiliation` |
 | 11 | PRE-1 says "for this visit"; IDV says once per shopper | Once per shopper | Use case author | Low: following IDV matches the client's stated intent |
-| 12 | Error JSON shape and status codes | `401` / `403` / `422` / `503` with named codes | Team, via arch §8.2.3 | Yes: the front end and back end must agree |
+| 12 | **Shared error envelope resolved; SHP status/code mapping requires design review.** | Shared `ApiResponse<T>` with `VALIDATION`, `AUTHORIZATION`, `UNAVAILABLE`, or `UNEXPECTED`; proposed `401` / `403` / `422` / `503` mappings above | Team, in the SHP build-context review | Yes: the front end and back end must agree |
 | 13 | How repeated submissions are recognized | A client-generated `submissionId`, unique in the database | Team | Yes: `FR-SAVE-duplicate-submission`, and the weight would be counted twice |
-| 14 | SRS §7.2 allows a count of 0 and lacks category and weight | ≥ 1; category and weight added | Team (update the SRS) | No: following the use case is stricter |
-| 15 | SRS §7.2 requires `verificationMethod` | Column left out | Team (update the SRS) | Low, unless a non-digital fallback is added |
+| 14 | **Count resolved 2026-11-11; category and weight remain open.** SRS §7.2 and the use case allow a non-negative whole-number count; category and weight fields still require alignment | Count ≥ 0; category and weight added in this design | Team (update the SRS for category and weight) | Yes for category and weight reporting |
+| 15 | **`verificationMethod` resolved 2026-11-11.** | Store server-derived `TCU_EMAIL` or `VOLUNTEER_ROLE` on every accepted visit | Answered by team | — |
 | 16 | The category list is not final, and SRS and the use case list differ | One shared `item_category` table, list to be confirmed | Client: Wendy | Yes now: category is required and drives the weight |
 | 17 | Does the category endpoint need to be public for Donation? | Signed-in only for SHP; Donation may need it public | Team, when Donation is designed | No, for SHP |
-| 18 | Package layout and class names | `shopping/`, `shared/`, `idv/`, `administration/` | Team, once the stack is chosen (arch §5.1, §8.2.4) | No |
+| 18 | **Stack and source roots resolved; remaining class names are proposals.** | .NET solution roots and `Features/Shopping` paths recorded above | Team, in the SHP build-context review | No |
 | 19 | IDV and ADM are not built yet | SHP builds against their one-method interfaces | Team (build order) | No, if the interfaces are kept |
 | 20 | **Risk:** outdoor locations with poor connectivity (`ROB-connectivity-loss`, vision §3.2) | The form keeps values and retries with the same `submissionId`; **no offline queue** | Team; revisit after the first event | Possibly: if signal is too poor to submit at all, visits and their weight are lost unless the 4a2 fallback catches them |
 | 21 | **Risk:** a `PER-form-submission` two-second response at peak | One indexed lookup plus one insert per visit | Team, at load test | Unlikely at `SCA-event-capacity` volumes |

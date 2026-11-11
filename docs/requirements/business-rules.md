@@ -149,6 +149,8 @@ _Format each rule as a bold identifier, the rule in one sentence, then its sourc
   **Source:** Existing ReFrog Donation Form, obtained from Wendy Macias, September 11, 2026.
 - **`BR-donation-count-recorded`:** Each donation submission records the number of items donated.
   **Source:** Existing ReFrog Donation Form, obtained from Wendy Macias, September 11, 2026.
+- **`BR-donation-ease`:** A donor may record a donation without signing in by providing the receiving ReFrog location and a non-negative whole-number item count; selecting an item category is optional.
+  **Source:** Existing ReFrog Donation Form, obtained from Wendy Macias, September 11, 2026; client decision resolving `OI-4`, October 2, 2026.
 - **`BR-partner-pickup-priority`:** Donation partners receive eligible remaining items according to the event’s agreed pickup order and item priorities.
   **Source:** Current-process description in vision-and-scope.md §1.2. The exact priority order should be confirmed with Wellman Project, Trio, Archway, and ReFrog organizers.
 - **`BR-remaining-items-distributed`:** Usable items remaining after shopping are made available to ReFrog’s donation partners for pickup.

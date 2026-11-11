@@ -105,7 +105,7 @@ The application has six user classes. General sign-in uses the application's own
 | Donors | Donors are external event participants, typically students and sometimes their families. Their technical skill varies, and their use is brief at a ReFrog location when dropping off items; they require only low-privilege participation access. | View basic event and location information and record planned or completed donation information with minimal effort. |
 | Shoppers | Shoppers are TCU-affiliated event participants — students, faculty, staff, and sometimes volunteers — who use the system briefly while shopping in person. Their technical skill varies; they require low-privilege participation access, subject to the selected affiliation-verification method. | View event information, provide evidence of TCU affiliation by the method selected for the project, and record the items they take. |
 | TCU community visitors | TCU students, faculty, staff, and other interested community members are public-information users, not necessarily ReFrog participants. They may access the system occasionally from personal devices and require no privileged access. | View public event information, including locations, hours, and general guidance. |
-| Donation-recipient partners | The Wellman Project, TRIO, and Archway/Berry Good Buys are external organizations that collect remaining usable items near the end of the event. Their representatives would use the system occasionally for pickup coordination; their technical skill and privilege level have not yet been confirmed. | Potentially view pickup schedules, locations, and relevant event information. Direct application access and any partner-specific capabilities have not yet been confirmed. |
+| Donation-recipient partners | The Wellman Project, TRIO, and Archway/Berry Good Buys are external organizations that collect remaining usable items near the end of the event. They receive no account, role, partner portal, or partner-specific application access (`OI-3`, resolved 2026-10-02). | View the same basic public website information available to any unauthenticated visitor, such as event details, locations, hours, and general guidance. Pickup coordination remains outside the application through ReFrog administrators. |
 
 
 
@@ -138,15 +138,17 @@ _Examples:_
 **TCU-related constraints:**
 
 - _`CO-tcu-it-technology-stack`: The application shall use C# with ASP.NET Core, a Blazor progressive web application, and Microsoft SQL Server, as directed by TCU IT._
+- _`CO-tcu-database-deployment`: The project shall provide SQL Server scripts that allow TCU to create and update all required tables, views, and other database structures; production database deployment shall not depend on contractors receiving direct database access._
 - _`CO-version-control-workflow`: Project changes shall follow the branch, pull-request, and independent-review workflow defined in `docs/team-contract.md` §5 and `AGENTS.md`._
 - _`CO-nontechnical-administration`: The administrative interface shall be usable by ReFrog organizers without technical knowledge._
 - _`CO-tcu-it-approval`: The system shall not integrate with TCU identity services or other university systems until TCU IT approves the integration._
+- _`CO-tcu-security-scan`: The application shall not be implemented in production until TCU has analyzed the code and installed application with Nexpose or an equivalent security-scanning product and all identified security concerns have been fully resolved._
+- _`CO-tcu-code-ownership`: Source code and executables created specifically for TCU as part of this project shall become TCU property, and TCU may copy, reproduce, share, and reuse them; third-party components remain governed by their applicable licenses._
 - _`CO-tcu-accessibility`: The system shall conform to the accessibility standards required by TCU for student-facing software._
 - _`CO-tcu-data-governance`: The system shall collect, store, access, retain, and dispose of TCU-affiliation and participant data in accordance with TCU-approved privacy and data-governance requirements._
 - _`CO-approved-branding`: The system shall use only ReFrog and TCU branding materials approved by the applicable owners._
 - _`CO-operational-ownership`: Before the system is used for an operational ReFrog event, a designated owner shall assume responsibility for maintenance, service accounts, recurring costs, and ongoing support._
-- _`CO-azure-database-hosting`: The production database shall be hosted on Microsoft Azure using a TCU-approved account and configuration._
-- _`CO-tcu-application-hosting`: If TCU requires a TCU-managed deployment environment for the student-facing application, the production application shall be hosted on TCU-managed server infrastructure capable of supporting the anticipated scale of ReFrog participants._
+- _`CO-tcu-application-hosting`: EAS shall host the production ASP.NET Core application and its Microsoft SQL Server database on TCU-managed infrastructure (`OI-15`, resolved 2026-11-11)._
 
 _The constraint students forget: **who maintains this after you graduate, and what do they already know how to run?** If the answer is one person who knows Python, a Spring Boot service is a constraint violation nobody wrote down._
 
@@ -164,11 +166,10 @@ _Examples:_
 - _`AS-existing-program`: ReFrog will retain its existing in-person donation and shopping model, and the system will support that model without changing the physical event._
 - _`AS-participant-access`: Intended users will have access to a suitable personal device and sufficient connectivity to use the selected delivery channel at event locations._
 - _`DE-event-configuration`: Operation depends on ReFrog organizers confirming each event's dates, operating hours, locations, shift lengths, and staffing needs before volunteer registration opens._
-- _`DE-delivery-platform-decision`: Implementation depends on ReFrog confirming the selected delivery platform, because the current requirements do not finalize whether the application is a mobile app, website, or another solution._
-- _`DE-affiliation-verification`: Electronic TCU-affiliation verification depends on the client and TCU accepting a verification method and, if needed, granting approval for university resources or integrations._
-- _`DE-tcu-azure-hosting`: Production deployment depends on access to a TCU-approved Microsoft Azure account and configuration for the production database._
-- _`DE-operational-ownership`: Continued operation after the senior design team completes the project depends on EAP completing operational handoff and assuming maintenance responsibility (`OI-12`, resolved 2026-11-04)._
-- _`DE-eas-production-review`: Production launch depends on a pre-implementation/go-live review with EAS; the exact lead time represented by the meeting note "3-4 before we go live" remains open under `OI-24`._
+- _`DE-delivery-platform-decision`: Implementation shall use the resolved Blazor progressive web application delivery platform: browser-accessible without installation, optionally installable from the browser, and packaged with the ASP.NET Core application (`OI-1`, resolved 2026-10-02; `KD-tcu-it-stack`). No native mobile application or alternate front-end framework remains under consideration for this release._
+- _`DE-affiliation-verification`: Electronic TCU-affiliation verification shall use the resolved one-time code sent through the shared email adapter to an exact `tcu.edu` address (`OI-10`, resolved 2026-10-02). It requires the EAS-approved production email provider tracked by `OI-25` and does not require integration with a TCU identity service._
+- _`DE-operational-ownership`: Continued operation after the senior design team completes the project depends on EAS completing operational handoff and assuming maintenance responsibility (`OI-12`, resolved 2026-11-04)._
+- _`DE-eas-production-review`: Production launch depends on a pre-implementation/go-live review with EAS scheduled for early March 2027 (`OI-24`, resolved 2026-11-11); the exact meeting date may be coordinated without changing this dependency._
 - _`DE-spring-closeout-meetings`: Project closeout depends on holding one or two meetings with TCU IT before the team wraps up work in spring._
 
 ---
@@ -300,6 +301,15 @@ If current restriction state or eligibility cannot be established because requir
 **Verification of current shopping authorization:** Confirm a restricted email-verified account is denied, an unrestricted email-verified non-volunteer is accepted, and a role-only active volunteer is accepted. Confirm the next submission after revocation is denied without cancelling an already authorized operation. Simulate unavailable restriction and eligibility lookups: deny temporarily, offer retry, and retain saved verification. Confirm a successful eligibility path does not require the second source.
 
 **Source for the role requirements:** Team decision with Alexa Mercado, October 16, 2026, consistent with `BR-volunteer-role-approval` and `BR-shopper-verification`; not a recorded client approval. Role approval does not gate shift sign-up: a person without the role signs up as pending approval (`UC-VOL-signup` 5c).
+
+**`FR-SHP-estimated-weight`**
+
+For each accepted shopping visit, the system shall require one configured item category for each item in the visit, calculate the visit's estimated weight on the server as the sum of the configured per-item category weights, and store the category and weight used for each item together with the visit's total estimated weight. A zero-item visit shall use an empty category list and a total estimated weight of zero. The system shall not accept a weight supplied by the browser. Changing a configured category weight shall not silently change the stored weight of an earlier visit.
+
+**Verification:** Submit a visit containing items from categories with known configured weights and confirm the stored visit total equals their sum. Submit a client-supplied weight and confirm it is ignored. Change a category weight after saving a visit and confirm the earlier visit and event total remain unchanged. Submit a zero-item visit and confirm it stores no item categories and a zero estimated weight.
+
+**Source:** Team decision, October 16, 2026, and the client-confirmed estimated-weight feature recorded in `SHP.md`. Final category values, weights, source, unit, and rounding remain unresolved under `OI-26`.
+
 **`FR-AUTH-volunteer-lifecycle`**
 
 At or after the configured annual event end timestamp, evaluated using server time and the event’s America/Chicago time convention, the system shall expire volunteer privileges for that event. Each new annual event shall require administrator review and approval before volunteer access is renewed; renewal shall not be automatic. Explicitly revoked or expired volunteer accounts shall have general-information access only; retained TCU email verification shall not restore participation capabilities. The server shall enforce this restriction on subsequent protected requests, including requests made through an existing session. General information includes public event details, locations, hours, and guidance; restricted accounts shall not submit shopping or donation records, use volunteer operations, or perform administrative operations. Administrator renewal is the path to restored volunteer privileges; this requirement does not create a self-renewal capability.
@@ -325,7 +335,7 @@ When a user submits data for storage, the system shall validate required fields,
 
 If a submission fails validation, then the system shall identify which field failed and what correction is needed, rather than a generic error.
 
-**Verification:** Submit an invalid item count. The response names the item-count field and states the requirement (a positive whole number).
+**Verification:** Submit an invalid item count. The response names the item-count field and states the requirement (a non-negative whole number).
 
 **`FR-VAL-preserve-input`**
 
@@ -522,18 +532,21 @@ The following dictionary identifies the core business data the system must manag
 | DonationRecord | donationRecordId | String | Unique record identifier | Required. |
 |  | recordedDateTime | DateTime | Local time | Required; recorded at the time of drop-off. |
 |  | dropoffLocation / locationId | String | Existing DonationLocation.locationId | Required; each donation must be associated with the site of receipt. |
-|  | itemCount | Integer | 0 or greater | Required; must represent the number of items donated in the submission. |
+|  | itemCount | Integer | 0 or greater | Required; non-negative whole number representing the number of items donated in the submission. |
 |  | source | Enum | QR scan, manual entry, admin entry | Required; distinguishes how the donation was logged. |
 | Item | category / itemGroup | String | Furniture, appliance, clothing, linens, household goods, other | Required for category-level tracking; may be used for partner pickup prioritization. |
 |  | itemCount | Integer | 1 or greater | Required when item-level quantities are tracked. |
 |  | condition | Enum | usable, damaged, uncertain | Required when item quality is recorded; otherwise may default to usable if not assessed. |
+|  | estimatedWeight | Decimal | Greater than 0; unit per `OI-26` | Configured estimate for one item in the category; source, unit, and rounding require approval before production use. |
 | Shopper | name / shopperId | String | Unique shopper identifier | Required if the system tracks repeat visits or abuse patterns. |
 |  | affiliationType | — | Not collected | The TCU email code cannot tell student, faculty, or staff apart, and shopping eligibility does not need it (§7.4.5). Eligibility comes from `verificationStatus` or the volunteer role (`FR-AUTH-shopping-eligibility`). |
 |  | verificationStatus | Enum | verified, unverified | Required; verified only after a successful one-time code for an exact `tcu.edu` email during `UC-AUTH-register-account` or `UC-IDV-verify-affiliation`. There is no rejected or review state, because no visual-ID review exists (`OI-19`). |
 | ShoppingRecord | shoppingRecordId | String | Unique record identifier | Required. |
 |  | shoppingDateTime | DateTime | Local time | Required. |
 |  | locationId | String | Existing DonationLocation.locationId | Required. |
-|  | quantityTaken | Integer | 0 or greater | Required; must record number of items removed in the visit. |
+|  | quantityTaken | Integer | 0 or greater | Required; non-negative whole number representing the number of items removed in the visit. |
+|  | itemCategories | List of Item category references | Exactly one category per item; empty when quantityTaken is 0 | Required; categories must be active when the visit is accepted. |
+|  | estimatedWeight | Decimal | 0 or greater | Required; calculated and stored by the server under `FR-SHP-estimated-weight`, never accepted from the browser. |
 |  | verificationMethod | Enum | verified TCU email, approved volunteer role | Required; supports audit and abuse review. |
 | TCUAffiliationCheck | checkId | String | Unique verification record | Required. |
 |  | accountId | String | Stable signed-in account identifier | Required; links successful email verification to the account. |
@@ -563,7 +576,7 @@ The system shall generate operational and reporting data in a format that can be
 #### 7.3.1 Daily site activity report
 
 - Who reads it: ReFrog organizers and the volunteer staff at each donation location.
-- What it contains: donated item counts by location, shopping counts by location, date/time of activity, site status, and any verification or review events.
+- What it contains: donated item counts by location, shopping counts and estimated shopping weight by location, date/time of activity, site status, and any verification or review events.
 - Frequency: generated daily during the event and available after each operational day.
 - Format: dashboard view and downloadable CSV or spreadsheet export.
 - Purpose: gives organizers a single source of truth for site activity while the event is still running.
@@ -579,7 +592,7 @@ The system shall generate operational and reporting data in a format that can be
 #### 7.3.3 Donor and shopper activity summary
 
 - Who reads it: ReFrog organizers and the TCU Sustainability Committee.
-- What it contains: total donations by site, total shopping visits by site, number of items donated, number of items taken, and totals by day or time range.
+- What it contains: total donations by site, total shopping visits by site, number of items donated, number of items taken, estimated shopping weight, and totals by day or time range.
 - Frequency: generated daily and at the end of the event.
 - Format: summary table and chart view with export to spreadsheet.
 - Purpose: supports the impact metrics the program reports to the university and external partners.
@@ -603,7 +616,7 @@ The system shall generate operational and reporting data in a format that can be
 #### 7.3.6 Year-end impact report
 
 - Who reads it: the TCU Sustainability Committee, client stakeholders, and event supporters.
-- What it contains: annual totals for volunteers, volunteer hours, donation sites, donation counts, shopping counts, diverted items, and partner handoff totals, as approved by the committee for public reporting.
+- What it contains: annual totals for volunteers, volunteer hours, donation sites, donation counts, shopping counts, estimated shopping weight, diverted items, and partner handoff totals, as approved by the committee for public reporting.
 - Frequency: generated once per event cycle, usually at the end of the move-out season.
 - Format: spreadsheet-ready summary or presentation-friendly dashboard.
 - Purpose: replaces the current hand-reconciled Google Sheets process and reduces the "unknown amount of error" described by the client.
@@ -617,7 +630,7 @@ This section distinguishes the data-handling behavior required to support the bu
 #### 7.4.1 Data acquisition
 
 - The system shall record the ReFrog location and item count for each donation submission, as required by `BR-donation-location-recorded` and `BR-donation-count-recorded`.
-- The system shall record the event date, location, and number of items taken for each shopping visit, as required by `BR-shopping-activity-recorded`.
+- The system shall record the event date, location, number of items taken, category of each item, stored item-weight estimates, and total estimated weight for each shopping visit, as required by `BR-shopping-activity-recorded` and `FR-SHP-estimated-weight`.
 - The system shall retain TCU email verification state separately from administrator-granted volunteer roles and check either qualification for digital shopping eligibility under `BR-shopper-verification` and `BR-shopper-tcu-affiliation`.
 - The system shall record volunteer assignments against the location and shift the volunteer has claimed or been assigned, as required by `BR-volunteer-assignment`. The business rules do not yet define the complete cancellation and reassignment workflow.
 - The system shall record remaining-item handoffs to donation partners in the agreed pickup order and according to item priorities, as required by `BR-partner-pickup-priority` and `BR-remaining-items-distributed`.
@@ -625,7 +638,7 @@ This section distinguishes the data-handling behavior required to support the bu
 #### 7.4.2 Data integrity
 
 - Each donation record shall remain associated with the physical ReFrog location where it was received, in accordance with `BR-donation-location-recorded`.
-- Each shopping record shall contain the event date, location, and item count required by `BR-shopping-activity-recorded`.
+- Each shopping record shall contain the event date, location, item count, one category per item, stored category-weight snapshot, and server-calculated total estimated weight required by `BR-shopping-activity-recorded` and `FR-SHP-estimated-weight`.
 - The system shall accept a digital shopping submission only for a signed-in account eligible under `FR-AUTH-shopping-eligibility`, consistent with `BR-shopper-verification` and `BR-shopper-tcu-affiliation`.
 - The system shall preserve the pickup order and item priorities used for partner handoffs, in accordance with `BR-partner-pickup-priority`.
 - The system shall route suspected excessive or prohibited shopping to ReFrog administrator review before applying any action, in accordance with `BR-shopping-abuse-review`. The threshold and penalty for abuse remain unresolved and shall not be invented by the system.
@@ -731,12 +744,12 @@ A low-friction form used at a donation drop-off location to record the number of
 A signed-in form used at the event to record the number of items a shopper takes. Accessible to signed-in users with either verified TCU email or an administrator-granted volunteer role, as checked by the server.
 
 - The form shall allow a verified shopper to enter the number of items taken and the location in as few steps as possible.
-- The form shall offer the same optional category selection used on `UI-donation-form` (confirmed 2026-10-02), so both sides of the program use consistent categories.
+- The form shall require one category selection per item from the same category set used on `UI-donation-form`; a zero-item visit has no category selections.
 - The form shall display a confirmation when the submission is saved.
 - The form shall enforce `FR-AUTH-shopping-eligibility`: either persisted TCU email verification or an administrator-granted volunteer role is sufficient; the browser cannot grant itself eligibility.
 - If the submission fails, the form shall preserve the entered values, consistent with `FR-VAL-preserve-input`.
 
-*Supports:* `UC-SHP-log-item-taken`; `UC-IDV-verify-affiliation`; `FR-AUTH-enforce-permissions`; `USE-mobile-responsive`
+*Supports:* `UC-SHP-log-item-taken`; `UC-IDV-verify-affiliation`; `FR-AUTH-enforce-permissions`; `FR-SHP-estimated-weight`; `USE-mobile-responsive`
 
 
 **`UI-admin-dashboard`** — Administrator dashboard and event management view
@@ -747,7 +760,7 @@ A signed-in, administrator-only view providing event schedule creation and manag
 - The view shall display the current volunteer staffing level by location and shift, including open and filled slots and cancellation status.
 - The view shall let administrators approve or decline volunteer requests, grant access manually by verified sign-in email, and remove roles or revoke pending email approvals, supporting `UC-ADM-review-volunteer-request`, `UC-ADM-grant-volunteer-access`, and `UC-ADM-remove-volunteer-access`.
 - The view shall let an administrator manually send a notification to volunteers about open shifts, targeting either everyone or only volunteers who have not signed up, consistent with `UC-ADM-notify-volunteers`. No notification shall be sent automatically on a cancellation.
-- The view shall display donation and shopping activity counts by location and day, drawing from the reports defined in §7.3.
+- The view shall display donation and shopping activity counts and estimated shopping weight by location and day, drawing from the reports defined in §7.3 and identifying the approved weight unit.
 - The view shall surface shopping-abuse review flags for administrator inspection, consistent with `UC-ABU-review-alert` and `SEC-administrator-review`. No automatic penalty or action shall be applied; the view shall route flagged cases to administrator review only, consistent with `BR-shopping-abuse-review`.
 - The view shall not be accessible to volunteers, donors, shoppers, or unauthenticated users, consistent with `SEC-least-privilege`.
 - The view shall allow an authorized administrator to export volunteer, donation, and shopping data in CSV format, consistent with `INT-data-export`.
@@ -875,13 +888,14 @@ _[Add the ones that apply, with `SCA-`, `INT-`, and `MNT-` identifiers. Maintain
 
 - `MNT-event-configuration`: The system shall allow authorized administrators to change event dates, operating hours, locations, shifts, and staffing requirements without modifying or redeploying application code.
 - `MNT-automated-tests`: The project shall include automated tests for authentication, authorization, volunteer scheduling, validation, and data-calculation rules.
+- `MNT-source-documentation`: The source code shall use clear structure and appropriate inline documentation, supported by external technical documentation, so a software developer of reasonable skill can interpret and modify the application. Documentation shall cite the applicable `UC-*`, `BR-*`, and `FR-*` identifiers rather than duplicate their text.
 - `MNT-deployment-documentation`: The project shall provide instructions for installing, configuring, deploying, backing up, restoring, and updating the application.
 - `MNT-administrator-documentation`: The project shall provide instructions for routine administrator tasks and event preparation.
 - `MNT-diagnostics`: The system shall record sufficient diagnostic information to identify failed requests and external-service failures without recording authentication secrets or unnecessary sensitive information.
 - `MNT-error-notification`: The system shall automatically notify the designated operational recipient when an application error requiring attention is logged. Recipients, delivery channel, severity threshold, and escalation timing remain unresolved under `OI-23`.
-- `MNT-data-access-abstraction`: Application modules shall access Microsoft SQL Server through a documented persistence abstraction so EAP can maintain or replace database-specific implementation details without changing business-rule code.
+- `MNT-data-access-abstraction`: Application modules shall access Microsoft SQL Server through a documented persistence abstraction so EAS can maintain or replace database-specific implementation details without changing business-rule code.
 - `MNT-dependency-record`: The project shall document its runtime, external services, required service accounts, and third-party dependencies.
-- `MNT-operational-handoff`: Before production handoff, the project shall provide EAP with the source code, deployment instructions, administrator instructions, service-account ownership information, recurring-cost information, and documentation of the database abstraction. EAP is the designated post-graduation maintenance owner (`OI-12`, resolved 2026-11-04); hosting payer and service-account ownership remain unresolved.
+- `MNT-operational-handoff`: Before production handoff, the project shall provide EAS with the source code, deployment instructions, administrator instructions, service-account ownership information, recurring-cost information, and documentation of the database abstraction. EAS is the designated post-graduation maintenance owner (`OI-12`, resolved 2026-11-04); hosting payer and service-account ownership remain unresolved.
 
 ---
 

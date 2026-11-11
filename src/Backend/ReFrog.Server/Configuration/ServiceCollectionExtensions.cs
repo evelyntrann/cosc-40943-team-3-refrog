@@ -50,6 +50,10 @@ public static class ServiceCollectionExtensions
         {
             services.AddHttpClient<IEmailSender, MicrosoftGraphEmailSender>();
         }
+        else if (string.Equals(configuration["Email:Provider"], "Smtp", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddScoped<IEmailSender, SmtpEmailSender>();
+        }
         else
         {
             services.AddScoped<IEmailSender, UnavailableEmailSender>();

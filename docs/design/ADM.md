@@ -17,7 +17,7 @@ The Administration (`ADM`) area lets authorized ReFrog organizers view a consoli
 
 ## Components & classes
 
-These are **planned application boundaries**, not claims that the files already exist. The application framework, directory layout, database technology and provider adapter remain provisional in the architecture; the paths below are proposed logical paths and must be aligned to the repo conventions before implementation.
+These are **planned application boundaries**, not claims that the files already exist. They use the approved C# / ASP.NET Core, Blazor PWA, Entity Framework Core, and Microsoft SQL Server stack (`KD-tcu-it-stack`). Logical paths must follow the existing `src/Backend` and `src/Frontend` solution conventions. The email provider remains unresolved under `OI-25`.
 
 ```mermaid
 classDiagram
@@ -49,23 +49,23 @@ classDiagram
     }
     class ShiftService {
         <<new, administration / contract with VOL>>
-        +findSignupCandidates(now) List~Shift~
-        +findById(shiftId) Shift
-        +lockForAssignment(shiftId) Shift
+        +FindSignupCandidatesAsync(now) List~Shift~
+        +FindByIdAsync(shiftId) Shift
+        +LockForAssignmentAsync(shiftId) Shift
     }
     class AssignmentService {
         <<reused, volunteer>>
-        +confirmPending(volunteerId)
-        +denyPending(volunteerId, shiftId)
+        +ConfirmPendingAsync(volunteerId, eventId)
+        +DenyPendingAsync(volunteerId, shiftId)
     }
     class AssignmentQueryService {
         <<reused, volunteer / read-only>>
         +isActive(shiftId, volunteerId) bool
-        +countsByShift(shiftIds) Map
+        +CountsByShiftAsync(shiftIds) Map
     }
     class AuthenticationAccount {
         <<reused, authentication>>
-        +volunteerStatus NONE_OR_APPROVED
+        +GetVolunteerAccessAsync(eventId) ROLE_ACTIVE|NONE|RESTRICTED
     }
     class AdminNotificationService {
         <<new>>
@@ -127,10 +127,10 @@ classDiagram
 |---|---|---|
 | `administration/AdminController` | New | Admin-only HTTP entry points and field-level error presentation; delegates business decisions |
 | `administration/AdminService` | New | Dashboard aggregation, per-location default staffing configuration, per-shift override validation, existing-shift change preview and protected writes |
-| `administration/ShiftService` | New (ADM-owned) | `findSignupCandidates(now)`, `findById(id)`, `lockForAssignment(id)`; supplies stable shift IDs, UTC instants and row lock for VOL transactions |
+| `src/Backend/Administration/ShiftService` | New (ADM-owned) | `FindSignupCandidatesAsync(now)`, `FindByIdAsync(id)`, `LockForAssignmentAsync(id)`; supplies stable shift IDs and UTC instants. The lock method uses parameterized SQL Server `UPDLOCK, HOLDLOCK` behind the persistence abstraction and joins VOL's EF Core transaction. |
 | `administration/VolunteerReviewService` | New (ADM-owned) | Reviews pending volunteers; approves the account and confirms all its pending claims in one transaction, or denies one claim; dispatches outcome message after commit |
-| `volunteer/AssignmentService` / `AssignmentQueryService` | Reused, VOL-owned | `confirmPending`, `denyPending` and `countsByShift` / `isActive`; ADM never edits VOL records directly |
-| Authentication user account | Reused, Authentication-owned | `volunteerStatus = NONE | APPROVED`; only ADM review awards the Volunteer role |
+| `src/Backend/Volunteer/AssignmentService` / `AssignmentQueryService` | Reused, VOL-owned | `ConfirmPendingAsync`, `DenyPendingAsync`, `CountsByShiftAsync`, and `IsActiveAsync`; ADM never edits VOL records directly |
+| Authentication user account | Reused, Authentication-owned | Event-scoped `ROLE_ACTIVE`, `NONE`, or `RESTRICTED` access under `BR-volunteer-role-lifecycle`; approved role-grant paths are defined by `BR-volunteer-role-approval` |
 | `administration/AdminNotificationService` | New | Explicit send action, audience selection, available-shift context, delivery result and retry behavior |
 | `administration/AdminRepository` | New | Persistence queries for event/location configuration, shift definitions and dashboard aggregates |
 | Authentication/authorization middleware | Reused, cross-cutting | Enforce administrator authorization on *every* ADM endpoint server-side |
@@ -139,7 +139,7 @@ classDiagram
 | Notification delivery adapter | Reused, cross-cutting | Selected external delivery provider and its failure handling |
 | Shared audit facility | Reused, cross-cutting | Capture administrator changes and authentication audit events without secrets |
 
-**Integration boundary fixed by VOL:** ADM must use `AssignmentQueryService.countsByShift(shiftIds)` for active/pending counts, and VOL must use `ShiftService.findSignupCandidates(now)`, `findById(id)` and `lockForAssignment(id)`. `ShiftService` returns shift start/end as UTC instants; user-facing time is `America/Chicago`. One location-level `required_count` default is configured per event; a shift copies it at creation and may be overridden by an administrator. `ACTIVE + PENDING <= shift.required_count` must hold after every successful change. Assignment approval/denial goes through VOL's `AssignmentService`, **never** direct writes to `shift_assignment`.
+**Integration boundary fixed by VOL:** ADM uses `AssignmentQueryService.CountsByShiftAsync(shiftIds)` for active/pending counts, and VOL uses `ShiftService.FindSignupCandidatesAsync(now)`, `FindByIdAsync(id)`, and `LockForAssignmentAsync(id)`. `ShiftService` returns UTC instants; user-facing time is `America/Chicago`. One location-level `required_count` default is configured per event; a shift copies it at creation and may be overridden by an administrator. `ACTIVE + PENDING <= shift.required_count` must hold after every successful change. Assignment approval/denial goes through VOL's `AssignmentService`, never direct writes to `shift_assignment`.
 
 ## Sequence
 

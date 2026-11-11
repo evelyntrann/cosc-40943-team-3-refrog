@@ -38,7 +38,7 @@ _[These are slugs, like every other identifier in your project, so an inserted d
 | 0.2 | 2026-10-28 | Alfonsotomax | Recorded the technology stack (`KD-tech-stack`); named container technologies in §5.1 |
 | 0.3 | 2026-10-30 | Alfonsotomax | §5.2 `VOL` *Depends on*: removed Notifications (Notifications depends on VOL, `OI-7`); locations come from Administration ([VOL.md](VOL.md)) |
 | 0.4 | 2026-10-30 | Uyen Tran | Removed Google Sign-In; own email-and-password accounts verified by code at sign-up (`KD-own-accounts`) |
-| 0.5 | 2026-11-04 | Team 3 | Recorded TCU IT's required stack (`KD-tcu-it-stack`), EAP ownership, automated error notification, and database abstraction |
+| 0.5 | 2026-11-04 | Team 3 | Recorded TCU IT's required stack (`KD-tcu-it-stack`), EAS ownership, automated error notification, and database abstraction |
 | 0.6 | 2026-11-04 | Team 3 | Added AUTH for registration, sign-in, sign-out, and recovery; exact `tcu.edu` registration verification establishes persisted affiliation while later verification remains in IDV |
 | 0.7 | 2026-11-04 | Team 3 | Recorded AUTH's design, shared API envelope, verification ownership, and administrator bootstrap |
 | 0.7 | 2026-11-04 | Alfonsotomax | §5.1: the Web Front End is Blazor WebAssembly hosted by the Application; §8.2.8: Entity Framework Core is the persistence library behind per-area store interfaces ([IDV.md](IDV.md) stack revision) |
@@ -94,7 +94,7 @@ The architecture must honor the following operating-environment requirements: `O
 
 The applicable design and implementation constraints are `CO-nontechnical-administration`, `CO-tcu-it-approval`, `CO-tcu-accessibility`, `CO-tcu-data-governance`, `CO-approved-branding`, and `CO-operational-ownership`.
 
-**Unresolved production hosting.** The team and client have not selected a production hosting provider. `CO-azure-database-hosting` and `CO-tcu-application-hosting` remain conditional constraints pending the client's comparison of TCU-managed hosting with an outside option and any required TCU IT decision. This uncertainty is tracked by `DE-tcu-azure-hosting` and `DE-operational-ownership`.
+**TCU-managed production hosting.** EAS will host the ASP.NET Core application and its Microsoft SQL Server database on TCU-managed infrastructure (`CO-tcu-application-hosting`, `OI-15`, resolved 2026-11-11). Azure is not required. Operational handoff and service-account ownership remain governed by `DE-operational-ownership`.
 
 ## 3. Context and Scope
 
@@ -122,7 +122,7 @@ C4Context
 
     System(refrog, "ReFrog Application", "PWA that manages volunteer scheduling, donation and shopping forms, TCU-affiliation verification, and organizer reporting.")
 
-    System_Ext(notification, "Microsoft 365 email delivery", "Sends sign-up and TCU verification codes and shift/staffing notifications through Microsoft Graph")
+    System_Ext(notification, "Email delivery provider", "Sends sign-up and TCU verification codes and shift/staffing notifications through the shared adapter; provider unresolved under OI-25")
 
     Rel(admin, refrog, "Manages events, shifts, locations; reviews dashboard and abuse flags")
     Rel(volunteer, refrog, "Signs up for and cancels shifts; views schedule and hours")
@@ -148,9 +148,9 @@ C4Context
 
 **External systems.** One external system is shown. Email delivery is required for account registration. There is no external identity provider: the application creates and signs in its own accounts (section 8.1, `KD-own-accounts`, `OI-17`).
 
-- **Email delivery channel** — Microsoft 365 Outlook through Microsoft Graph sends the sign-up verification code (`FR-AUTH-account-signup`), a TCU affiliation verification code (`UC-IDV-verify-affiliation`, resolves `OI-10`), shift reminders (`FR-NOTIFY-shift-reminder`), and administrator-triggered volunteer notifications (`UC-ADM-notify-volunteers`). The user selected this provider on 2026-11-06. Every message except a verification code is also kept in the recipient's in-app inbox inside the application (`FR-NOTIFY-in-app-inbox`), so a user sees it even if the email is missed. The system must check notification accuracy before sending (`FR-NOTIFY-current-state`) and must not block business-state changes if a notification fails (`FR-NOTIFY-preserve-business-state`).
+- **Email delivery channel** — One shared, provider-neutral email adapter sends the sign-up verification code (`FR-AUTH-account-signup`), a TCU affiliation verification code (`UC-IDV-verify-affiliation`, resolves `OI-10`), shift reminders (`FR-NOTIFY-shift-reminder`), and administrator-triggered volunteer notifications (`UC-ADM-notify-volunteers`). The production provider and EAS-approved configuration remain unresolved under `OI-25`. Every message except a verification code is also kept in the recipient's in-app inbox inside the application (`FR-NOTIFY-in-app-inbox`), so a user sees it even if the email is missed. The system must check notification accuracy before sending (`FR-NOTIFY-current-state`) and must not block business-state changes if a notification fails (`FR-NOTIFY-preserve-business-state`).
 
-**What is not on this diagram.** The current toolchain — SignUpGenius, Google Forms, Google Sheets, and the ReFrog website — does not appear because the application replaces rather than integrates with them (`OE-decentralized-tool-replacement`; `INT-integration-scope`). If any of those tools is later selected for integration rather than replacement, it becomes an external-system box here and needs a corresponding `SI-*` or `CI-*` entry in the specification. The Azure database (`CO-azure-database-hosting`) is internal to the system boundary and appears on the container diagram in section 5.1, not here.
+**What is not on this diagram.** The current toolchain — SignUpGenius, Google Forms, Google Sheets, and the ReFrog website — does not appear because the application replaces rather than integrates with them (`OE-decentralized-tool-replacement`; `INT-integration-scope`). If any of those tools is later selected for integration rather than replacement, it becomes an external-system box here and needs a corresponding `SI-*` or `CI-*` entry in the specification. The Microsoft SQL Server database is internal to the system boundary and appears on the container diagram in section 5.1; EAS hosts it with the Application on TCU-managed infrastructure (`OI-15`, resolved).
 
 ## 4. Solution Strategy
 
@@ -222,10 +222,10 @@ C4Container
     System_Boundary(refrog, "ReFrog") {
         Container(web, "Web Front End", "PWA, Blazor WebAssembly", "Donor, shopper, volunteer, and administrator screens in the browser")
         Container(app, "Application", "C# / ASP.NET Core", "Every business rule from the component table in 5.2; serves the front end")
-        ContainerDb(db, "Database", "Microsoft SQL Server", "Shifts, volunteer assignments, donations, shopping visits, administrator accounts")
+        ContainerDb(db, "Database", "Microsoft SQL Server", "Shifts, volunteer assignments, donations, shopping visits, item categories and weight snapshots, administrator accounts")
     }
 
-    System_Ext(notify, "Microsoft 365 email delivery", "Sends sign-up and TCU verification codes and shift notifications through Microsoft Graph")
+    System_Ext(notify, "Email delivery provider", "Sends sign-up and TCU verification codes and shift notifications through the shared adapter; provider unresolved under OI-25")
 
     Rel(donor, web, "Logs a donation", "HTTPS")
     Rel(shopper, web, "Verifies affiliation, logs items taken", "HTTPS")
@@ -238,7 +238,7 @@ C4Container
 
 ReFrog ships as one deployable, reflecting the team's working direction for `KD-deployment-shape` (formal write-up pending §9.2): the three ReFrog founders cannot operate infrastructure, and the team's lack of mobile development experience already ruled out a native app in favor of a single web application. The front end is a separate container only because it runs in the browser as a PWA — it ships inside the application's package, not deployed independently, same as the worked example above.
 
-The container technologies (Blazor, C# / ASP.NET Core, Microsoft SQL Server) are recorded in `KD-tcu-it-stack` (section 9.2). The Web Front End uses the Blazor WebAssembly hosting model: it runs in the browser, is served by the Application, and calls the Application only through its JSON/HTTPS API. Blazor Server and server-side rendering are not used for participant screens, because the PWA must run in the browser and every area's design fixes an API contract between the two containers. Microsoft 365 Outlook through Microsoft Graph is the selected email delivery provider; the production hosting provider remains open.
+The container technologies (Blazor, C# / ASP.NET Core, Microsoft SQL Server) are recorded in `KD-tcu-it-stack` (section 9.2). The Web Front End uses the Blazor WebAssembly hosting model: it runs in the browser, is served by the Application, and calls the Application only through its JSON/HTTPS API. Blazor Server and server-side rendering are not used for participant screens, because the PWA must run in the browser and every area's design fixes an API contract between the two containers. Email uses the shared provider-neutral adapter; its production provider remains unresolved under `OI-25`. EAS hosts the production Application and Database on TCU-managed infrastructure (`OI-15`, resolved).
 
 **Corrected 2026-10-02:** this diagram previously showed Google Sign-In itself deriving TCU affiliation directly from the sign-in email's domain. The client meeting required proof through a one-time code sent to a qualifying TCU email (`OI-10`, resolved). **Changed 2026-10-30:** Google Sign-In is removed; the application creates and signs in its own accounts (`KD-own-accounts`). **Changed 2026-11-04:** when registration itself successfully verifies an exact `tcu.edu` email by code, that proof also establishes persisted TCU email verification; other accounts use the separate IDV profile flow.
 
@@ -266,14 +266,14 @@ _[Check before Checkpoint 1: every area in your use case file appears in the fir
 | Use case area | Component | Responsibility | Depends on | Status |
 |---|---|---|---|---|
 | `VOL` | Volunteer Scheduling | Owns a volunteer's shift sign-ups, cancellations, and their own schedule and hours | Administration, Authentication | provisional |
-| `IDV` | Identity Verification | Owns determining whether a signed-in shopper is eligible to shop from Authentication's persisted TCU verification and current volunteer-access state | Authentication | [IDV.md](IDV.md) (stack revision required) |
+| `IDV` | Identity Verification | Owns determining whether a signed-in shopper is eligible to shop from Authentication's persisted TCU verification and current volunteer-access state | Authentication | [IDV.md](IDV.md) |
 | `LOC` | Location Info | Owns the list of active ReFrog locations, hours, and event info shown to every participant | Administration | provisional |
-| `ADM` | Administration | Owns annual volunteer access review and renewal approval, volunteer access request decisions and manual email-based role grants and removals (team design decision, 2026-10-16), shift creation and configuration, manually triggering a notification to volunteers about open shifts (confirmed 2026-10-02, not an automatic alert), and the cross-location dashboard of donation, shopping, and volunteer-coverage activity | Authentication, Volunteer Scheduling, Shopping, Donation, Shopping-Abuse Monitoring, Email delivery channel | provisional |
+| `ADM` | Administration | Owns annual volunteer access review and renewal approval, volunteer access request decisions and manual email-based role grants and removals (team design decision, 2026-10-16), shift creation and configuration, manually triggering a notification to volunteers about open shifts (confirmed 2026-10-02, not an automatic alert), and the cross-location dashboard of donation counts, shopping counts and estimated weight, and volunteer-coverage activity | Authentication, Volunteer Scheduling, Shopping, Donation, Shopping-Abuse Monitoring, Email delivery channel | provisional |
 | `ABU` | Shopping-Abuse Monitoring | Owns flagging and administrator review of potentially-excessive shopping activity | Shopping, Authentication | provisional |
-| `SHP` | Shopping | Owns recording what a shopper takes during a visit | Identity Verification, Administration | provisional |
+| `SHP` | Shopping | Owns recording what a shopper takes during a visit, the category and stored weight estimate for each item, the visit's server-calculated estimated weight, and the derived event total (`FR-SHP-estimated-weight`) | Identity Verification, Administration | provisional |
 | `DON` | Donation | Owns recording what a donor drops off at a location | Administration | provisional |
 | `AUTH` | Authentication | Owns account registration, sign-in, sign-out, password recovery, stable account identity, persisted TCU email verification, shared verification challenges, trusted current roles and explicit revoked/expired restrictions, event-scoped access and renewal state, and administrator recognition | Email delivery channel (registration, affiliation-verification, and recovery messages) | [AUTH.md](AUTH.md) |
-| _(cross-cutting)_ | Notifications | Owns every reminder and alert the system sends — shift reminders, understaffed-shift alerts | Volunteer Scheduling, Microsoft 365 email delivery | provisional |
+| _(cross-cutting)_ | Notifications | Owns every reminder and alert the system sends — shift reminders, understaffed-shift alerts | Volunteer Scheduling, shared email delivery adapter (`OI-25`) | provisional |
 
 Volunteer role handling is detailed in [Administration](ADM.md) and [Authentication](AUTH.md). Administrators approve requests or manually approve verified sign-in emails; IDV checks the current role through Authentication. These team-selected workflows still require supporting use cases and SRS alignment.
 
@@ -355,9 +355,9 @@ Due: Checkpoint 1. These conventions apply across all components and remain prov
 
 **8.2.4 Code conventions.** The implementation shall use one agreed formatter, linter, naming convention, dependency-management approach, and test organization across components. Shared business rules shall not be duplicated between participant interfaces and server-side operations. The language and frameworks are recorded in `KD-tcu-it-stack` (C# / ASP.NET Core and Blazor); the formatter, linter, and banned-library list remain provisional until the team records them. This supports `MNT-automated-tests`, `MNT-dependency-record`, and `MNT-operational-handoff`. Shown in: the repository formatter/linter configuration and contribution instructions.
 
-**8.2.5 Validation.** Validation shall occur on the server before data is stored, including required fields, data types, positive item counts, and references to active ReFrog locations or other valid records. Interfaces shall identify the invalid field, explain the correction, and preserve valid entered values. Client-side validation may improve feedback but is not the authoritative check. This implements `FR-VAL-server-validation`, `FR-VAL-field-feedback`, `FR-VAL-preserve-input`, and `ROB-invalid-input`. Shown in: shared validation tests that submit invalid requests without using the interface.
+**8.2.5 Validation.** Validation shall occur on the server before data is stored, including required fields, data types, non-negative donation and shopping item counts, and references to active ReFrog locations or other valid records. Interfaces shall identify the invalid field, explain the correction, and preserve valid entered values. Client-side validation may improve feedback but is not the authoritative check. This implements `FR-VAL-server-validation`, `FR-VAL-field-feedback`, `FR-VAL-preserve-input`, and `ROB-invalid-input`. Shown in: shared validation tests that submit invalid requests without using the interface.
 
-**8.2.6 Configuration and secrets.** Environment-specific settings shall be supplied through deployment configuration rather than source code, and credentials, API keys, and connection strings shall be stored in the approved secret-management facility for the selected hosting environment. Secrets shall not appear in this document, source control, logs, exports, or error responses. The hosting provider, secret-management product, service-account owner, and production configuration are unresolved under `CO-operational-ownership`, `DE-tcu-azure-hosting`, and `DE-operational-ownership`. Shown in: deployment configuration documentation and a checked-in example containing placeholders only.
+**8.2.6 Configuration and secrets.** Environment-specific settings shall be supplied through deployment configuration rather than source code, and credentials, API keys, and connection strings shall be stored in the approved secret-management facility for the selected hosting environment. Secrets shall not appear in this document, source control, logs, exports, or error responses. The secret-management product, service-account owner, and production configuration remain unresolved under `CO-operational-ownership` and `DE-operational-ownership`. Shown in: deployment configuration documentation and a checked-in example containing placeholders only.
 
 **8.2.7 Logging.** Centralized automated logs shall support diagnosis of failed requests and external-service failures and shall notify the designated operational recipient when an error requiring attention is recorded (`MNT-error-notification`). Logs and notifications shall exclude authentication secrets, verification codes, raw TCU ID numbers, unnecessary affiliation data, and other unnecessary personal information. Recipient, channel, severity threshold, escalation timing, log levels, and retention remain unresolved under `OI-23` and `OI-6`. Shown in: shared logging and notification configuration, redaction tests, and error-notification integration tests.
 
@@ -412,13 +412,15 @@ _Example:]_
 - **Rejected:** TypeScript end to end (a Node.js server framework with an ORM such as Prisma). One language across client and server is an advantage, but the common ORMs need raw SQL for the row lock Volunteer Scheduling depends on, and the team has less course support for it than for Spring Boot and Vue.js.
 - **Trade-off:** The repository carries two languages and two toolchains (Java and JavaScript), so §8.2.4 must name a formatter, linter, and test layout for each. This decision must be revisited if TCU IT or the eventual maintenance owner requires a different supported stack (`CO-tcu-it-approval`, `CO-operational-ownership`).
 
+_Historical note, 2026-11-11: `CO-azure-database-hosting` and `DE-tcu-azure-hosting` were retired when the team confirmed that Microsoft SQL Server is required but Azure hosting is not. Their references above remain only as part of this superseded decision's original record._
+
 **`KD-tcu-it-stack`: C# / ASP.NET Core application, Blazor PWA, Microsoft SQL Server database.** _Accepted._
 
 - **Driving requirements:** `CO-tcu-it-technology-stack`, `CO-operational-ownership`, `MNT-data-access-abstraction`, `MNT-operational-handoff`, and `USE-mobile-responsive`.
-- **Context:** TCU IT directed the team to use ASP.NET, Blazor, Microsoft SQL Server, and C#, and identified EAP as the post-graduation maintenance owner. This direction supersedes `KD-tech-stack`. Reported from the IT meeting on 2026-11-04.
-- **Decision:** Build the Application container in C# with ASP.NET Core, the Web Front End as a Blazor progressive web app packaged with the application, and the Database container on Microsoft SQL Server. Keep database-specific access behind a documented persistence abstraction for EAP. Production hosting remains unresolved (`OI-15`).
-- **Rejected:** Continuing with Java / Spring Boot, Vue.js, and PostgreSQL, because it conflicts with the required TCU IT stack and EAP handoff direction.
-- **Trade-off:** Existing VOL and IDV designs contain Spring, Vue, JPA, and PostgreSQL-specific mechanisms and are not build-ready until revised. Their concurrency guarantees must be preserved using SQL Server-supported transactions and locking rather than copied mechanically from PostgreSQL.
+- **Context:** TCU IT directed the team to use ASP.NET, Blazor, Microsoft SQL Server, and C#, and identified EAS as the post-graduation maintenance owner. This direction supersedes `KD-tech-stack`. Reported from the IT meeting on 2026-11-04.
+- **Decision:** Build the Application container in C# with ASP.NET Core, the Web Front End as a Blazor progressive web app packaged with the application, and the Database container on Microsoft SQL Server. Keep database-specific access behind a documented persistence abstraction for EAS. EAS hosts the production Application and Database on TCU-managed infrastructure (`OI-15`, resolved 2026-11-11); Azure is not required.
+- **Rejected:** Continuing with Java / Spring Boot, Vue.js, and PostgreSQL, because it conflicts with the required TCU IT stack and EAS handoff direction.
+- **Trade-off:** VOL and IDV have been revised for the approved stack. VOL preserves capacity and role-change concurrency with SQL Server locks behind ADM/AUTH persistence contracts; IDV reuses AUTH-owned verification contracts. These database-specific mechanisms require integration tests against Microsoft SQL Server rather than an in-memory substitute.
 
 **`KD-own-accounts`: the application runs its own email-and-password accounts, with no external identity provider.** _Accepted._
 

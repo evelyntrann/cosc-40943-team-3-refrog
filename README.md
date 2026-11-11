@@ -25,7 +25,7 @@ dotnet run -- --apply-migrations
 dotnet run --launch-profile https      # then open https://localhost:7257/register
 ```
 
-Email goes through Microsoft 365 when `Email:Provider` is `MicrosoftGraph` (setup: [docs/operations/microsoft-365-email.md](docs/operations/microsoft-365-email.md)). In Development with no provider configured, each email (including the six-digit code) is written to a file in `.email-pickup/` at the repository root instead of being sent. The folder is git-ignored. In any other environment with no provider configured, sending reports "not sent".
+Email goes through the shared `IEmailSender` adapter. Local development uses Mailpit over SMTP: run `docker compose up -d mailpit`, start ReFrog in the Development environment, then inspect captured messages at `http://localhost:8025`. Mailpit listens only on the local machine through the compose port bindings and does not deliver real email. The repository also contains a candidate Microsoft Graph adapter for evaluation ([setup](docs/operations/microsoft-365-email.md)), but no production provider is approved or selected (`OI-25`). A non-development deployment without an approved provider reports email delivery unavailable.
 
 ## Tests
 
