@@ -57,6 +57,14 @@ public sealed class TcuEmailVerification
     public DateTimeOffset VerifiedAt { get; set; }
 }
 
+public sealed class AdministratorSignInAudit
+{
+    public Guid Id { get; set; }
+    public Guid AccountId { get; set; }
+    public DateTimeOffset OccurredAt { get; set; }
+    public bool Succeeded { get; set; }
+}
+
 public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options)
     : IdentityDbContext<AuthAccount, IdentityRole<Guid>, Guid>(options)
 {
@@ -64,6 +72,7 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options)
     public DbSet<VerificationChallenge> VerificationChallenges => Set<VerificationChallenge>();
     public DbSet<VerificationFailure> VerificationFailures => Set<VerificationFailure>();
     public DbSet<TcuEmailVerification> TcuEmailVerifications => Set<TcuEmailVerification>();
+    public DbSet<AdministratorSignInAudit> AdministratorSignInAudits => Set<AdministratorSignInAudit>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -114,6 +123,14 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options)
             entity.HasKey(x => x.AccountId);
             entity.Property(x => x.NormalizedEmail).HasMaxLength(256);
             entity.HasOne(x => x.Account).WithOne().HasForeignKey<TcuEmailVerification>(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<AdministratorSignInAudit>(entity =>
+        {
+            entity.ToTable("AdministratorSignInAudits");
+            entity.HasKey(item => item.Id);
+            entity.HasIndex(item => new { item.AccountId, item.OccurredAt });
+            entity.Property(item => item.OccurredAt).HasColumnType("datetimeoffset");
         });
     }
 }

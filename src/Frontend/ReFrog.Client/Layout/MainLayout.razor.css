@@ -11,3 +11,19 @@ header a {
   font-weight: 700;
   text-decoration: none;
 }
+
+header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+header nav {
+  display: flex;
+  gap: 1rem;
+}
+
+header nav a {
+  color: #4d1979;
+  font-size: 0.9rem;
+}
