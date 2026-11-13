@@ -56,8 +56,11 @@ public sealed class SessionFlowTests
         }
 
         var locked = await fixture.SignInAsync("person@example.org", "Password1!");
-        Assert.AreEqual(await ErrorBody(unknown), await ErrorBody(wrong));
-        Assert.AreEqual(await ErrorBody(wrong), await ErrorBody(locked));
+        var unknownError = await ErrorBody(unknown);
+        var wrongError = await ErrorBody(wrong);
+        var lockedError = await ErrorBody(locked);
+        Assert.AreEqual(unknownError, wrongError);
+        Assert.AreEqual(wrongError, lockedError);
         Assert.AreEqual(HttpStatusCode.Unauthorized, locked.StatusCode);
 
         fixture.Clock.Advance(TimeSpan.FromMinutes(5));
