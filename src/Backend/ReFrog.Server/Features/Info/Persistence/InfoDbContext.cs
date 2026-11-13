@@ -55,7 +55,10 @@ public sealed class InfoDbContext(DbContextOptions<InfoDbContext> options) : DbC
         });
     }
 
-    /// <summary>The SQL Server options every caller (app, tests, EF tools) must use for this context.</summary>
+    /// <summary>
+    /// The SQL Server options for this context, shared by the app, tests, and EF tools so all three use the
+    /// <c>info</c> migration history. <c>AuthDbContext</c> still configures itself inline; aligning it is a follow-up.
+    /// </summary>
     public static void Configure(DbContextOptionsBuilder options, string? connectionString)
     {
         ArgumentNullException.ThrowIfNull(options);

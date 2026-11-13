@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -28,7 +29,6 @@ public sealed class EventInfoEndpointTests
         using var response = await fixture.Client.GetAsync(new Uri(Route, UriKind.Relative));
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.IsFalse(response.RequestMessage!.Headers.Contains("Cookie"));
         var body = await response.Content.ReadFromJsonAsync<ApiResponse<EventInfoResponse>>();
         Assert.IsNull(body?.Error);
         Assert.AreEqual(EventInfoStatus.Active, body?.Data?.Status);
@@ -102,6 +102,34 @@ public sealed class EventInfoEndpointTests
         Assert.AreEqual("UNEXPECTED_ERROR", body?.Error?.Code);
     }
 
+    [TestMethod]
+    public async Task EventInfoStaysPublicWhenSignInIsRequiredByDefault()
+    {
+        // If the app ever requires sign-in by default, the event endpoint must still be public
+        // (architecture §8.1; INF.md "Unauthenticated access"). No database needed.
+        await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(host =>
+            host.ConfigureServices(services =>
+            {
+                services.RemoveAll<IEventInfoStore>();
+                services.AddScoped<IEventInfoStore, NoEventStore>();
+                services.AddAuthorizationBuilder().SetFallbackPolicy(
+                    new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+            }));
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost/"),
+            AllowAutoRedirect = false,
+        });
+
+        using var protectedRoute = await client.GetAsync(new Uri("/api/v1/not-a-route", UriKind.Relative));
+        using var eventInfo = await client.GetAsync(new Uri(Route, UriKind.Relative));
+
+        // Control: the default policy is in force, so a route without AllowAnonymous is refused.
+        Assert.AreNotEqual(HttpStatusCode.NotFound, protectedRoute.StatusCode);
+        Assert.AreNotEqual(HttpStatusCode.OK, protectedRoute.StatusCode);
+        Assert.AreEqual(HttpStatusCode.OK, eventInfo.StatusCode);
+    }
+
     private static ReFrogEvent Event(string status, int year) => new()
     {
         Id = Guid.NewGuid(),
@@ -112,6 +140,11 @@ public sealed class EventInfoEndpointTests
         CampusOverview = $"Sample overview {year}",
         Status = status,
     };
+
+    private sealed class NoEventStore : IEventInfoStore
+    {
+        public Task<EventInfo?> FindActiveEventAsync(CancellationToken cancellationToken) => Task.FromResult<EventInfo?>(null);
+    }
 
     private sealed class FailingStore : IEventInfoStore
     {
@@ -155,9 +188,27 @@ public sealed class EventInfoEndpointTests
                 host.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
                     new Dictionary<string, string?> { ["ConnectionStrings:ReFrog"] = builder.ConnectionString })));
             var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost/") });
-            await using var scope = factory.Services.CreateAsyncScope();
-            await scope.ServiceProvider.GetRequiredService<InfoDbContext>().Database.MigrateAsync();
-            return new(factory, client);
+            var fixture = new InfoFixture(factory, client);
+            try
+            {
+                await using var scope = factory.Services.CreateAsyncScope();
+                await scope.ServiceProvider.GetRequiredService<InfoDbContext>().Database.MigrateAsync();
+                return fixture;
+            }
+            catch
+            {
+                // Drop a half-created database and release the host so a failed setup leaves nothing behind.
+                try
+                {
+                    await fixture.DisposeAsync();
+                }
+                catch (Microsoft.Data.SqlClient.SqlException)
+                {
+                    // Keep the original setup failure as the reported error.
+                }
+
+                throw;
+            }
         }
 
         public async ValueTask DisposeAsync()
