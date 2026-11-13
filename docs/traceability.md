@@ -111,7 +111,7 @@ Release values follow the course's release plan: `v0.1.0` is the proving slice (
 | `UC-ADM-remove-volunteer-access` | | v1.0.0 | ❌ Not started | | | |
 | `UC-ADM-view-dashboard` | [design/ADM.md](design/ADM.md) | v1.0.0 | 📐 Designed | | | |
 | `UC-ADM-notify-volunteers` | [design/ADM.md](design/ADM.md) | v1.0.0 | 📐 Designed | | | |
-| `UC-INF-view-event-info` | [design/INF.md](design/INF.md) | v1.0.0 | 📐 Designed | | | |
+| `UC-INF-view-event-info` | [design/INF.md](design/INF.md#uc-inf-view-event-info-view-overall-event-dates-and-general-information) | v1.0.0 | ✅ Built | `src/Backend/ReFrog.Server/Features/Info/`, `src/Backend/ReFrog.Shared/Info/`, `src/Frontend/ReFrog.Client/Features/Info/` | `tests/ReFrog.Server.Tests/Info/` (main, 2a, unauthenticated access, invariants, failure), `tests/ReFrog.Client.Tests/Info/` (main, 2a, unavailable and retry) | ✅ Verified: main and 2a pass against SQL Server 2022 (2026-11-13). No rendered-component test; a component-testing package is not approved |
 | `UC-INF-view-locations` | [design/INF.md](design/INF.md) | v1.0.0 | 📐 Designed | | | |
 | `UC-INF-view-role-guides` | [design/INF.md](design/INF.md) | v1.0.0 | 📐 Designed | | | |
 | `UC-INF-view-install-guide` | [design/INF.md](design/INF.md#uc-inf-view-install-guide-view-app-installation-guide-and-device-instructions) | v1.0.0 | 📐 Designed | | | |

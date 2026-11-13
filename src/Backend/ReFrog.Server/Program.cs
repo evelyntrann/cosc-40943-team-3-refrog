@@ -2,6 +2,8 @@ using ReFrog.Server.Configuration;
 using Microsoft.EntityFrameworkCore;
 using ReFrog.Server.Features.Authentication;
 using ReFrog.Server.Features.Authentication.Persistence;
+using ReFrog.Server.Features.Info;
+using ReFrog.Server.Features.Info.Persistence;
 using ReFrog.Contracts.Api;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -22,6 +24,7 @@ if (args.Contains("--apply-migrations", StringComparer.Ordinal))
 {
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<AuthDbContext>().Database.MigrateAsync();
+    await scope.ServiceProvider.GetRequiredService<InfoDbContext>().Database.MigrateAsync();
     return;
 }
 
@@ -59,6 +62,7 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapRegistrationEndpoints();
+app.MapInfoEndpoints();
 app.Map("/api/{**path}", () => Results.Json(ApiResponse.Failure<object>(
     new ApiError(ApiErrorCategory.Validation, "NOT_FOUND", "The requested resource was not found.")),
     statusCode: StatusCodes.Status404NotFound));

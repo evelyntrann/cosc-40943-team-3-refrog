@@ -129,6 +129,8 @@ classDiagram
 - `client/info/ClientPlatformDetector` (new): client-side utility inspecting `navigator.userAgent` and platform hints to identify user OS (Android, iOS, Windows, macOS, Linux).
 - `client/info/PwaInstallManager` (new): handles browser `beforeinstallprompt` interception, standalone display mode detection (`display-mode: standalone`), and prompt invocation.
 
+**Event-info build note (issue #99).** `UC-INF-view-event-info` is built in `src/Backend/ReFrog.Server/Features/Info/` (`InfoEndpoints`, `InfoService`, `IEventInfoStore`, and `Persistence/` with `InfoDbContext` and `EfEventInfoStore`), `src/Backend/ReFrog.Shared/Info/`, and `src/Frontend/ReFrog.Client/Features/Info/` (`EventInfoPanel` on the landing page, `EventInfoView`). No use case configures events yet (architecture §5.2), so `AdminEventConfigService` does not exist: INF owns the `ReFrogEvent` table and reads it through its own store, and no write path is built. When an `ADM` event-configuration use case is specified, it writes this table and INF's read side stays unchanged. `InfoDbContext` keeps its tables and migration history in the `info` schema so area migrations do not collide in the shared database. Only an event with status `ACTIVE` is shown; every other status, or none, is extension 2a. At most one event may be `ACTIVE` (filtered unique index), and an event cannot end before it starts (check constraint).
+
 ## Sequence
 
 _[One sequence diagram per use case for its main success scenario, plus one for each extension that does not just return an error. **Label each interaction with the use case step it implements**, so a reviewer can check that every step is realized and nothing extra was invented. Use `alt` blocks for extensions that branch off the main flow. Give each use case its own `###` heading; that heading is the anchor your traceability matrix cites._
@@ -178,13 +180,13 @@ sequenceDiagram
     participant DB as Database
 
     U->>WEB: Open app / click Event Info (step 1)
-    WEB->>IC: GET /api/info/event
+    WEB->>IC: GET /api/v1/info/event
     IC->>IS: getActiveEventInfo()
-    IS->>DB: Query current active ReFrogEvent
+    IS->>DB: Query the ReFrogEvent whose status is ACTIVE
     alt No active event scheduled (2a)
-        DB-->>IS: null / inactive
-        IS-->>IC: Off-season summary response
-        IC-->>WEB: 200 OK (off-season notice & general info)
+        DB-->>IS: none (no event, or only PLANNED / CLOSED / ARCHIVED)
+        IS-->>IC: status OFF_SEASON
+        IC-->>WEB: 200 OK (status OFF_SEASON)
         WEB-->>U: Display general mission & notice of pending dates (step 2a1)
     else Active event found
         DB-->>IS: Event record (dates, hours, campus overview)
@@ -310,7 +312,7 @@ _Example:]_
 
 | Endpoint or job | Caller (who may) | Request | Success | Errors, by extension |
 |---|---|---|---|---|
-| `GET /api/info/event` | Anyone (public, unauthenticated) | None | `200 OK`: `{ eventYear, status, scheduleWindow: { startDate, endDate, dailyHoursDescription }, campusOverview, overallInfographicUrl }` | Unexpected failure: `500`. |
+| `GET /api/v1/info/event` | Anyone (public, unauthenticated) | None | `200 OK`, in the shared `ApiResponse<T>` envelope (architecture §8.2.3): `{ status, eventYear, scheduleWindow: { startDate, endDate, dailyHoursDescription }, campusOverview, overallInfographicUrl }`. `status` is `ACTIVE`, or `OFF_SEASON` (2a) with every other field null. Dates are calendar dates in America/Chicago | Unexpected failure: `500 UNEXPECTED_ERROR` from the shared handler. |
 | `GET /api/info/locations` | Anyone (public, unauthenticated) | Query param: optional `activeOnly` (default true) | `200 OK`: Array of `{ locationId, name, address, operatingSchedule: [{ dayOfWeek, openTime, closeTime }], mapUrl, latitude, longitude, infographicUrl, podNotes }` | Unexpected failure: `500`. |
 | `GET /api/info/locations/{locationId}` | Anyone (public, unauthenticated) | Path param: `locationId` | `200 OK`: Detailed location object including access instructions, specific pod notes, accepted categories, mapUrl, and high-resolution infographic URL | Location not found: `404`. |
 | `GET /api/info/guides` | Anyone (public, unauthenticated) | Query param: optional `role` (`DONOR`, `SHOPPER`, `VOLUNTEER`, `ALL`) | `200 OK`: Array or object of `{ role, title, summaryText, instructionalSteps: [{ stepNumber, title, body }], rulesSummary }` | Invalid role query: `400`. Unexpected failure: `500`. |
@@ -429,8 +431,10 @@ _Example:]_
 
 | Use case, flow | Level | Asserts |
 |---|---|---|
-| UC-INF-view-event-info main | integration | Public request to `/api/info/event` returns active event dates, hours description, and overview |
-| UC-INF-view-event-info 2a (no active event) | unit | When no event is active, returns general off-season text without 500 error |
+| UC-INF-view-event-info main | integration | Public request to `/api/v1/info/event` returns active event dates, hours description, and overview |
+| UC-INF-view-event-info 2a (no active event) | unit + integration | With no event, or only `PLANNED`/`CLOSED`/`ARCHIVED` events, returns `200` `OFF_SEASON` without a 500 error; the page shows the off-season text |
+| UC-INF-view-event-info event invariants | integration | A second `ACTIVE` event and an event ending before it starts are both rejected by the database |
+| UC-INF-view-event-info failure | integration + client unit | A store failure returns `500 UNEXPECTED_ERROR` in the shared envelope; the page reports it could not load and a retry recovers |
 | UC-INF-view-locations main | integration | `/api/info/locations` returns all active locations with individual schedules and map links |
 | UC-INF-view-locations 2a (no locations) | unit | Returns empty list with 200 OK when no locations are yet published |
 | Map universal link generation | unit | `MapLinkBuilder` formats valid universal query URL given latitude, longitude, and title |
