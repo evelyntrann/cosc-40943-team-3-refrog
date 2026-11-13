@@ -2,6 +2,7 @@ using ReFrog.Server.Configuration;
 using Microsoft.EntityFrameworkCore;
 using ReFrog.Server.Features.Authentication;
 using ReFrog.Server.Features.Authentication.Persistence;
+using ReFrog.Server.Features.Info.Persistence;
 using ReFrog.Contracts.Api;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -22,6 +23,7 @@ if (args.Contains("--apply-migrations", StringComparer.Ordinal))
 {
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<AuthDbContext>().Database.MigrateAsync();
+    await scope.ServiceProvider.GetRequiredService<InfoDbContext>().Database.MigrateAsync();
     return;
 }
 
