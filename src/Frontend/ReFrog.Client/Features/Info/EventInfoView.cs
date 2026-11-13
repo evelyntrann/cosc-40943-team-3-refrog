@@ -12,12 +12,18 @@ namespace ReFrog.Client.Features.Info;
 /// </summary>
 public sealed class EventInfoView(HttpClient http)
 {
+    private static readonly ApiError NoAnswer = new(ApiErrorCategory.Unavailable, "NETWORK_UNAVAILABLE",
+        "Event information could not be loaded. Check your connection and try again.");
+
     public EventInfoResponse? Info { get; private set; }
 
-    /// <summary>True when no answer could be read; the page offers a retry (architecture §8.2.1).</summary>
-    public bool Unavailable { get; private set; }
+    /// <summary>The server's error from the shared envelope, or NETWORK_UNAVAILABLE when no readable answer arrived.</summary>
+    public ApiError? Error { get; private set; }
 
-    public bool Loading => Info is null && !Unavailable;
+    /// <summary>True after a failed load; the page offers a retry (architecture §8.2.1).</summary>
+    public bool Unavailable => Error is not null;
+
+    public bool Loading => Info is null && Error is null;
 
     public bool IsActive => Info?.Status == EventInfoStatus.Active && Info.ScheduleWindow is not null;
 
@@ -29,16 +35,21 @@ public sealed class EventInfoView(HttpClient http)
     public async Task LoadAsync()
     {
         Info = null;
-        Unavailable = false;
+        Error = null;
         try
         {
-            var answer = await http.GetFromJsonAsync<ApiResponse<EventInfoResponse>>("api/v1/info/event");
+            // Read the shared envelope for every status, so a server error keeps its category and code.
+            using var response = await http.GetAsync(new Uri("api/v1/info/event", UriKind.Relative));
+            var answer = await response.Content.ReadFromJsonAsync<ApiResponse<EventInfoResponse>>();
             Info = answer?.Data;
-            Unavailable = Info is null;
+            Error = Info is null ? answer?.Error ?? NoAnswer : null;
         }
-        catch (Exception failure) when (failure is HttpRequestException or JsonException or TaskCanceledException)
+        catch (Exception failure) when (failure is HttpRequestException or JsonException or TaskCanceledException
+            or NotSupportedException or InvalidOperationException or ArgumentException)
         {
-            Unavailable = true;
+            // Includes non-JSON replies (for example a captive portal) and a malformed envelope.
+            Info = null;
+            Error = NoAnswer;
         }
     }
 

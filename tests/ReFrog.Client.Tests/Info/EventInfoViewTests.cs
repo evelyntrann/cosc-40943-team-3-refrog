@@ -56,9 +56,30 @@ public sealed class EventInfoViewTests
         await view.LoadAsync();
         Assert.IsTrue(view.Unavailable);
         Assert.IsNull(view.Info);
+        Assert.AreEqual("UNEXPECTED_ERROR", view.Error?.Code);
 
         await view.LoadAsync();
         Assert.IsFalse(view.Unavailable);
+        Assert.IsNull(view.Error);
+        Assert.IsTrue(view.IsActive);
+    }
+
+    [TestMethod]
+    [DataRow("text/html", "<html>Sign in to the Wi-Fi</html>")]
+    [DataRow("application/json", "{}")]
+    public async Task UnreadableReplyIsUnavailableAndRetryRecovers(string mediaType, string body)
+    {
+        var server = new ScriptedServer();
+        server.Raw(mediaType, body);
+        server.Reply(HttpStatusCode.OK, ApiResponse.Success(ActiveEvent));
+        var view = server.View();
+
+        await view.LoadAsync();
+        Assert.IsTrue(view.Unavailable);
+        Assert.IsFalse(view.Loading);
+        Assert.AreEqual("NETWORK_UNAVAILABLE", view.Error?.Code);
+
+        await view.LoadAsync();
         Assert.IsTrue(view.IsActive);
     }
 
@@ -85,6 +106,9 @@ public sealed class EventInfoViewTests
             replies.Enqueue(() => new HttpResponseMessage(status) { Content = JsonContent.Create(body) });
 
         public void Drop() => replies.Enqueue(() => throw new HttpRequestException("Connection dropped."));
+
+        public void Raw(string mediaType, string body) => replies.Enqueue(() =>
+            new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body, System.Text.Encoding.UTF8, mediaType) });
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
