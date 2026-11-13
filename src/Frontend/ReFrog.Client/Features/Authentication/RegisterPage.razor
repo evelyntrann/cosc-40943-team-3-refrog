@@ -4,61 +4,121 @@
 
 <PageTitle>Register | ReFrog</PageTitle>
 
-<h1>Register</h1>
+<div class="registration-shell">
+    <section class="registration-intro" aria-labelledby="registration-heading">
+        <p class="eyebrow">ReFrog account</p>
+        <h1 id="registration-heading">Create your account</h1>
+        <p class="intro-copy">Register once to access ReFrog's protected volunteer, shopping, and account features.</p>
 
-@if (form.Completed is not null)
-{
-    <p role="status">Your account is ready. @(form.Completed.TcuEmailVerified ? "TCU email verified." : "")</p>
-}
-else if (form.Pending is null)
-{
-    <form @onsubmit="form.StartAsync" @onsubmit:preventDefault>
-        <label for="registration-email">Email</label>
-        <input id="registration-email" type="email" autocomplete="email" @bind="form.Email" required />
-        @if (form.FieldError("email") is { } emailError)
+        <ol class="registration-progress" aria-label="Registration progress">
+            <li class="@(form.Pending is null && form.Completed is null ? "current" : "complete")">
+                <span aria-hidden="true">1</span>
+                Account details
+            </li>
+            <li class="@(form.Pending is not null && form.Completed is null ? "current" : form.Completed is not null ? "complete" : "")">
+                <span aria-hidden="true">2</span>
+                Verify email
+            </li>
+        </ol>
+    </section>
+
+    <section class="registration-card" aria-label="Account registration">
+        @if (form.Completed is not null)
         {
-            <p role="alert">@emailError</p>
+            <div class="success-panel" role="status">
+                <div class="success-mark" aria-hidden="true">✓</div>
+                <p class="eyebrow">Registration complete</p>
+                <h2>Your account is ready</h2>
+                <p>@form.Completed.Email</p>
+                @if (form.Completed.TcuEmailVerified)
+                {
+                    <p class="verification-badge">TCU email verified</p>
+                }
+            </div>
+        }
+        else if (form.Pending is null)
+        {
+            <div class="card-heading">
+                <h2>Start with your email</h2>
+                <p>We'll send a one-time code to confirm that the address belongs to you.</p>
+            </div>
+
+            <form class="registration-form" @onsubmit="form.StartAsync" @onsubmit:preventDefault>
+                <div class="field-group">
+                    <label for="registration-email">Email address</label>
+                    <input id="registration-email" type="email" autocomplete="email" @bind="form.Email"
+                           aria-describedby="email-guidance" required />
+                    <p id="email-guidance" class="field-help">Please use a tcu.edu email if you are a TCU affiliate.</p>
+                    @if (form.FieldError("email") is { } emailError)
+                    {
+                        <p class="field-error" role="alert">@emailError</p>
+                    }
+                </div>
+
+                <div class="field-group">
+                    <label for="registration-password">Password</label>
+                    <input id="registration-password" type="password" autocomplete="new-password" @bind="form.Password"
+                           aria-describedby="password-guidance" required />
+                    <p id="password-guidance" class="field-help">Use 6+ characters with uppercase, lowercase, a number, and a symbol.</p>
+                    @if (form.FieldError("password") is { } passwordError)
+                    {
+                        <p class="field-error" role="alert">@passwordError</p>
+                    }
+                </div>
+
+                <button class="primary-action" type="submit" disabled="@form.Busy">
+                    @(form.Busy ? "Sending code…" : "Continue")
+                </button>
+            </form>
+        }
+        else
+        {
+            <div class="card-heading">
+                <p class="eyebrow">Check your inbox</p>
+                <h2>Verify your email</h2>
+                <p>Enter the six-digit code sent to <strong>@form.Email</strong>.</p>
+            </div>
+
+            <form class="registration-form" @onsubmit="form.VerifyAsync" @onsubmit:preventDefault>
+                <div class="field-group">
+                    <label for="registration-code">Verification code</label>
+                    <input class="code-input" id="registration-code" type="text" inputmode="numeric"
+                           autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" @bind="form.Code" required />
+                    @if (form.FieldError("code") is { } codeError)
+                    {
+                        <p class="field-error" role="alert">@codeError</p>
+                    }
+                </div>
+
+                <button class="primary-action" type="submit" disabled="@form.Busy">
+                    @(form.Busy ? "Verifying…" : "Verify and create account")
+                </button>
+            </form>
+
+            <div class="resend-panel">
+                <p>Didn't receive the email?</p>
+                <button class="secondary-action" type="button" disabled="@(form.Busy || !form.CanResend)"
+                        @onclick="form.ResendAsync">Send a new code</button>
+                @if (!form.CanResend)
+                {
+                    <p class="resend-time">Available after @ChicagoTime(form.Pending.ResendAvailableAt).</p>
+                }
+            </div>
         }
 
-        <label for="registration-password">Password</label>
-        <input id="registration-password" type="password" autocomplete="new-password" @bind="form.Password" required />
-        @if (form.FieldError("password") is { } passwordError)
+        @if (form.Error is not null)
         {
-            <p role="alert">@passwordError</p>
+            <div class="form-alert" role="alert">
+                <strong>We couldn't complete that request.</strong>
+                <p>@form.Error.Message</p>
+                @if (form.Error.RetryAt is not null)
+                {
+                    <p>Try again after @ChicagoTime(form.Error.RetryAt.Value).</p>
+                }
+            </div>
         }
-
-        <p>Use six or more characters with uppercase, lowercase, a number, and a symbol.</p>
-        <button type="submit" disabled="@form.Busy">Send verification code</button>
-    </form>
-}
-else
-{
-    <p>Enter the six-digit code sent to @form.Email.</p>
-    <form @onsubmit="form.VerifyAsync" @onsubmit:preventDefault>
-        <label for="registration-code">Verification code</label>
-        <input id="registration-code" type="text" inputmode="numeric" autocomplete="one-time-code"
-               maxlength="6" pattern="[0-9]{6}" @bind="form.Code" required />
-        @if (form.FieldError("code") is { } codeError)
-        {
-            <p role="alert">@codeError</p>
-        }
-        <button type="submit" disabled="@form.Busy">Verify and create account</button>
-    </form>
-    <button type="button" disabled="@(form.Busy || !form.CanResend)" @onclick="form.ResendAsync">Send a new code</button>
-    @if (!form.CanResend)
-    {
-        <p>You can request a new code after @ChicagoTime(form.Pending.ResendAvailableAt).</p>
-    }
-}
-
-@if (form.Error is not null)
-{
-    <p role="alert">@form.Error.Message</p>
-    @if (form.Error.RetryAt is not null)
-    {
-        <p>Try again after @ChicagoTime(form.Error.RetryAt.Value).</p>
-    }
-}
+    </section>
+</div>
 
 @code {
     private RegistrationForm form = null!;
