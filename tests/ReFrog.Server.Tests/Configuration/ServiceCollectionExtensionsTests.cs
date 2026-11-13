@@ -39,4 +39,24 @@ public sealed class ServiceCollectionExtensionsTests
 
         Assert.IsInstanceOfType<MicrosoftGraphEmailSender>(provider.GetRequiredService<IEmailSender>());
     }
+
+    [TestMethod]
+    public void SmtpProviderUsesTheSharedEmailAdapter()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Email:Provider"] = "Smtp",
+            ["Email:Smtp:Host"] = "localhost",
+            ["Email:Smtp:Port"] = "1025",
+            ["Email:Smtp:SenderAddress"] = "refrog@localhost.test",
+        }).Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddReFrogCore(configuration);
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.IsInstanceOfType<SmtpEmailSender>(provider.GetRequiredService<IEmailSender>());
+    }
 }

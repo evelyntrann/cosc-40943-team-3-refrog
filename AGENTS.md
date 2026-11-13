@@ -38,7 +38,7 @@ ReFrog: a phone-first progressive web app for TCU's finals-week move-out donatio
 
 - One deployable: PWA front end and application modules ship together, one database (architecture §9.2 `KD-deployment-shape`).
 - Technology stack: C# / ASP.NET Core application, Blazor PWA, Microsoft SQL Server database (architecture §9.2 `KD-tcu-it-stack`); do not add another language, framework, or database on your own.
-- Hosting: **unresolved**, TCU IT vs. paid (`OI-15`); keep hosting specifics out of code.
+- Hosting: EAS will host the ASP.NET Core application and Microsoft SQL Server database on TCU-managed infrastructure (`OI-15`, resolved); Azure is not required. Keep provider-specific hosting assumptions out of code unless EAS approves them.
 - Sign-in: the app's own email-and-password accounts, email confirmed by a one-time code at registration; no Google or other external identity provider (architecture §9.2 `KD-own-accounts`). A successfully code-verified exact `tcu.edu` registration email also establishes persisted TCU email verification; other sign-in emails prove identity only (architecture §8.1, `FR-AUTH-account-signup`).
 - TCU affiliation is proven only by the email one-time code (`UC-IDV-verify-affiliation`, `OI-10`).
 - Donors do not sign in (`OI-4`); donation partners get no app access (`OI-3`).

@@ -964,7 +964,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 **Related Use Cases:** `UC-VOL-cancel-shift`: Cancel a signed-up shift; `UC-VOL-signup`: Sign up for a volunteer shift
 **Assumptions:** none.
-**Open Issues:** none — `OI-7` is resolved. The channel is settled (email plus in-app inbox, team decision 2026-10-16); only the email provider remains open, tracked in the architecture document.
+**Open Issues:** `OI-7` is resolved. The channel is settled (email plus in-app inbox, team decision 2026-10-16); the production email provider remains open under `OI-25`.
 
 ---
 
@@ -1219,20 +1219,20 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 **Postconditions:**
 
-- POST-1. The shopping visit (location, date, item count, and the category of each item) is recorded.
+- POST-1. The shopping visit (location, date, item count, category of each item, stored item-weight estimates, and server-calculated total estimated weight) is recorded.
 
 **Main Success Scenario:**
 
 1. The shopper indicates they are finished selecting items.
 2. The system asks the shopper to enter the number of items taken and to select a category for each item, from the same fixed category set used for donations (confirmed 2026-10-02, matching `UC-DON-log-donation`'s extension 2a).
 3. The shopper enters the count, selects a category for each item, and confirms.
-4. The system records the shopping visit.
+4. The system calculates the estimated weight under `FR-SHP-estimated-weight` and records the shopping visit.
 5. The system confirms the entry to the shopper.
 6. Use case ends.
 
 **Extensions:**
 
-- **3a. The shopper enters an invalid count (negative, non-numeric, or zero):**
+- **3a. The shopper enters an invalid count (negative, fractional, or non-numeric):**
     - 3a1. The system rejects the entry and asks the shopper to correct it.
     - 3a2. Use case resumes at step 2.
 - **3b. The shopper does not select a category for every item:**
@@ -1254,8 +1254,9 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 | Property name | Data type | Validation rule | Security or access concerns | Glossary reference |
 |---|---|---|---|---|
 | location | Reference | Required; must reference an active ReFrog location | Visible to administrators | Donation Location |
-| item count | Integer | Required; positive whole number | Visible to administrators | Item |
+| item count | Integer | Required; non-negative whole number | Visible to administrators | Item |
 | category | Enum, same fixed set as `UC-DON-log-donation` | Required; one category per item taken, so the number of categories equals the item count (repeats allowed) | Visible to administrators | Item |
+| estimated weight | Decimal | Derived by the server under `FR-SHP-estimated-weight`; zero when item count is zero | Visible to administrators; never supplied by the shopper | Item |
 
 A failed save leaves no visit recorded. A retry of the same submission, whether user-initiated or a duplicate, must not record the same visit twice.
 
@@ -1294,7 +1295,7 @@ A failed save leaves no visit recorded. A retry of the same submission, whether 
 
 **Extensions:**
 
-- **3a. The donor enters an invalid item count:**
+- **3a. The donor enters an invalid item count (negative, fractional, or non-numeric):**
     - 3a1. The system rejects the entry and asks the donor to correct it.
     - 3a2. Use case resumes at step 2.
 - **2a. The donor selects a category for the donation:**
@@ -1316,7 +1317,7 @@ A failed save leaves no visit recorded. A retry of the same submission, whether 
 | Property name | Data type | Validation rule | Security or access concerns | Glossary reference |
 |---|---|---|---|---|
 | location | Reference | Required; must reference an active ReFrog location | Visible to administrators | Donation Location |
-| item count | Integer | Required; positive whole number | Visible to administrators | Item |
+| item count | Integer | Required; non-negative whole number | Visible to administrators | Item |
 | category | Enum, one of a fixed set (e.g., mattress toppers, headboards, large furniture — final list TBD) | Optional | Visible to administrators | Item |
 
 A failed save leaves no donation recorded. A retry of the same submission, whether donor-initiated or a duplicate, must not record the same donation twice.

@@ -27,7 +27,7 @@ _**How much to write.** Pin down what a wrong guess would break: a requirement, 
 
 _[One paragraph: what this area does, which components of your [architecture-of-record](architectural-design.md) it lives in, and what it reads from or calls in other areas. Link the container diagram rather than redrawing it. If this design changes the architecture-of-record, say so here and list the change under "Changes to the architecture-of-record" below.]_
 
-Identity Verification decides whether a signed-in account may shop from the persisted TCU verification and trusted current access state owned by [Authentication](AUTH.md) (`UC-IDV-verify-affiliation`, `FR-AUTH-shopping-eligibility`). Authentication also runs the shared email-code machinery for the later profile verification path. IDV owns only the shopping-eligibility decision and its presentation. The remaining Spring/Vue/PostgreSQL components and data model below are superseded and must be replaced in the dedicated IDV revision before implementation.
+Identity Verification decides whether a signed-in account may shop from the persisted TCU verification and trusted current access state owned by [Authentication](AUTH.md) (`UC-IDV-verify-affiliation`, `FR-AUTH-shopping-eligibility`). Authentication owns the single purpose-aware email-code service and persisted TCU verification used by both registration and later profile verification. IDV owns the shopping-eligibility orchestration, its endpoints, and its presentation; it does not own verification-code persistence or cryptography.
 
 ## Components & classes
 
@@ -59,29 +59,19 @@ classDiagram
         +VerifyCodeAsync(account, access, code)
         +CheckShoppingEligibilityAsync() ShoppingEligibility
     }
-    class ITcuEmailVerificationStore {
-        <<new, interface>>
+    class IAuthTcuVerificationReader {
+        <<reused, Authentication>>
+        +GetForAccountAsync(accountId)
     }
-    class ITcuEmailCodeStore {
-        <<new, interface>>
-        +BeginAccountWriteAsync(accountId, email)
-    }
-    class SqlServerStores {
-        <<new, EF Core + SQL Server>>
-    }
-    class CodeVerifier {
-        <<new>>
-        +Hash(accountId, codeId, code) keyVersion, hmac
-        +Matches(row, code) bool
+    class IAuthVerificationChallengeService {
+        <<reused, Authentication>>
+        +RequestAsync(accountId, TCU_AFFILIATION, email, requestId)
+        +VerifyAsync(accountId, TCU_AFFILIATION, code)
     }
     class ICurrentUser {
         <<reused, Authentication>>
         +AccountId
         +GetCurrentVolunteerAccessAsync() ROLE_ACTIVE|NONE|RESTRICTED
-    }
-    class IEmailSender {
-        <<reused, shared adapter>>
-        +SendAsync(to, subject, body)
     }
     class TimeProvider {
         <<reused, .NET, §8.2.2>>
@@ -90,28 +80,15 @@ classDiagram
     AffiliationController --> ICurrentUser
     AffiliationController --> AffiliationService
     AffiliationService --> ICurrentUser : for CheckShoppingEligibilityAsync
-    AffiliationService --> ITcuEmailVerificationStore
-    AffiliationService --> ITcuEmailCodeStore
-    SqlServerStores ..|> ITcuEmailVerificationStore
-    SqlServerStores ..|> ITcuEmailCodeStore
-    AffiliationService --> CodeVerifier
-    AffiliationService --> IEmailSender
+    AffiliationService --> IAuthTcuVerificationReader
+    AffiliationService --> IAuthVerificationChallengeService
     AffiliationService --> TimeProvider
 ```
 
-- `client/idv/AffiliationSection.razor` (new): the identity section of `UI-account-profile`. It renders the status from `GET /api/v1/me/shopping-eligibility`. It shows "TCU email verified" and the "Volunteer" role as separate facts (2b1). It shows "Volunteer access inactive—administrator review required" for `RESTRICTED` (2c1), and in that state never shows "TCU email verified", so the screen a volunteer sees at step 8 cannot read as a pass (`BR-volunteer-role-lifecycle`). It shows "Unable to verify access—try again" with a retry for `503 ACCESS_UNAVAILABLE` (2d1), and the same for a network failure or a `5xx` without an IDV code on the `GET`; it never shows a last-known status (§8.2.1). It offers the email form and code form only when the account is not eligible and not restricted. The explanation of both qualifying paths sits beside the email form, so a shopper with neither sees why they cannot shop (5b1). It does not check the email's domain itself; on `422` it names the bad field and keeps the typed email (§8.2.5). It offers resend after a rejected code (5a1), and disables resend until `resendAvailableAt`. It generates a new `requestId` (a GUID) for each explicit send and reuses it when it retries that same send after a dropped response.
+- `client/idv/AffiliationSection.razor` (new): the identity section of `UI-account-profile`. It renders the status from `GET /api/v1/me/shopping-eligibility`. It shows "TCU email verified" and the "Volunteer" role as separate facts (2b1). It shows "Volunteer access inactive—administrator review required" for `RESTRICTED` (2c1), and in that state never shows "TCU email verified", so the screen a volunteer sees at step 8 cannot read as a pass (`BR-volunteer-role-lifecycle`). It shows "Unable to verify access—try again" with a retry for `503 ACCESS_UNAVAILABLE` (2d1), and the same for a network failure or a `5xx` without an IDV code on the `GET`; it never shows a last-known status (§8.2.1). It offers the email form and code form only when the account is not eligible and not restricted. The explanation of both qualifying paths sits beside the email form, so a shopper with neither sees why they cannot shop (5b1). Beside the email field it displays: "Please use a tcu.edu email if you are a TCU affiliate." This is guidance, not a client-side authorization check; the server remains authoritative. On `422` it names the bad field and keeps the typed email (§8.2.5). It offers resend after a rejected code (5a1), and disables resend until `resendAvailableAt`. It generates a new `requestId` (a GUID) for each explicit send and reuses it when it retries that same send after a dropped response.
 - `server/idv/AffiliationController` (new): three endpoints, behind the application-wide "signed in" authorization policy Authentication provides. The controller also requires an authenticated user itself, so it is never anonymous before that policy exists; tests sign in through a test authentication handler. It takes the account only from `ICurrentUser` and validates request shape, nothing else.
-- `server/idv/AffiliationService` (new): every IDV rule. It checks the restriction before eligibility, the exact domain, rate limits, code lifetime and attempts, and supersede-on-resend. It reads time only from the injected `TimeProvider`. `CheckShoppingEligibilityAsync()` is the only thing Shopping calls.
-- `server/idv/ITcuEmailVerificationStore`, `server/idv/ITcuEmailCodeStore` (new): IDV's persistence abstraction (`MNT-data-access-abstraction`). `AffiliationService` sees only these interfaces and no Entity Framework Core or SQL Server type. `BeginAccountWriteAsync` opens the transaction for one code request or one verification and takes the locks described under Key decisions; everything else the service needs (the account's saved verification, limits, the live code, the outcome of a `requestId`) is read inside it.
-- `server/idv/SqlServer…Store` implementations and their Entity Framework Core mappings and migration (new): the only IDV code that knows about Entity Framework Core, SQL Server types, or lock hints (architecture §8.2.8). Whether IDV has its own `DbContext` or adds its entities to a shared one follows the first code's convention; IDV's transactions touch only IDV's tables either way.
-- `server/idv/CodeVerifier` (new): HMAC-SHA256 (`HMACSHA256`) over the account, code row, and code, using versioned keys from deployment secrets (§8.2.6). Codes come from `RandomNumberGenerator.GetInt32(0, 1_000_000)`, formatted to six digits. Comparison uses `CryptographicOperations.FixedTimeEquals`. All three are in .NET itself; IDV adds no cryptography package.
-- `ICurrentUser` (reused contract, owned by Authentication): the account id and current volunteer access. [vol.md](vol.md) fixed event-scoped access for a shift. IDV has no shift and so no event, so it needs **`GetCurrentVolunteerAccessAsync()`**, which resolves the current annual event inside Authentication (see Key decisions and Open questions). It reads current state from the database on every call, never from role claims carried in the sign-in cookie, because `FR-AUTH-shopping-eligibility` forbids old session role claims from authorizing. It fails as unavailable rather than defaulting. IDV relies on this mapping, which Authentication must implement:
-- `client/idv/AffiliationSection.razor` (new): the identity section of `UI-account-profile`. It renders the status from `GET /api/v1/me/shopping-eligibility`. It shows "TCU email verified" and the "Volunteer" role as separate facts (2b1). It shows "Volunteer access inactive—administrator review required" for `RESTRICTED` (2c1), and in that state never shows "TCU email verified", so the screen a volunteer sees at step 8 cannot read as a pass (`BR-volunteer-role-lifecycle`). It shows "Unable to verify access—try again" with a retry for `503 ACCESS_UNAVAILABLE` (2d1), and the same for a network failure or a `5xx` without an IDV code on the `GET`; it never shows a last-known status (§8.2.1). It offers the email form and code form only when the account is not eligible and not restricted. The explanation of both qualifying paths sits beside the email form, so a shopper with neither sees why they cannot shop (5b1). It does not check the email's domain itself; on `422` it names the bad field and keeps the typed email (§8.2.5). It offers resend after a rejected code (5a1), and disables resend until `resendAvailableAt`. It generates a new `requestId` (a GUID) for each explicit send and reuses it when it retries that same send after a dropped response.
-- `server/idv/AffiliationController` (new): three endpoints, behind the application-wide "signed in" authorization policy Authentication provides. The controller also requires an authenticated user itself, so it is never anonymous before that policy exists; tests sign in through a test authentication handler. It takes the account only from `ICurrentUser` and validates request shape, nothing else.
-- `server/idv/AffiliationService` (new): every IDV rule. It checks the restriction before eligibility, the exact domain, rate limits, code lifetime and attempts, and supersede-on-resend. It reads time only from the injected `TimeProvider`. `CheckShoppingEligibilityAsync()` is the only thing Shopping calls.
-- `server/idv/ITcuEmailVerificationStore`, `server/idv/ITcuEmailCodeStore` (new): IDV's persistence abstraction (`MNT-data-access-abstraction`). `AffiliationService` sees only these interfaces and no Entity Framework Core or SQL Server type. `BeginAccountWriteAsync` opens the transaction for one code request or one verification and takes the locks described under Key decisions; everything else the service needs (the account's saved verification, limits, the live code, the outcome of a `requestId`) is read inside it.
-- `server/idv/SqlServer…Store` implementations and their Entity Framework Core mappings and migration (new): the only IDV code that knows about Entity Framework Core, SQL Server types, or lock hints (architecture §8.2.8). Whether IDV has its own `DbContext` or adds its entities to a shared one follows the first code's convention; IDV's transactions touch only IDV's tables either way.
-- `server/idv/CodeVerifier` (new): HMAC-SHA256 (`HMACSHA256`) over the account, code row, and code, using versioned keys from deployment secrets (§8.2.6). Codes come from `RandomNumberGenerator.GetInt32(0, 1_000_000)`, formatted to six digits. Comparison uses `CryptographicOperations.FixedTimeEquals`. All three are in .NET itself; IDV adds no cryptography package.
+- `server/idv/AffiliationService` (new): applies the IDV ordering rules: current restriction first, then active volunteer access, then persisted TCU email verification. It delegates code requests and submissions to Authentication with purpose `TCU_AFFILIATION`; it does not duplicate domain, rate-limit, lifetime, attempt, or supersession rules. `CheckShoppingEligibilityAsync()` is the only thing Shopping calls.
+- `IAuthTcuVerificationReader` and `IAuthVerificationChallengeService` (reused contracts, owned by Authentication): expose persisted verification and the single purpose-aware verification workflow described in [AUTH.md](AUTH.md). Authentication owns their Entity Framework Core mappings, Microsoft SQL Server transactions and locks, HMAC verification, and shared email adapter call. IDV adds no code tables, store implementations, verifier, migration, or email-provider integration.
 - `ICurrentUser` (reused contract, owned by Authentication): the account id and current volunteer access. [VOL.md](VOL.md) fixed event-scoped access for a shift. IDV has no shift and so no event, so it needs **`GetCurrentVolunteerAccessAsync()`**, which resolves the current annual event inside Authentication (see Key decisions and Open questions). It reads current state from the database on every call, never from role claims carried in the sign-in cookie, because `FR-AUTH-shopping-eligibility` forbids old session role claims from authorizing. It fails as unavailable rather than defaulting. IDV relies on this mapping, which Authentication must implement:
   - `ROLE_ACTIVE`: the role is held for the current event.
   - `RESTRICTED`: the role was explicitly removed, or it expired at an event's end and has not been renewed (`BR-volunteer-role-lifecycle`). This holds between events too.
@@ -136,7 +113,7 @@ sequenceDiagram
     participant C as AffiliationController
     participant CU as ICurrentUser
     participant SV as AffiliationService
-    participant DB as SQL Server (through IDV stores)
+    participant DB as SQL Server (through AUTH contracts)
     participant E as IEmailSender
     actor V as Volunteer
     S->>UI: Wants to shop (step 1)
@@ -183,7 +160,7 @@ sequenceDiagram
     participant C as AffiliationController
     participant CU as ICurrentUser
     participant SV as AffiliationService
-    participant DB as SQL Server (through IDV stores)
+    participant DB as SQL Server (through AUTH contracts)
     actor V as Volunteer
     S->>UI: Wants to shop (step 1)
     UI->>C: GET /api/v1/me/shopping-eligibility (step 2)
@@ -223,7 +200,7 @@ If either read fails in any branch, the access read or the IDV store read, the r
 
 _[One row per endpoint, scheduled job, or message this area adds or changes, appended per use case. **This section is never dropped**: before the code exists it is the only thing the person (or agent session) building the front end and the one building the back end both read. Name the caller and who may call it, the request fields, the success response, and the error each extension returns. Leave field types and exact JSON to the agent unless a wrong guess would break something, such as a format another system depends on. Use the error shape your architecture-of-record's section 8.2 fixes; do not invent one here.]_
 
-Architecture §8.2.1 and §8.2.3 do not fix the response envelope yet, so this table fixes only the error **codes** the front end branches on, the same approach [VOL.md](VOL.md) takes. Each code sits in a machine-readable field of whatever envelope the team fixes, produced by the one shared error handler. `VOLUNTEER_ACCESS_INACTIVE` and `ACCESS_UNAVAILABLE` are the same codes VOL uses. "Access unavailable" reaches the handler as its own exception mapped to `503`, never the generic `500`. Times are ISO-8601 with their UTC offset. Enum values (`basis`, `volunteerAccess`) and error codes travel as the strings written here, never as numbers: .NET's JSON serializer writes enums as numbers unless it is configured once, application-wide, to write strings. Every retry time is in the response body. No endpoint accepts an account id or role from the browser. Within either `POST`, a database failure before the first write (taking the locks or reading) is `503 ACCESS_UNAVAILABLE`, the same as 2d. A failure at or after the first write, a deadlock or the commit included, rolls back and is the save failure: a `5xx` without an IDV code, with nothing saved and nothing sent.
+The endpoints use the application-wide success/error envelope and documented status-code mapping fixed by architecture §8.2.3. `VOLUNTEER_ACCESS_INACTIVE` and `ACCESS_UNAVAILABLE` are the same codes VOL uses. "Access unavailable" reaches the shared handler as its own exception mapped to `503`, never the generic `500`. Times are ISO-8601 with their UTC offset. Enum values (`basis`, `volunteerAccess`) and error codes travel as strings. Every retry time is in the response body. No endpoint accepts an account id or role from the browser. AUTH-owned verification write failures roll back and are never reported as saved (§8.2.1, §8.2.8).
 
 | Endpoint or operation | Caller (who may) | Request | Success | Errors, by extension |
 |---|---|---|---|---|
@@ -263,15 +240,15 @@ Rejected:
 
 **The per-email hourly limit takes a second lock, always after the account's.** A code request also takes `UPDLOCK, HOLDLOCK` on the destination email's rows (the (`email`, `created_at`) index), after the account lock. So two accounts sending to one address at the same moment cannot both take its fifth slot (`FR-AUTH-verification-limits`). Every request takes the two locks in the same order, so two requests cannot deadlock on them. Rejected: counting the email's rows without a lock, which lets a concurrent pair exceed the limit at its boundary.
 
-**IDV's store interfaces are its persistence abstraction.** `AffiliationService` depends on `ITcuEmailCodeStore` and `ITcuEmailVerificationStore` only. The Entity Framework Core mappings, the lock hints, and the SQL Server types live only in their implementations (architecture §8.2.8, `MNT-data-access-abstraction`). Rejected: the service using the database context or raw SQL directly, which would put SQL Server-specific code in business-rule code and make EAP's replacement of database details touch the rules.
+**Authentication's contracts are IDV's persistence boundary.** `AffiliationService` depends on `IAuthVerificationChallengeService` and `IAuthTcuVerificationReader`; it does not use a database context, raw SQL, or verification tables directly (architecture §8.2.8, `MNT-data-access-abstraction`).
 
-**Codes are stored as a keyed HMAC, and keys are versioned.** `CodeVerifier` computes HMAC-SHA256 over the account, code row, and code. The key comes from deployment secrets through ASP.NET Core configuration, never from a settings file in source control (§8.2.6). Each row records its key version, so an old key is kept until its outstanding codes expire (approved 2026-10-16). Generate codes with `RandomNumberGenerator`, and generate again if the new code equals the one it supersedes (approved). The keys are checked at startup, and the Application does not start without a current key. A code row whose key version is no longer configured is answered as `CODE_EXPIRED`, which counts no failure (`FR-AUTH-verification-limits`), and is logged as an error. Rejected: plaintext, or a plain hash, because six digits are recovered from a leaked hash by trying all million values.
+**AUTH stores codes as keyed HMAC values with versioned keys.** The AUTH-owned verifier and challenge store implement the HMAC, key rotation, secure generation, fixed-time comparison, and expired-key behavior defined in [AUTH.md](AUTH.md). IDV supplies no cryptography or key configuration (§8.2.6).
 
-**IDV's own code tables, not ASP.NET Core Identity's email token providers.** Identity can generate six-digit email codes, but they are time-window codes that are never stored. They cannot enforce "only the latest code", "accepted at most once", or "invalidated by its fifth failure" (`FR-AUTH-verification-code`, `FR-AUTH-verification-limits`), and Authentication has not yet chosen whether it uses Identity at all. Rejected for those reasons.
+**One AUTH-owned challenge service, not an IDV token system.** Authentication's purpose-aware service enforces "only the latest code", "accepted at most once", and the approved failure limits for both registration and `TCU_AFFILIATION` (`FR-AUTH-verification-code`, `FR-AUTH-verification-limits`). IDV neither selects an ASP.NET Core Identity token provider nor implements a parallel verifier.
 
 **Limits are counted from database rows, not ASP.NET Core's rate-limiting middleware.** The middleware counts in memory, per server instance, and forgets on restart. `FR-AUTH-verification-limits` requires limits that hold across sessions on the server, so every limit is counted from `tcu_email_code` and `tcu_email_code_failure` rows. Rejected: the middleware, for those reasons.
 
-**One shared email adapter.** IDV sends through the shared `IEmailSender` (charter; architecture §3, §5.1). Provider acceptance means "requested", never "received" or "verified". A provider timeout is `503 EMAIL_NOT_SENT` with no automatic background resend. Rejected: an IDV-only email client, which the earlier draft of this document had and which would put a second provider integration in the codebase.
+**One shared email adapter.** Authentication's challenge service sends through the shared `IEmailSender` (charter; architecture §3, §5.1). IDV calls the challenge service and never calls an email provider directly. Provider acceptance means "requested", never "received" or "verified"; a timeout is `503 EMAIL_NOT_SENT` with no automatic background resend.
 
 **Exact `tcu.edu` only, with a lenient shape check, checked only on the server.** The domain rule is `BR-tcu-email-domain`. Trim the address and lowercase it with `ToLowerInvariant()`, so the stored address does not depend on the server's culture (under a Turkish culture, culture-aware lowercasing turns `I` into a dotless `ı`). It is well formed if it has exactly one `@`, a non-empty local part with no whitespace or control characters, and at most 254 characters. The local part's characters are otherwise not restricted, so a real TCU address is never rejected for its spelling (`BR-shopper-tcu-affiliation`). Then accept it only if the part after the `@` equals `tcu.edu` (approved 2026-10-16; source `OI-10`). Control of the inbox, proven by the code, is the real check. Subdomains such as `frog.tcu.edu` and lookalikes such as `tcu.edu.co` are rejected. The lowercased address is what is stored and what per-email limits count.
 Rejected:
@@ -297,50 +274,9 @@ Only a `CODE_INVALID` result counts as a failure: it increments that code's `fai
 
 _[The **change** this area makes to the data: new tables or entities, new columns, the migration that adds them. Draw an ER diagram when there is more than one new table. Do not redraw the domain model; your [specification](../requirements/software-requirements-specification.md) owns it, so link it and show only the change. If the area changes nothing, say "No change" and give the reason in one line; that is a design decision too.]_
 
-Three new tables in Microsoft SQL Server, owned by IDV, created by IDV's first Entity Framework Core migration. `account` belongs to Authentication and is shown only for its foreign key; `account_id` takes whatever key type Authentication's account table uses.
+No IDV-owned tables or migration. Authentication owns the verification challenge, failure, and persisted TCU-verification tables defined in [AUTH.md](AUTH.md). IDV reads the persisted result and invokes the AUTH-owned challenge service through contracts; it never reads or writes those tables directly.
 
-```mermaid
-erDiagram
-    ACCOUNT ||--o| TCU_EMAIL_VERIFICATION : "verified as"
-    ACCOUNT ||--o{ TCU_EMAIL_CODE : "requested"
-    ACCOUNT ||--o{ TCU_EMAIL_CODE_FAILURE : "failed"
-    TCU_EMAIL_VERIFICATION {
-        id account_id PK, FK
-        nvarchar email
-        datetimeoffset verified_at
-    }
-    TCU_EMAIL_CODE {
-        id id PK
-        id account_id FK
-        nvarchar email
-        varbinary code_hmac
-        int key_version
-        uniqueidentifier request_id
-        nvarchar send_outcome
-        datetimeoffset created_at
-        datetimeoffset expires_at
-        int failed_attempts
-        datetimeoffset consumed_at
-        datetimeoffset superseded_at
-    }
-    TCU_EMAIL_CODE_FAILURE {
-        id account_id FK
-        datetimeoffset failed_at
-    }
-```
-
-- `tcu_email_verification`: one row per verified account. If there is no row, the account is not verified. It realizes "persisted TCU email verification" (`FR-AUTH-affiliation-from-signin`) and is stored separately from roles (SRS §7.4.5).
-- `tcu_email_code`: one row per code request. Its indexes carry the design:
-  - a **filtered unique index** on `account_id` `WHERE consumed_at IS NULL AND superseded_at IS NULL` is the one-live-code backstop;
-  - a **unique index** on (`account_id`, `request_id`) absorbs duplicate send actions; `send_outcome` (accepted or failed) lets a retry return the first outcome;
-  - an index on (`account_id`, `created_at`) is the range the account lock takes, and serves the cooldown (the newest row's `created_at`) and the per-account hourly count;
-  - an index on (`email`, `created_at`) is the range the email lock takes, and serves the per-email hourly count.
-- `tcu_email_code_failure`: one row per incorrect submission, for the ten-per-15-minutes budget that survives resends, indexed on (`account_id`, `failed_at`). It is written and committed even though the submission is refused.
-- `email` (at most 254 characters) is stored already lowercased, so no comparison relies on SQL Server's case-insensitive default collation. `code_hmac` is the 32-byte HMAC in binary.
-- All timestamps are `datetimeoffset`, written in UTC from `TimeProvider` and compared only with times from it (§8.2.2).
-- No role, restriction, or event column is copied into IDV; `ICurrentUser` owns them. No code, HMAC key, or raw TCU ID is stored.
-- Retention and pruning of old code and failure rows, and of verified emails, wait on `OI-6`. Rows older than one hour no longer affect any limit, so pruning them later changes no behavior.
-- The SRS data dictionary's `Shopper.verificationStatus` and `affiliationType` are realized only as "row exists or not" in `tcu_email_verification`. The email check cannot tell student from staff, so no affiliation type is stored.
+The IDV module stores no role, restriction, event, verification code, HMAC key, or raw TCU ID. Retention for the AUTH-owned verification data remains governed by `OI-6`.
 
 ## Reuse & cross-cutting
 
@@ -350,7 +286,7 @@ _[Which existing services, components, and conventions this area uses rather tha
 - **Email:** the shared `EmailSender` adapter (§3, §5.1). The provider is not chosen, and no provider name appears in IDV code.
 - **Error handling and API** (§8.2.1, §8.2.3): the shared handler, the codes above, and `/api/v1/me/...` naming consistent with VOL.
 - **Time** (§8.2.2): `Clock` for expiry, cooldown, and rolling windows. `expiresAt` is displayed in `America/Chicago` on a 12-hour clock.
-- **Validation** (§8.2.5): the server check is the one that counts; the client may pre-check the domain for feedback only.
+- **Validation** (§8.2.5): the server check is the one that counts. The client displays the approved `tcu.edu` guidance but does not duplicate the domain rule or authorize access.
 - **Configuration and secrets** (§8.2.6): HMAC keys and their versions, and provider credentials, come from deployment secrets.
 - **Logging** (§8.2.7): log outcomes such as code requested, delivery failed, or limit hit, with the account id only. Never log the code, the HMAC, a key, or the email address.
 - **Persistence** (§8.2.8): one transaction for each code request and each verification, as described in Key decisions.
@@ -380,7 +316,7 @@ _[One row per flow: the main success scenario and **every** extension of every u
 | 3a | unit | `a@tcu.edu` and `A@TCU.EDU` accepted and stored lowercase. `a@frog.tcu.edu`, `a@tcu.edu.co`, `a@xtcu.edu`, malformed addresses, and blank fail with `422 VALIDATION_FAILED` naming `email`, with no row and no email |
 | 3a, shape | unit | `first.last+x@tcu.edu` and `o'neil@tcu.edu` are accepted. `a@b@tcu.edu`, `@tcu.edu`, an address containing a space, and a 255-character address are refused with `422` naming `email` |
 | 3a, culture | unit | With the current culture set to `tr-TR`, `KIM@TCU.EDU` is stored as `kim@tcu.edu` |
-| 3a, front end | unit (front end) | On `422` the typed email stays in the field and the field is named; the component sends a non-`tcu.edu` address to the server rather than rejecting it itself |
+| 3a, front end | unit (front end) | The email field displays "Please use a tcu.edu email if you are a TCU affiliate." On `422` the typed email stays in the field and the field is named; the component sends a non-`tcu.edu` address to the server rather than rejecting it itself |
 | 5a, wrong code | integration | Wrong code: `422 CODE_INVALID`, `failed_attempts` incremented, one failure row, no verification |
 | 5a, fifth failure | integration | The fifth wrong code invalidates the code: even the correct code then gets `422 CODE_EXPIRED` |
 | 5a, expiry boundary | unit | With a fixed `TimeProvider`, the correct code one second before `expires_at` is accepted, and at `expires_at` gets `CODE_EXPIRED` |
@@ -430,10 +366,10 @@ _[What this design could not settle and who can, and what could go wrong that yo
 | Shopping's contract | SHP owner | [SHP.md](SHP.md) calls `AffiliationService.isVerified` and refuses with `AFFILIATION_NOT_VERIFIED`, which leaves out the volunteer path and the restriction that `FR-AUTH-shopping-eligibility` requires. SHP should call `checkShoppingEligibility()` and map `RESTRICTED`, `NOT_ELIGIBLE`, and unavailable. This design does not edit SHP.md. |
 | `OI-22`: expiry restricts past volunteers | Client | Under `BR-volunteer-role-lifecycle`, a past volunteer who is a TCU student cannot shop at the next event until renewed, even with verified email. This design builds the rule as written. |
 | `OI-6` retention | Client and TCU data governance | Retention and pruning of verified emails and of code and failure rows. |
-| Response envelope (**build prerequisite**) | Team | §8.2.1 and §8.2.3 still do not fix it, and IDV fixes only codes. `/implement` must not choose one: the team records it once in §8.2.3 before IDV's (or any area's) first endpoint is built. |
+| Response envelope | Team | Resolved by architecture §8.2.3: IDV uses the application-wide shared success/error envelope and documented status-code mapping. |
 | Code machinery shared with registration | Authentication owner | Resolved in [AUTH.md](AUTH.md): AUTH owns one purpose-aware challenge service and persisted TCU verification for registration and later IDV verification. The IDV revision removes its duplicate code tables and verifier. |
 | Authentication not built | Team (build order) | IDV can be built and tested against a stubbed `CurrentUser`, but it cannot run end to end, or create its `account` foreign key, until Authentication exists. |
-| Email provider | Team (`OI-15` hosting) | The `202` means provider acceptance only. A slow provider shows up as `503 EMAIL_NOT_SENT` with retry; no background resend is designed. |
+| Email provider | Team / EAS | The `202` means provider acceptance only. A slow provider shows up as `503 EMAIL_NOT_SENT` with retry; no background resend is designed. |
 
 ---
 
