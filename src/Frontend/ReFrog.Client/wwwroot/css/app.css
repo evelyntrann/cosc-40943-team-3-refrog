@@ -126,3 +126,13 @@ code {
 .form-floating > .form-control:focus::placeholder {
   text-align: start;
 }
+
+/* Keep the organizers' line breaks in the overview text (UC-INF-view-event-info). */
+.event-overview {
+  white-space: pre-line;
+}
+
+section[aria-labelledby="event-info-heading"] img {
+  max-width: 100%;
+  height: auto;
+}

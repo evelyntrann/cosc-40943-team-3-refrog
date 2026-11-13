@@ -1,0 +1,43 @@
+@using ReFrog.Contracts.Info
+@inject HttpClient Http
+
+<section aria-labelledby="event-info-heading">
+    <h2 id="event-info-heading">Event information</h2>
+
+    @if (view.Loading)
+    {
+        <p role="status">Loading event information…</p>
+    }
+    else if (view.Unavailable)
+    {
+        <p role="alert">Event information could not be loaded. Check your connection and try again.</p>
+        <button type="button" @onclick="view.LoadAsync">Try again</button>
+    }
+    else if (view.IsActive)
+    {
+        var info = view.Info!;
+        <p><strong>@info.EventYear move-out event:</strong> @view.DateRange</p>
+        <p><strong>Daily hours:</strong> @info.ScheduleWindow!.DailyHoursDescription</p>
+        <p class="event-overview">@info.CampusOverview</p>
+        @if (!string.IsNullOrWhiteSpace(info.OverallInfographicUrl))
+        {
+            <img src="@info.OverallInfographicUrl" alt="ReFrog event infographic" />
+        }
+    }
+    else
+    {
+        @* UC-INF-view-event-info extension 2a. Wording awaits client approval (issue #99). *@
+        <p>ReFrog collects items TCU students leave behind at move-out so they can be reused instead of thrown away.</p>
+        <p>Dates for the next move-out event have not been announced yet. Check back soon.</p>
+    }
+</section>
+
+@code {
+    private EventInfoView view = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        view = new EventInfoView(Http);
+        await view.LoadAsync();
+    }
+}
