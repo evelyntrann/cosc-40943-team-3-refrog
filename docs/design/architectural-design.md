@@ -265,7 +265,7 @@ _[Check before Checkpoint 1: every area in your use case file appears in the fir
 
 | Use case area | Component | Responsibility | Depends on | Status |
 |---|---|---|---|---|
-| `VOL` | Volunteer Scheduling | Owns a volunteer's shift sign-ups, cancellations, and their own schedule and hours | Administration, Authentication | provisional |
+| `VOL` | Volunteer Scheduling | Owns event-scoped volunteer access requests and a volunteer's shift sign-ups, cancellations, and their own schedule and hours | Administration, Authentication | provisional |
 | `IDV` | Identity Verification | Owns determining whether a signed-in shopper is eligible to shop from Authentication's persisted TCU verification and current volunteer-access state | Authentication | [IDV.md](IDV.md) |
 | `LOC` | Location Info | Owns the list of active ReFrog locations, hours, and event info shown to every participant | Administration | provisional |
 | `ADM` | Administration | Owns annual volunteer access review and renewal approval, volunteer access request decisions and manual email-based role grants and removals (team design decision, 2026-10-16), shift creation and configuration, manually triggering a notification to volunteers about open shifts (confirmed 2026-10-02, not an automatic alert), and the cross-location dashboard of donation counts, shopping counts and estimated weight, and volunteer-coverage activity | Authentication, Volunteer Scheduling, Shopping, Donation, Shopping-Abuse Monitoring, Email delivery channel | provisional |
