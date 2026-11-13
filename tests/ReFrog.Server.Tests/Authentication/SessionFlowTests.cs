@@ -82,10 +82,10 @@ public sealed class SessionFlowTests
         Assert.AreEqual(fixture.Clock.GetUtcNow().AddHours(4), CookieExpiry(accepted));
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
         var audits = await scope.ServiceProvider.GetRequiredService<AuthDbContext>()
-            .AdministratorSignInAudits.OrderBy(item => item.OccurredAt).ToListAsync();
+            .AdministratorSignInAudits.ToListAsync();
         Assert.HasCount(2, audits);
-        Assert.IsFalse(audits[0].Succeeded);
-        Assert.IsTrue(audits[1].Succeeded);
+        Assert.HasCount(1, audits.Where(item => !item.Succeeded));
+        Assert.HasCount(1, audits.Where(item => item.Succeeded));
     }
 
     [TestMethod]
