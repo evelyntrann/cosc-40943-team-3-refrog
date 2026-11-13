@@ -1,6 +1,6 @@
 # Volunteer Scheduling Design
 
-> **Stack revision required (2026-11-04):** `KD-tcu-it-stack` supersedes the Java/Spring/Vue/PostgreSQL assumptions in this design. Do not implement VOL until its framework, persistence, transaction, and locking details are revised for C# / ASP.NET Core, Blazor, and Microsoft SQL Server while preserving the cited requirements.
+> **Stack revision completed (2026-11-11):** This design uses C# / ASP.NET Core, Blazor PWA, Entity Framework Core, and Microsoft SQL Server under `KD-tcu-it-stack`.
 
 **Project:** ReFrog
 **Team:** Team 3
@@ -8,9 +8,9 @@
 
 > **Realizes:** `UC-VOL-signup`, `UC-VOL-cancel-shift`, `UC-VOL-view-schedule`
 > **Supports:** `UC-ADM-review-volunteer` (VOL's part only: confirming or releasing pending sign-ups)
-> **Depends on:** `BR-volunteer-assignment`, `BR-location-staffing`, `BR-event-schedule`, `BR-volunteer-role-approval`, `BR-volunteer-role-lifecycle`, `FR-AUTH-enforce-permissions`, `FR-AUTH-volunteer-role`, `FR-AUTH-volunteer-lifecycle`, `FR-VAL-server-validation`, `FR-SAVE-confirmed-success`, `FR-SAVE-unknown-outcome`, `FR-SAVE-duplicate-submission`, `ROB-duplicate-submission`, `USE-volunteer-signup-completion`, `PER-form-submission`, `SEC-least-privilege`, `UI-volunteer-schedule`, `KD-tech-stack`
-> **See:** [use cases](../requirements/use-cases.md#area-volunteer-scheduling-vol), [SRS non-use-case FRs](../requirements/software-requirements-specification.md#52-non-use-case-functional-requirements), [data dictionary](../requirements/software-requirements-specification.md#72-data-dictionary), [architecture-of-record](architectural-design.md) (§5.2 components, §8 crosscutting concepts, §9.2 `KD-tech-stack`)
-> **Designed against:** `main` at `4323d3d` (2026-10-16); `UC-VOL-signup` revised against `tech_stack` at `9175280` (`main` `612c5cc` plus `KD-tech-stack`, 2026-10-30). No application code exists yet; every class below is new.
+> **Depends on:** `BR-volunteer-assignment`, `BR-location-staffing`, `BR-event-schedule`, `BR-volunteer-role-approval`, `BR-volunteer-role-lifecycle`, `FR-AUTH-enforce-permissions`, `FR-AUTH-volunteer-role`, `FR-AUTH-volunteer-lifecycle`, `FR-VAL-server-validation`, `FR-SAVE-confirmed-success`, `FR-SAVE-unknown-outcome`, `FR-SAVE-duplicate-submission`, `ROB-duplicate-submission`, `USE-volunteer-signup-completion`, `PER-form-submission`, `SEC-least-privilege`, `UI-volunteer-schedule`, `KD-tcu-it-stack`
+> **See:** [use cases](../requirements/use-cases.md#area-volunteer-scheduling-vol), [SRS non-use-case FRs](../requirements/software-requirements-specification.md#52-non-use-case-functional-requirements), [data dictionary](../requirements/software-requirements-specification.md#72-data-dictionary), [architecture-of-record](architectural-design.md) (§5.2 components, §8 crosscutting concepts, §9.2 `KD-tcu-it-stack`)
+> **Designed against:** the approved requirements and architecture through the 2026-11-11 TCU IT amendments. No VOL application code exists yet; every VOL class below is new.
 
 ---
 
@@ -52,7 +52,7 @@ _[One class diagram for the whole area, and one line per class or file saying wh
 
 _**If your repository has no code for this area yet**, which is the normal case for your proving slice, list the files you expect the agent to create, with the paths your architecture-of-record's conventions give them, and mark them all new. The agent then builds into the structure you chose rather than one it improvised.]_
 
-The repository has no code yet, so every file is new. The stack is Java / Spring Boot, Vue.js, and PostgreSQL (`KD-tech-stack`). Paths below use the `server/<module>/…` and `client/<module>/…` shorthand that [IDV.md](IDV.md) uses. The exact package root follows whatever layout the first code records under §8.2.4.
+The repository has no VOL code yet, so every VOL file is new. The stack is C# / ASP.NET Core, Blazor PWA, Entity Framework Core, and Microsoft SQL Server (`KD-tcu-it-stack`). Paths below use `src/Backend/<module>/…` and `src/Frontend/<module>/…` shorthand, consistent with the existing solution. Exact namespaces and folders follow the repository-wide convention recorded under §8.2.4.
 
 ```mermaid
 classDiagram
@@ -114,9 +114,9 @@ classDiagram
         +id() String
         +volunteerAccess(eventId) ROLE_ACTIVE | NONE | RESTRICTED
     }
-    class Clock {
-        <<reused, crosscutting 8.2.2>>
-        +now() Instant
+    class TimeProvider {
+        <<reused, .NET, crosscutting 8.2.2>>
+        +GetUtcNow() DateTimeOffset
     }
     VolunteerShiftController --> AssignmentService
     VolunteerShiftController --> ScheduleService
@@ -125,31 +125,31 @@ classDiagram
     AssignmentService --> ShiftService
     AssignmentService --> AdminEventConfigService
     AssignmentService --> CurrentUser
-    AssignmentService --> Clock
+    AssignmentService --> TimeProvider
     ScheduleService --> AssignmentRepository
     ScheduleService --> ShiftService
     ScheduleService --> AdminEventConfigService
-    ScheduleService --> Clock
+    ScheduleService --> TimeProvider
     AssignmentQueryService --> AssignmentRepository
     AssignmentRepository --> ShiftAssignment
     RoleGrantingOperations --> AssignmentService
 ```
 
-- `server/volunteer/VolunteerShiftController` (new): the HTTP entry point for all four endpoints. It takes the volunteer id from `CurrentUser`, never from the path or body. It checks the request shape and nothing else. It also owns the duplicate backstop's re-read (see Key decisions).
-- `server/volunteer/AssignmentService` (new): owns the three invariants. `listOpenShifts` and `signUp` read `CurrentUser.volunteerAccess(eventId)` for the shift's event before any assignment check. `RESTRICTED` is refused, and an unavailable state is refused as unavailable. Neither is ever treated as `NONE` (see Key decisions). Each `signUp` and `cancel` call is one transaction. `confirmPending` flips all of a person's `PENDING` rows to `ACTIVE`; `denyPending` flips one `PENDING` row to `DENIED`. Only role-granting operations owned by ADM and Authentication call these two, inside their own transaction, so a grant changes the account's role and its pending sign-ups together.
+- `src/Backend/Volunteer/VolunteerShiftEndpoints` (new): the ASP.NET Core HTTP entry point for all four endpoints. It takes the volunteer id from `ICurrentUser`, never from the path or body, validates request shape, and maps the application envelope. Duplicate-constraint recovery stays in the persistence/service boundary, not the endpoint.
+- `src/Backend/Volunteer/AssignmentService` (new): owns the three invariants. `ListOpenShiftsAsync` and `SignUpAsync` read `ICurrentUser.GetVolunteerAccessAsync(eventId)` before any assignment check. `RESTRICTED` and unavailable are refused and never treated as `NONE`. Each sign-up and cancel is one EF Core transaction. `ConfirmPendingAsync` changes a person's event-scoped `PENDING` rows to `ACTIVE`; `DenyPendingAsync` changes one to `DENIED`. Role-granting operations owned by ADM and Authentication call these within their coordinated transaction.
 - Role-granting operations (new, **owned by ADM and Authentication**, shown for the contract only): **every** operation that gives an account the current volunteer role calls `confirmPending` in the same transaction. That includes `UC-ADM-review-volunteer` approve (step 4), `UC-ADM-review-volunteer-request` approve, `UC-ADM-grant-volunteer-access` (both the direct grant and the claim at sign-in, 4b), and annual renewal. `UC-ADM-review-volunteer`'s deny (3a1) calls `denyPending` for one sign-up and leaves the account unchanged. [ADM.md](ADM.md) and Authentication's design own the endpoints, screens, and authorization.
-- `server/volunteer/ScheduleService` (new): read-only. It builds the volunteer's upcoming shifts, including pending ones, and computes hours from `ACTIVE` assignments and shift times at read time.
-- `server/volunteer/AssignmentRepository` and the `ShiftAssignment` entity (new): the only code that touches the `shift_assignment` table.
-- `server/volunteer/AssignmentQueryService` (new): the read-only face VOL shows other areas, so they never touch VOL's table. ADM's dashboard (`UC-ADM-view-dashboard`, `UC-ADM-notify-volunteers`) and the shift reminder's recheck (`FR-NOTIFY-current-state`) call it. `isActive` is false for a `PENDING` assignment, so an unapproved person gets no shift reminder. `countsByShift` returns active and pending counts separately. Only the two methods shown are in VOL's scope. Any other method another area needs is added by that area's design, not here.
-- `administration/ShiftService` (reused, **owned by ADM**): VOL needs three methods from it. `findSignupCandidates(now)` returns the shifts that have not started, in an event whose status is `planned` or `active`. `findById` is the plain lookup. `lockForAssignment` is the same lookup but holds a pessimistic write lock on the shift row until the caller's transaction ends. It **joins** the caller's transaction (Spring's default `REQUIRED` propagation, never `REQUIRES_NEW` or read-only), so the lock lasts until VOL commits. Every shift these methods return carries its event id and the event's status, so `signUp` applies the same `planned`/`active` rule to one locked shift that `findSignupCandidates` applies to the list. All three return a shift's start and end as **instants** (UTC), not as the data dictionary's local date and `HH:MM`. ADM converts from `America/Chicago` when it stores a shift (§8.2.2), and VOL compares them only with `Clock.now()`. These three methods are a contract with ADM's design (`ADM.md`). See Open questions.
+- `src/Backend/Volunteer/ScheduleService` (new): read-only. It builds upcoming shifts, including pending ones, and computes hours from `ACTIVE` assignments and shift times at read time.
+- `src/Backend/Volunteer/AssignmentRepository` and `ShiftAssignment` (new): the EF Core persistence boundary and entity for `shift_assignment`; SQL Server-specific constraint and transaction handling remain here.
+- `src/Backend/Volunteer/AssignmentQueryService` (new): the read-only contract VOL exposes to other areas so they never touch its table. ADM dashboards and notification rechecks call it. `IsActiveAsync` is false for `PENDING`; `CountsByShiftAsync` returns active and pending counts separately.
+- `administration/ShiftService` (reused, **owned by ADM**): VOL needs three asynchronous methods from it. `FindSignupCandidatesAsync(now)` returns shifts that have not started in an event whose status is `planned` or `active`. `FindByIdAsync` is the plain lookup. `LockForAssignmentAsync` uses a parameterized SQL Server `SELECT` with `UPDLOCK, HOLDLOCK` behind ADM's persistence abstraction and participates in the caller's EF Core transaction, so the shift-row lock lasts until VOL commits. Every returned shift carries its event id and status, so sign-up applies the same `planned`/`active` rule as the list. Shift start and end are `DateTimeOffset` UTC instants; ADM converts from `America/Chicago` when storing them, and VOL compares them only with `TimeProvider.GetUtcNow()` (§8.2.2). These methods are a contract with ADM's design (`ADM.md`).
 - `adm/AdminEventConfigService` (reused, **owned by ADM**, the same service [INF.md](INF.md) reads): `getLocationsForEvent(eventId)` supplies location name and address for display.
 - `authentication/CurrentUser` (reused): the signed-in account's id and its volunteer access **for one annual event** (`BR-volunteer-role-lifecycle`: the role is reviewed for each event).
   - `ROLE_ACTIVE`: holds the volunteer role for that event.
   - `NONE`: no role for that event and not restricted, for example a new account, or a current volunteer looking at next year's planned event before renewal.
   - `RESTRICTED`: access removed, or expired and not renewed (`FR-AUTH-volunteer-lifecycle`).
 
-  When Authentication cannot establish the state, `volunteerAccess(eventId)` fails with a dedicated "unavailable" exception that the shared error handler maps to `503`. It never returns a default. Called inside a transaction, it reads the account row with a shared lock (`FOR SHARE`) held until commit, so a role grant or removal (which writes that row first) cannot interleave with a sign-up (see Key decisions). Authentication owns the role, the restriction, and their event scope (architecture §5.2, §8.1). VOL reads them and stores nothing about them (see Data model).
-- `Clock` (reused, architecture §8.2.2): the injected clock, so tests can fix "now" for "has the shift started" and "has the shift ended".
+  When Authentication cannot establish the state, `GetVolunteerAccessAsync(eventId)` fails with a dedicated unavailable result that the shared error handler maps to `503`; it never returns a default. Inside the sign-up transaction, Authentication reads the account row using SQL Server `UPDLOCK, HOLDLOCK`, so a role grant or removal cannot interleave with the sign-up (see Key decisions). Authentication owns the role, restriction, and event scope (architecture §5.2, §8.1). VOL stores none of them.
+- `TimeProvider` (reused from .NET, architecture §8.2.2): injected so tests can fix "now" for shift-start and shift-end decisions.
 - **Front end** (new): the `UI-volunteer-schedule` view, with an open-shifts list, a sign-up action, and a my-schedule list with a cancel action. Sign-up is a single action on the open-shifts list, with no confirm dialog before it is sent, so a volunteer claims a shift within the two interactions `UI-volunteer-schedule` allows. The "signed up" confirmation shows only after the server answers `201` or `200` (step 6, `FR-SAVE-confirmed-success`). When the response's status is `PENDING`, it says the sign-up is awaiting administrator approval (5c2), and the my-schedule list marks that shift the same way. A `403 VOLUNTEER_ACCESS_INACTIVE` shows "Volunteer access inactive—administrator review required", the same text IDV shows (1a1). A `503 ACCESS_UNAVAILABLE` shows "Unable to verify access—try again" with a retry, never "no shifts are open". A confirm-before-send dialog is used only for cancel (`UC-VOL-cancel-shift` step 4). While a sign-up or cancel request is in flight, its button is disabled. After any `409` or `404` the front end shows the matching message (`404` uses the 4a1 "no longer available" text) and reloads the open list (4a2, 4c2). The service worker serves every `/api/v1/*` request network-only. It caches no shift list or access state and queues no `POST`, because a cached list or a queued sign-up would show what the server has not confirmed (§8.1, `FR-SAVE-confirmed-success`). Times arrive as ISO-8601 with their UTC offset and are displayed in `America/Chicago` on a 12-hour clock (§8.2.2).
 
 ### The assignment's states
@@ -190,7 +190,7 @@ sequenceDiagram
     V->>WEB: View open shifts (step 1)
     WEB->>C: GET /api/v1/shifts/open
     C->>AS: listOpenShifts(volunteerId from session)
-    AS->>SH: findSignupCandidates(clock.now())
+    AS->>SH: FindSignupCandidatesAsync(timeProvider.GetUtcNow())
     AS->>U: volunteerAccess(eventId) for each event among the candidates (1a guard)
     alt RESTRICTED for every such event, or no candidates and the account is restricted (1a)
         AS-->>C: refused, VOLUNTEER_ACCESS_INACTIVE
@@ -209,12 +209,12 @@ sequenceDiagram
     V->>WEB: Select a shift (step 3)
     WEB->>C: POST /api/v1/shifts/{shiftId}/assignments
     C->>AS: signUp(volunteerId, shiftId)
-    Note over AS,R: one transaction (READ COMMITTED) from here to commit; locks taken account first, then shift
+    Note over AS,R: one EF Core transaction (READ COMMITTED) from here to commit; SQL Server locks account first, then shift
     AS->>SH: findById(shiftId), for its event id
     alt shift unknown
         AS-->>C: refused, SHIFT_NOT_FOUND
     else shift exists
-        AS->>U: volunteerAccess(eventId), account row FOR SHARE until commit (1a guard, again: access may have changed since step 2)
+        AS->>U: GetVolunteerAccessAsync(eventId), account row UPDLOCK/HOLDLOCK until commit (1a guard)
         alt RESTRICTED (1a) or unavailable (§8.2.1)
             AS-->>C: refused, VOLUNTEER_ACCESS_INACTIVE or ACCESS_UNAVAILABLE, nothing written
         else ROLE_ACTIVE or NONE
@@ -319,7 +319,7 @@ sequenceDiagram
     SS->>R: findHeldByVolunteer(volunteerId), ACTIVE and PENDING (step 2)
     SS->>SH: shift times for those assignments
     SS->>L: location names and addresses
-    SS->>SS: upcoming = shift end > clock.now(); finishedHours = sum of (end - start) for ended ACTIVE shifts; plannedHours = sum of (end - start) for upcoming ACTIVE shifts
+    SS->>SS: upcoming = shift end > timeProvider.GetUtcNow(); derive finished and planned ACTIVE hours
     SS-->>C: upcoming shifts with status, finishedHours, plannedHours
     C-->>WEB: 200
     alt no upcoming shifts (2a)
@@ -358,7 +358,7 @@ _The notification to the person (`UC-ADM-review-volunteer` step 5, 3a2) is ADM's
 
 _[One row per endpoint, scheduled job, or message this area adds or changes, appended per use case. **This section is never dropped**: before the code exists it is the only thing the person (or agent session) building the front end and the one building the back end both read. Name the caller and who may call it, the request fields, the success response, and the error each extension returns. Leave field types and exact JSON to the agent unless a wrong guess would break something, such as a format another system depends on. Use the error shape your architecture-of-record's section 8.2 fixes; do not invent one here.]_
 
-The architecture's §8.2.1 and §8.2.3 don't fix an error shape yet (see Open questions). So this table fixes only the error **codes** the front end branches on, not the response envelope around them. Whatever envelope the team fixes, each code must sit in a machine-readable field of it, produced by the one shared error handler, because the front end chooses 1a1, 4a1, and 4c1 by code. "Access unavailable" must reach that handler as its own exception mapped to `503`, never the generic `500`. Times in responses are ISO-8601 with their UTC offset.
+All endpoints use the application-wide success/error envelope and documented status-code mapping fixed by architecture §8.2.3. Error codes sit in its machine-readable code field and are produced by the shared error handler, because the front end chooses 1a1, 4a1, and 4c1 by code. "Access unavailable" maps to `503`, never the generic `500`. Times in responses are ISO-8601 with their UTC offset.
 
 | Endpoint | Caller (who may) | Request | Success | Errors, by extension |
 |---|---|---|---|---|
@@ -375,18 +375,18 @@ _[Only the decisions a reader could not recover from the code: an invariant, who
 
 _A decision that affects the whole system rather than this area is an architecture decision. It belongs in your architecture-of-record as a `KD-*` entry, not here.]_
 
-**How overbooking is prevented.** Inside the sign-up transaction, VOL locks the shift's row (`ShiftService.lockForAssignment`, a Spring Data JPA `PESSIMISTIC_WRITE` lock, which PostgreSQL executes as `SELECT … FOR UPDATE`, `KD-tech-stack`). Then it counts held assignments (`ACTIVE` plus `PENDING`) and inserts. Two concurrent claims for the last slot run one after the other: the second sees the count at capacity and gets `SHIFT_FULL`. Cancel takes the same lock, so a cancel and a claim on the same shift cannot interleave.
+**How overbooking is prevented.** Inside the EF Core sign-up transaction, VOL calls `ShiftService.LockForAssignmentAsync`. Its SQL Server persistence implementation executes a parameterized `SELECT` with `UPDLOCK, HOLDLOCK` for that shift row behind ADM's data-access abstraction (`KD-tcu-it-stack`, architecture §8.2.8). VOL then counts held assignments (`ACTIVE` plus `PENDING`) and inserts or reactivates one row. Two concurrent claims for the last slot run one after the other: the second sees capacity reached and gets `SHIFT_FULL`. Cancel takes the same shift lock, so a cancel and claim cannot interleave.
 Rejected: a stored `filledCount` column decremented on cancel, which can drift from the real assignments after a partial failure. Rejected: an optimistic version check with retry, which the SRS §5.2 scoping note cut as more than this event's load needs (`SCA-event-capacity`: 200 volunteers), and which surfaces as spurious failures under the sign-up rush. Rejected: an in-process lock, which breaks as soon as the application runs more than one instance. Contention is per shift, so locking one shift row never blocks sign-ups for other shifts (`PER-form-submission`).
-The transaction runs at PostgreSQL's default **READ COMMITTED**, so the count after the lock sees the previous claimant's committed row. Rejected: REPEATABLE READ or SERIALIZABLE. Their snapshot is taken before the lock wait, so the count would miss the insert committed during the wait (REPEATABLE READ), or the second claimant would get a serialization failure instead of `SHIFT_FULL` (SERIALIZABLE). The wait for the shift lock is bounded (PostgreSQL `lock_timeout`; the value is left to the build), and a timeout is answered as 5a: `5xx`, nothing written, retry.
+The transaction uses SQL Server **READ COMMITTED**. The explicit update/hold lock serializes operations for one shift, and after waiting the capacity query sees the prior transaction's committed assignment. The database command timeout bounds the wait through deployment configuration; a timeout rolls back and returns the shared unavailable/save-failure response with retry, never success. Rejected: `SERIALIZABLE` for the whole transaction, because it broadens locking beyond the one shift; and an in-process lock, because it fails with multiple application instances.
 
-**How duplicates are prevented.** Two layers. (1) The service looks up the volunteer's row first and returns `200 alreadyAssigned` if it is `ACTIVE` or `PENDING` (4b, 5b, `FR-SAVE-duplicate-submission`). (2) A database **unique constraint on (shift_id, volunteer_id)** is the backstop if two identical requests ever get past the lock. A violation of that constraint is caught and answered as `alreadyAssigned`, not as an error. In PostgreSQL a constraint violation aborts the transaction, so the catch sits in the controller, outside `signUp`'s transaction. It catches **only** a violation of the (`shift_id`, `volunteer_id`) constraint, identified by its constraint name, not every integrity error. It re-reads the volunteer's row in a **new** read-only transaction. It answers `200 alreadyAssigned` only if that row is `ACTIVE` or `PENDING`, and otherwise `5xx` (5a), so a sign-up that wrote nothing is never confirmed (`FR-SAVE-confirmed-success`).
-Rejected: `INSERT … ON CONFLICT DO NOTHING`, because a sign-up that reactivates a `CANCELLED` row is an `UPDATE`, which would leave two write paths with different duplicate handling. Rejected: a client-generated idempotency key per submission, which adds a table and key handling for a case that "(shift, volunteer) is unique" already identifies exactly. Rejected: relying only on disabling the button, which does not survive a page reload or a retry after a lost response (`FR-SAVE-unknown-outcome`).
+**How duplicates are prevented.** Two layers. (1) After the shift lock, the service looks up the volunteer's row and returns `200 alreadyAssigned` when it is `ACTIVE` or `PENDING` (4b, 5b, `FR-SAVE-duplicate-submission`). (2) Microsoft SQL Server enforces a **unique constraint on (`shift_id`, `volunteer_id`)** as the backstop. The persistence adapter recognizes only that named unique constraint, rolls back, and re-reads in a fresh EF Core scope. It returns `alreadyAssigned` only when the committed row is held; any other constraint failure or missing held row is a save failure, never false success (`FR-SAVE-confirmed-success`).
+Rejected: SQL Server `MERGE`, because its concurrency behavior is harder to reason about and reactivation is already handled under the shift lock. Rejected: a client-generated idempotency key, which adds storage for a request already identified by `(shift, volunteer)`. Rejected: relying only on the disabled button, which does not survive reloads or lost responses (`FR-SAVE-unknown-outcome`).
 
 **4b and 5b get the same response.** The server cannot tell "already signed up and selected it again" (4b) apart from "retry of a sign-up that succeeded" (5b). The state is identical. Both get `200` with `alreadyAssigned: true`, and the UI's "You're already signed up for this shift" satisfies both 4b1 and 5b2.
 Rejected: returning `409` for 4b, which would make a lost-response retry look like a failure and break `FR-SAVE-unknown-outcome`.
 
 **Cancel soft-deletes, and signing up again reactivates the same row.** Keeping a `CANCELLED` row gives the coverage report its cancellation status (SRS §7.3.2), lets a duplicate cancel answer `200` instead of `404`, and keeps the unique constraint simple.
-Rejected: deleting the row, which loses cancellation status and makes a duplicate cancel indistinguishable from "never assigned". Rejected: a new row per sign-up cycle. PostgreSQL's partial unique index would make it possible, but it keeps a history no requirement asks for.
+Rejected: deleting the row, which loses cancellation status and makes a duplicate cancel indistinguishable from "never assigned". Rejected: a new row per sign-up cycle, which keeps a history no requirement asks for.
 
 **Hours are computed on read, never stored, and shown as two numbers.** Both come from scheduled shift length (end − start), with no check-in, per the use case's assumption. `finishedHours` sums the volunteer's `ACTIVE` assignments whose shift has **ended** by the injected clock. That is `UI-volunteer-schedule`'s "hours credited so far". `plannedHours` sums the `ACTIVE` assignments whose shift has not ended. A cancelled or `PENDING` assignment counts toward neither, because the person has not been approved to work it. Because hours are derived from the assignments, a cancel or a failed save can never leave them inconsistent.
 Rejected: an hours column updated on sign-up, cancel, and shift end, which needs a scheduled job and can drift. Rejected: one total that adds upcoming shifts to worked ones, which would credit hours not yet worked. Rejected: finished hours alone, which hides the volunteer's planned contribution (team decision, resolves Open questions item 1).
@@ -403,7 +403,7 @@ Rejected: approving the person before they may claim anything, which keeps a fir
 **The access check comes first, and an unknown state is never `NONE`.** `listOpenShifts` and `signUp` read `CurrentUser.volunteerAccess(eventId)` before any assignment check or shift lock. `RESTRICTED` gets `403 VOLUNTEER_ACCESS_INACTIVE` (1a, `FR-AUTH-volunteer-lifecycle`). An unavailable state gets `503 ACCESS_UNAVAILABLE` with retry (§8.2.1). Neither writes anything. `signUp` checks again rather than trusting the list, because access can be removed between steps 2 and 3, and §8.1 forbids authorizing from earlier session state.
 Rejected: treating an unavailable state as `NONE`. That would quietly write a `PENDING` sign-up for a revoked person. Rejected: checking access after the own-assignment lookup, which could answer `200 alreadyAssigned` to a restricted account.
 
-**A role change and a sign-up cannot interleave.** `signUp` reads access inside its transaction while holding a shared lock on the account row (`FOR SHARE`). Every operation that grants or removes the role writes that account row **first**, and only then touches assignments (`confirmPending`, or the release on removal). So whichever commits second sees the other's result.
+**A role change and a sign-up cannot interleave.** `SignUpAsync` reads access inside its transaction while Authentication's SQL Server adapter holds `UPDLOCK, HOLDLOCK` on the account row. Every operation that grants or removes the role locks and writes that account row **first**, then touches assignments (`ConfirmPendingAsync`, or the release on removal). Whichever commits second therefore sees the other's result.
 - If the grant commits first, sign-up sees `ROLE_ACTIVE` and writes `ACTIVE`.
 - If sign-up commits first, the grant's `confirmPending` sees the new `PENDING` row.
 - A removal likewise never leaves a held row behind.
@@ -432,8 +432,8 @@ One new table, `shift_assignment`, owned by VOL:
 | `shift_id` | References ADM's shift table |
 | `volunteer_id` | References Authentication's user account |
 | `status` | `PENDING`, `ACTIVE`, `CANCELLED`, or `DENIED` |
-| `assigned_at` | When it last became `PENDING` or `ACTIVE` (PostgreSQL `timestamptz`, §8.2.2) |
-| `cancelled_at` | When it last became `CANCELLED` or `DENIED` (`timestamptz`), null while held |
+| `assigned_at` | When it last became `PENDING` or `ACTIVE` (SQL Server `datetimeoffset`, UTC, §8.2.2) |
+| `cancelled_at` | When it last became `CANCELLED` or `DENIED` (`datetimeoffset`, UTC), null while held |
 
 Constraint: **unique (`shift_id`, `volunteer_id`)**. Index on (`shift_id`, `status`) for the count under lock, and on (`volunteer_id`, `status`) for the schedule.
 
@@ -448,9 +448,9 @@ _[Which existing services, components, and conventions this area uses rather tha
 - **Authentication** (architecture §8.1): `CurrentUser` for the volunteer id and current volunteer access (`ROLE_ACTIVE`, `NONE`, `RESTRICTED`, or unavailable). Every VOL endpoint requires sign-in, volunteers included (`FR-AUTH-enforce-permissions`). The sign-up endpoints refuse restricted accounts (`FR-AUTH-volunteer-lifecycle`).
 - **Authorization** (§8.1): own-records-only is enforced by endpoint shape. No VOL endpoint accepts a volunteer id.
 - **Error handling** (§8.2.1): a failed write is reported as "not recorded", never as success (`FR-SAVE-confirmed-success`). The `201`/`200` is sent only after commit. An access state that cannot be established is refused as unavailable with retry, never treated as a negative result.
-- **Time** (§8.2.2): shift times are stored in UTC and shown in `America/Chicago` on a 12-hour clock. "Started" and "ended" are decided by the injected `Clock`.
+- **Time** (§8.2.2): shift times are stored as SQL Server `datetimeoffset` values in UTC and shown in `America/Chicago` on a 12-hour clock. "Started" and "ended" are decided by injected .NET `TimeProvider`.
 - **Validation** (§8.2.5): VOL requests carry no body. The only inputs are the path's `shiftId` (must exist: `404`) and the session.
-- **Persistence and concurrency** (§8.2.8): one transaction per sign-up or cancel, covering lock, check, and write. This document fixes the duplicate-submission strategy that §8.2.8 leaves provisional, for VOL.
+- **Persistence and concurrency** (§8.2.8): EF Core and Microsoft SQL Server implement one transaction per sign-up or cancel, covering account lock, shift lock, checks, and write. Database-specific lock hints stay behind the AUTH and ADM persistence contracts.
 - **Logging** (§8.2.7): log the shift id and refusal code on refusals. Never log the volunteer's email.
 - **ADM** `ShiftService` and `AdminEventConfigService`: called through their services, never their repositories.
 
@@ -543,15 +543,15 @@ _[What this design could not settle and who can, and what could go wrong that yo
 
 **Coordination with other areas** (contract, not client):
 
-- **ADM (Ananye):** `ShiftService.findSignupCandidates`, `findById`, `lockForAssignment` as described in Components, returning start and end as UTC instants converted from `America/Chicago`. `required_count` starts from the location's count set at event setup and may be changed per shift. `UC-ADM-review-volunteer` is ADM's, calling `confirmPending` and `denyPending` in its own transaction (see Approval hand-off). ADM's `UC-ADM-manage-shifts` 6a also has to decide what happens to held assignments when a shift is edited below its held count or removed. VOL does not handle this; it only reads `required_count`. Whatever ADM decides, it must not leave held count > required count without saying so.
-- **Authentication:** exposes `CurrentUser.volunteerAccess(eventId)`: `ROLE_ACTIVE` for that event's role, `NONE`, or `RESTRICTED` for removed or expired access. It fails as unavailable rather than defaulting, and inside a transaction it reads the account row `FOR SHARE`. Every grant or removal writes the account row before touching assignments (see Key decisions). Session, cookie, and CSRF handling for VOL's state-changing `POST` and `DELETE` come from the application-wide security configuration Authentication owns (§8.1); VOL adds none of its own. [AUTH.md](AUTH.md) adopts this trusted-current-user contract. Every role grant it owns (the claim of an email approval at sign-in) calls `confirmPending`.
-- **ADM, role grants:** [ADM.md](ADM.md) still models approval as `volunteerStatus = NONE | APPROVED`. It needs revising to the role model, and every grant it owns (`UC-ADM-review-volunteer-request`, `UC-ADM-grant-volunteer-access`, renewal) must call `confirmPending` in its transaction.
+- **ADM:** `ShiftService.FindSignupCandidatesAsync`, `FindByIdAsync`, and `LockForAssignmentAsync` return UTC instants and use the shared SQL Server transaction contract described in Components. `required_count` starts from the event-location setting and may be changed per shift. `UC-ADM-review-volunteer` calls `ConfirmPendingAsync` or `DenyPendingAsync` in its transaction. ADM rejects capacity edits or removal that would violate held assignments; VOL only reads `required_count`.
+- **Authentication:** exposes `ICurrentUser.GetVolunteerAccessAsync(eventId)`: `ROLE_ACTIVE` for that event's role, `NONE`, or `RESTRICTED` for removed or expired access. It fails as unavailable rather than defaulting and, inside the sign-up transaction, locks the account row with SQL Server `UPDLOCK, HOLDLOCK`. Every grant or removal locks and writes the account row before touching assignments (see Key decisions). Session, cookie, and antiforgery handling for VOL's state-changing `POST` and `DELETE` come from application-wide ASP.NET Core configuration owned by Authentication (§8.1); VOL adds none. [AUTH.md](AUTH.md) owns this trusted-current-user contract. Every AUTH-owned role grant calls `ConfirmPendingAsync`.
+- **ADM, role grants:** [ADM.md](ADM.md) uses Authentication's event-scoped volunteer-access model. Every approved grant path calls `ConfirmPendingAsync(volunteerId, eventId)` in the same transaction.
 - **ADM, role removal:** `UC-ADM-remove-volunteer-access` step 4 clears active assignments and releases their capacity. That needs a VOL method that releases all of a person's held rows under each shift's lock. ADM's design adds it, per this document's rule on `AssignmentQueryService`. The released rows become `CANCELLED`, never `DENIED` or a new status, so a later re-grant lets the person claim those shifts again (step 5, not 4c).
-- **ADM, shift contract:** shifts returned by `ShiftService` carry their event id and event status, and `lockForAssignment` joins the caller's transaction (see Components).
+- **ADM, shift contract:** shifts returned by `ShiftService` carry their event id and event status, and `LockForAssignmentAsync` joins the caller's EF Core transaction (see Components).
 - **Notifications / `FR-NOTIFY-current-state`:** the reminder rechecks with `AssignmentQueryService.isActive` before sending.
 - **Notifications / `UC-ADM-review-volunteer`:** ADM's review notifies the person of an approval or a denied sign-up after its transaction commits, through the Notifications component. VOL sends nothing. If the notification fails, the decision stands and the administrator sees the failure (`FR-NOTIFY-preserve-business-state`).
 - **IDV:** architecture §5.2 makes "registered volunteer" a route to shopping eligibility. [IDV.md](IDV.md) reads the current volunteer role from Authentication (`BR-shopper-verification`), not from VOL. A `PENDING` or `ACTIVE` sign-up alone is not proof of anything.
-- **Team-wide:** the error envelope in architecture §8.2.1/8.2.3 is still provisional. VOL fixes only the codes. The team should fix the envelope once, before the first endpoint is built.
+- **Team-wide:** VOL uses the shared success/error envelope fixed by architecture §8.2.3; it adds only the VOL-specific machine-readable codes listed in the API contract.
 
 **Risks accepted:**
 

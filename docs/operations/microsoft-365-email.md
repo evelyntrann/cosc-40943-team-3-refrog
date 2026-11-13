@@ -1,10 +1,10 @@
-# Microsoft 365 email delivery
+# Microsoft 365 email adapter candidate
 
-`UC-AUTH-register-account` sends verification codes through the shared `IEmailSender` adapter. Set `Email:Provider` to `MicrosoftGraph` to use a Microsoft 365 work or school Outlook mailbox. Without that setting, the app reports email delivery unavailable.
+This document describes the repository's candidate Microsoft Graph implementation of the shared `IEmailSender` adapter. It does not select or approve Microsoft 365 for production. Production use remains blocked until the team and EAS resolve `OI-25`. Without an approved provider setting, a non-development deployment reports email delivery unavailable.
 
 The Microsoft 365 administrator must register an application for unattended mail sending, authorize Microsoft Graph application `Mail.Send` access for the sender mailbox, and provide a dedicated mailbox address. [Microsoft Graph sendMail](https://learn.microsoft.com/en-us/graph/api/user-sendmail?view=graph-rest-1.0) accepts app-only calls to `/users/{sender}/sendMail`; [Exchange Online application RBAC](https://learn.microsoft.com/en-us/graph/auth-limit-mailbox-access) describes mailbox-scoped access. An unscoped Microsoft Entra `Mail.Send` grant can override that mailbox scope, so the administrator must review the effective permissions.
 
-Supply these settings through deployment configuration or a secret store:
+If EAS approves this adapter under `OI-25`, supply these settings through deployment configuration or a secret store:
 
 | Setting | Purpose |
 |---|---|

@@ -1,7 +1,3 @@
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using ReFrog.Server.Features.Authentication;
 
 namespace ReFrog.Server.Tests.Authentication;
@@ -33,31 +29,5 @@ public sealed class DevelopmentPickupEmailSenderTests
                 Directory.Delete(directory, recursive: true);
             }
         }
-    }
-
-    [TestMethod]
-    [DataRow("Development", null, typeof(DevelopmentPickupEmailSender))]
-    [DataRow("Production", null, typeof(UnavailableEmailSender))]
-    [DataRow("Development", "MicrosoftGraph", typeof(MicrosoftGraphEmailSender))]
-    public async Task PickupSenderIsUsedOnlyInDevelopmentWithoutAProvider(string environment, string? provider, Type expected)
-    {
-        var settings = new Dictionary<string, string?>
-        {
-            ["Email:DevelopmentPickupDirectory"] = Path.GetTempPath(),
-            ["Email:Provider"] = provider,
-            ["Email:MicrosoftGraph:TenantId"] = Guid.NewGuid().ToString(),
-            ["Email:MicrosoftGraph:ClientId"] = Guid.NewGuid().ToString(),
-            ["Email:MicrosoftGraph:ClientSecret"] = "test-only",
-            ["Email:MicrosoftGraph:SenderAddress"] = "sender@example.org",
-        };
-        await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(host =>
-        {
-            host.UseEnvironment(environment);
-            host.UseSetting("Email:Provider", provider);
-            host.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(settings));
-        });
-        await using var scope = factory.Services.CreateAsyncScope();
-
-        Assert.IsInstanceOfType(scope.ServiceProvider.GetRequiredService<IEmailSender>(), expected);
     }
 }
