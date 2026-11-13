@@ -105,7 +105,7 @@ Release values follow the course's release plan: `v0.1.0` is the proving slice (
 | `FR-SAVE-unknown-outcome` | | v0.2.0 | ❌ Not started | | | |
 | `UC-VOL-view-schedule` | [design/VOL.md](design/VOL.md) | v1.0.0 | 📐 Designed | | | |
 | `UC-AUTH-recover-account` | | v1.0.0 | ❌ Not started | | | |
-| `UC-VOL-request-access` | | v1.0.0 | ❌ Not started | | | |
+| `UC-VOL-request-access` | [design/VOL.md](design/VOL.md#uc-vol-request-access-requesting-volunteer-access) | v1.0.0 | 📐 Designed | | | |
 | `UC-ADM-review-volunteer-request` | | v1.0.0 | ❌ Not started | | | |
 | `UC-ADM-grant-volunteer-access` | | v1.0.0 | ❌ Not started | | | |
 | `UC-ADM-remove-volunteer-access` | | v1.0.0 | ❌ Not started | | | |

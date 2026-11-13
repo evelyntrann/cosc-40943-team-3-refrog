@@ -6,11 +6,11 @@
 **Team:** Team 3
 **Area:** `UC-VOL`
 
-> **Realizes:** `UC-VOL-signup`, `UC-VOL-cancel-shift`, `UC-VOL-view-schedule`
+> **Realizes:** `UC-VOL-signup`, `UC-VOL-cancel-shift`, `UC-VOL-view-schedule`, `UC-VOL-request-access`
 > **Supports:** `UC-ADM-review-volunteer` (VOL's part only: confirming or releasing pending sign-ups)
-> **Depends on:** `BR-volunteer-assignment`, `BR-location-staffing`, `BR-event-schedule`, `BR-volunteer-role-approval`, `BR-volunteer-role-lifecycle`, `FR-AUTH-enforce-permissions`, `FR-AUTH-volunteer-role`, `FR-AUTH-volunteer-lifecycle`, `FR-VAL-server-validation`, `FR-SAVE-confirmed-success`, `FR-SAVE-unknown-outcome`, `FR-SAVE-duplicate-submission`, `ROB-duplicate-submission`, `USE-volunteer-signup-completion`, `PER-form-submission`, `SEC-least-privilege`, `UI-volunteer-schedule`, `KD-tcu-it-stack`
+> **Depends on:** `BR-volunteer-assignment`, `BR-location-staffing`, `BR-event-schedule`, `BR-volunteer-role-approval`, `BR-volunteer-role-lifecycle`, `BR-volunteer-request-resubmission`, `FR-AUTH-enforce-permissions`, `FR-AUTH-volunteer-role`, `FR-AUTH-volunteer-lifecycle`, `FR-VAL-server-validation`, `FR-SAVE-confirmed-success`, `FR-SAVE-unknown-outcome`, `FR-SAVE-duplicate-submission`, `ROB-duplicate-submission`, `USE-volunteer-signup-completion`, `PER-form-submission`, `SEC-least-privilege`, `UI-account-profile`, `UI-volunteer-schedule`, `KD-tcu-it-stack`
 > **See:** [use cases](../requirements/use-cases.md#area-volunteer-scheduling-vol), [SRS non-use-case FRs](../requirements/software-requirements-specification.md#52-non-use-case-functional-requirements), [data dictionary](../requirements/software-requirements-specification.md#72-data-dictionary), [architecture-of-record](architectural-design.md) (§5.2 components, §8 crosscutting concepts, §9.2 `KD-tcu-it-stack`)
-> **Designed against:** the approved requirements and architecture through the 2026-11-11 TCU IT amendments. No VOL application code exists yet; every VOL class below is new.
+> **Designed against:** `main` commit `bd2c7a6926fd11244c5347ca6ba3ac637f2bf89c` (2026-11-13). No VOL application code exists yet; every VOL class below is new.
 
 ---
 
@@ -38,13 +38,14 @@ _**Write it in this order.** Each step is one person's or one pair's work, and t
 
 _[One paragraph: what this area does, which components of your [architecture-of-record](architectural-design.md) it lives in, and what it reads from or calls in other areas. Link the container diagram rather than redrawing it. If this design changes the architecture-of-record, say so here and list the change under "Changes to the architecture-of-record" below.]_
 
-Volunteer Scheduling lets a signed-in volunteer claim an open slot on a shift, give a slot back, and see their own upcoming shifts and credited hours. It is the `VOL` module of the single Application container ([containers](architectural-design.md#51-containers), [use case areas](architectural-design.md#52-use-case-areas-and-components), `KD-deployment-shape`). It **owns one thing: the shift assignment**, the record that one volunteer holds one slot on one shift. It does not own shifts. Shifts, with their location, time, and required volunteer count, are created by Administration (`UC-ADM-manage-shifts`). VOL reads them through Administration's service and takes a row lock on a shift while it changes that shift's assignments. Location names and addresses also come from Administration, which owns event and location configuration ([INF.md](INF.md)). The signed-in user and their **current volunteer access** come from Authentication: the account holds the current volunteer role, holds no role, is restricted because its access was removed or expired (`FR-AUTH-volunteer-lifecycle`), or the state cannot be established. "Approved" in `UC-VOL-signup` 5c means "holds the current volunteer role" (`BR-volunteer-role-approval`). A restricted account may not sign up at all (`UC-VOL-signup` 1a). Every operation that grants the role (`UC-ADM-review-volunteer`, `UC-ADM-review-volunteer-request`, `UC-ADM-grant-volunteer-access`, annual renewal) calls VOL to confirm the person's pending sign-ups, and `UC-ADM-review-volunteer` can also deny one. VOL sends no notifications. Cancelling does not notify anyone (`OI-7`, resolved). Shift reminders and admin-triggered notifications belong to the Notifications component, which reads VOL's assignments, not the other way round.
+Volunteer Scheduling lets a signed-in account request volunteer access, claim an open slot on a shift, give a slot back, and see its own upcoming shifts and credited hours. It is the `VOL` module of the single Application container ([containers](architectural-design.md#51-containers), [use case areas](architectural-design.md#52-use-case-areas-and-components), `KD-deployment-shape`). VOL owns the event-scoped volunteer access request and the shift assignment. It does not own the volunteer role, access restrictions, request decisions, annual events, or shifts. Authentication supplies the signed-in account and current event-scoped volunteer access. Administration supplies the single configured current annual event, decides requests, grants or removes roles, and owns shifts and event/location configuration. VOL exposes request and assignment services to Administration so ADM never edits VOL tables directly. "Approved" in `UC-VOL-signup` 5c means "holds the current volunteer role" (`BR-volunteer-role-approval`). Every operation that grants the role (`UC-ADM-review-volunteer`, `UC-ADM-review-volunteer-request`, `UC-ADM-grant-volunteer-access`, annual renewal) calls VOL to confirm the person's pending sign-ups, and request decisions update the event-scoped request through VOL in the same completed operation. VOL sends no notifications. Cancelling does not notify anyone (`OI-7`, resolved). Shift reminders and admin-triggered notifications belong to the Notifications component, which reads VOL's assignments, not the other way round.
 
-The hard part of this area is three invariants that must hold under concurrent and repeated requests:
+The hard part of this area is four invariants that must hold under concurrent and repeated requests:
 
 1. **No overbooking.** A shift never has more **held** assignments (`ACTIVE` plus `PENDING` approval) than its required volunteer count, even when two volunteers claim the last slot at the same moment (`UC-VOL-signup` 4a, 5c1, POST-2). The required count is the shift's maximum. ADM sets it from the location's count when the event is set up, and an administrator may change it per shift (`UC-ADM-manage-shifts`).
 2. **No duplicate assignment.** One volunteer holds at most one slot on one shift, however many times the request arrives (4b, 5b, `FR-SAVE-duplicate-submission`, `ROB-duplicate-submission`).
 3. **Hours stay consistent with assignments.** Credited hours are never stored, so they cannot disagree with the assignments they come from (`UC-VOL-view-schedule`).
+4. **One access request per account and annual event.** Repeated, concurrent, or lost-response retries return the saved request; they never create a second request or grant a role (`UC-VOL-request-access` 2b, 3a, `BR-volunteer-role-approval`).
 
 ## Components & classes
 
@@ -52,7 +53,7 @@ _[One class diagram for the whole area, and one line per class or file saying wh
 
 _**If your repository has no code for this area yet**, which is the normal case for your proving slice, list the files you expect the agent to create, with the paths your architecture-of-record's conventions give them, and mark them all new. The agent then builds into the structure you chose rather than one it improvised.]_
 
-The repository has no VOL code yet, so every VOL file is new. The stack is C# / ASP.NET Core, Blazor PWA, Entity Framework Core, and Microsoft SQL Server (`KD-tcu-it-stack`). Paths below use `src/Backend/<module>/…` and `src/Frontend/<module>/…` shorthand, consistent with the existing solution. Exact namespaces and folders follow the repository-wide convention recorded under §8.2.4.
+The repository has no VOL code yet, so every VOL file is new. The stack is C# / ASP.NET Core, Blazor PWA, Entity Framework Core, and Microsoft SQL Server (`KD-tcu-it-stack`). Planned server files follow `src/Backend/ReFrog.Server/Features/Volunteer`, shared API contracts follow `src/Backend/ReFrog.Shared`, and Blazor files follow `src/Frontend/ReFrog.Client/Features/Volunteer`, matching the solution at the designed-against commit and §8.2.4.
 
 ```mermaid
 classDiagram
@@ -63,6 +64,33 @@ classDiagram
         +signUp(shiftId) Response
         +cancel(shiftId) Response
         +mySchedule() Response
+    }
+    class VolunteerAccessSection {
+        <<new, Blazor>>
+        +loadStatus()
+        +requestAccess()
+    }
+    class VolunteerAccessRequestEndpoints {
+        <<new, volunteer>>
+        +current() Response
+        +request() Response
+    }
+    class VolunteerAccessRequestService {
+        <<new, volunteer>>
+        +current(accountId) RequestView
+        +request(accountId) RequestResult
+        +recordDecision(requestId, decision)
+    }
+    class VolunteerAccessRequestRepository {
+        <<new, volunteer>>
+        +findForUpdate(accountId, eventId) VolunteerAccessRequest
+        +insertPending(accountId, eventId, now)
+    }
+    class VolunteerAccessRequest {
+        <<new, entity>>
+        accountId
+        eventId
+        status: PENDING | APPROVED | DECLINED
     }
     class AssignmentService {
         <<new, volunteer>>
@@ -107,6 +135,8 @@ classDiagram
     }
     class AdminEventConfigService {
         <<reused, administration>>
+        +getCurrentEvent() Event
+        +getCurrentEventForUpdate() Event
         +getLocationsForEvent(eventId) List~DonationLocation~
     }
     class CurrentUser {
@@ -121,6 +151,14 @@ classDiagram
     VolunteerShiftController --> AssignmentService
     VolunteerShiftController --> ScheduleService
     VolunteerShiftController --> CurrentUser
+    VolunteerAccessSection --> VolunteerAccessRequestEndpoints
+    VolunteerAccessRequestEndpoints --> VolunteerAccessRequestService
+    VolunteerAccessRequestEndpoints --> CurrentUser
+    VolunteerAccessRequestService --> VolunteerAccessRequestRepository
+    VolunteerAccessRequestService --> AdminEventConfigService
+    VolunteerAccessRequestService --> CurrentUser
+    VolunteerAccessRequestService --> TimeProvider
+    VolunteerAccessRequestRepository --> VolunteerAccessRequest
     AssignmentService --> AssignmentRepository
     AssignmentService --> ShiftService
     AssignmentService --> AdminEventConfigService
@@ -135,22 +173,39 @@ classDiagram
     RoleGrantingOperations --> AssignmentService
 ```
 
-- `src/Backend/Volunteer/VolunteerShiftEndpoints` (new): the ASP.NET Core HTTP entry point for all four endpoints. It takes the volunteer id from `ICurrentUser`, never from the path or body, validates request shape, and maps the application envelope. Duplicate-constraint recovery stays in the persistence/service boundary, not the endpoint.
-- `src/Backend/Volunteer/AssignmentService` (new): owns the three invariants. `ListOpenShiftsAsync` and `SignUpAsync` read `ICurrentUser.GetVolunteerAccessAsync(eventId)` before any assignment check. `RESTRICTED` and unavailable are refused and never treated as `NONE`. Each sign-up and cancel is one EF Core transaction. `ConfirmPendingAsync` changes a person's event-scoped `PENDING` rows to `ACTIVE`; `DenyPendingAsync` changes one to `DENIED`. Role-granting operations owned by ADM and Authentication call these within their coordinated transaction.
+- `src/Backend/ReFrog.Server/Features/Volunteer/VolunteerShiftEndpoints` (new): the ASP.NET Core HTTP entry point for the shift and schedule endpoints. It takes the volunteer id from `ICurrentUser`, never from the path or body, validates request shape, and maps the application envelope. Duplicate-constraint recovery stays in the persistence/service boundary, not the endpoint.
+- `src/Frontend/ReFrog.Client/Features/Volunteer/VolunteerAccessSection.razor` (new): the `UI-account-profile` section that loads the signed-in account's current access/request state and submits **Become a volunteer**. It shows active, pending, declined, inactive, unavailable, and eligible-to-request presentations from server results; it never derives authorization from cached state. Pending text states that the request grants no permissions. A lost response triggers the status `GET` before the section reports success or failure (`FR-SAVE-unknown-outcome`).
+- `src/Backend/ReFrog.Server/Features/Volunteer/VolunteerAccessRequestEndpoints` (new): exposes the current-account `GET` and `POST`. Account identity comes only from `ICurrentUser`; the request accepts neither account id nor event id. Cookie-authenticated `POST` uses the application antiforgery convention.
+- `src/Backend/ReFrog.Server/Features/Volunteer/VolunteerAccessRequestService` (new): obtains Administration's configured current annual event, checks Authentication's current event-scoped access before request state, and returns a display projection or records one `PENDING` request. `GetCurrentAsync` and `RequestAsync` use one coordinated SQL Server transaction spanning the event selector, current access, and request read; `RequestAsync` also spans the insert and commit. It exposes a decision method for the later ADM design so Administration changes request state through VOL rather than its table; this use case invokes no decision method.
+- `src/Backend/ReFrog.Server/Features/Volunteer/VolunteerAccessRequestRepository` and `VolunteerAccessRequest` (new): the EF Core persistence boundary and entity for `volunteer_access_request`. `FindForUpdateAsync` locks the `(account_id, event_id)` row or key range until commit. The adapter owns the named unique-constraint recovery for that key and re-reads the committed request after a duplicate insert race.
+- `src/Backend/ReFrog.Server/Features/Volunteer/AssignmentService` (new): owns the assignment invariants. `ListOpenShiftsAsync` and `SignUpAsync` read `ICurrentUser.GetVolunteerAccessAsync(eventId)` before any assignment check. `RESTRICTED` and unavailable are refused and never treated as `NONE`. Each sign-up and cancel is one EF Core transaction. `ConfirmPendingAsync` changes a person's event-scoped `PENDING` rows to `ACTIVE`; `DenyPendingAsync` changes one to `DENIED`. Role-granting operations owned by ADM and Authentication call these within their coordinated transaction.
 - Role-granting operations (new, **owned by ADM and Authentication**, shown for the contract only): **every** operation that gives an account the current volunteer role calls `confirmPending` in the same transaction. That includes `UC-ADM-review-volunteer` approve (step 4), `UC-ADM-review-volunteer-request` approve, `UC-ADM-grant-volunteer-access` (both the direct grant and the claim at sign-in, 4b), and annual renewal. `UC-ADM-review-volunteer`'s deny (3a1) calls `denyPending` for one sign-up and leaves the account unchanged. [ADM.md](ADM.md) and Authentication's design own the endpoints, screens, and authorization.
-- `src/Backend/Volunteer/ScheduleService` (new): read-only. It builds upcoming shifts, including pending ones, and computes hours from `ACTIVE` assignments and shift times at read time.
-- `src/Backend/Volunteer/AssignmentRepository` and `ShiftAssignment` (new): the EF Core persistence boundary and entity for `shift_assignment`; SQL Server-specific constraint and transaction handling remain here.
-- `src/Backend/Volunteer/AssignmentQueryService` (new): the read-only contract VOL exposes to other areas so they never touch its table. ADM dashboards and notification rechecks call it. `IsActiveAsync` is false for `PENDING`; `CountsByShiftAsync` returns active and pending counts separately.
+- `src/Backend/ReFrog.Server/Features/Volunteer/ScheduleService` (new): read-only. It builds upcoming shifts, including pending ones, and computes hours from `ACTIVE` assignments and shift times at read time.
+- `src/Backend/ReFrog.Server/Features/Volunteer/AssignmentRepository` and `ShiftAssignment` (new): the EF Core persistence boundary and entity for `shift_assignment`; SQL Server-specific constraint and transaction handling remain here.
+- `src/Backend/ReFrog.Server/Features/Volunteer/AssignmentQueryService` (new): the read-only contract VOL exposes to other areas so they never touch its table. ADM dashboards and notification rechecks call it. `IsActiveAsync` is false for `PENDING`; `CountsByShiftAsync` returns active and pending counts separately.
 - `administration/ShiftService` (reused, **owned by ADM**): VOL needs three asynchronous methods from it. `FindSignupCandidatesAsync(now)` returns shifts that have not started in an event whose status is `planned` or `active`. `FindByIdAsync` is the plain lookup. `LockForAssignmentAsync` uses a parameterized SQL Server `SELECT` with `UPDLOCK, HOLDLOCK` behind ADM's persistence abstraction and participates in the caller's EF Core transaction, so the shift-row lock lasts until VOL commits. Every returned shift carries its event id and status, so sign-up applies the same `planned`/`active` rule as the list. Shift start and end are `DateTimeOffset` UTC instants; ADM converts from `America/Chicago` when storing them, and VOL compares them only with `TimeProvider.GetUtcNow()` (§8.2.2). These methods are a contract with ADM's design (`ADM.md`).
-- `adm/AdminEventConfigService` (reused, **owned by ADM**, the same service [INF.md](INF.md) reads): `getLocationsForEvent(eventId)` supplies location name and address for display.
+- `adm/AdminEventConfigService` (reused, **owned by ADM**, the same service [INF.md](INF.md) reads): `GetCurrentEventAsync` supplies the single configured current annual event used to scope access requests; its coordinated `GetCurrentEventForUpdateAsync` form locks that selector until the caller commits, and event-rollover operations take the same lock. `GetLocationsForEventAsync` supplies location name and address for display. If the current event cannot be established, VOL returns unavailable and writes nothing; the browser never selects the event.
 - `authentication/CurrentUser` (reused): the signed-in account's id and its volunteer access **for one annual event** (`BR-volunteer-role-lifecycle`: the role is reviewed for each event).
   - `ROLE_ACTIVE`: holds the volunteer role for that event.
   - `NONE`: no role for that event and not restricted, for example a new account, or a current volunteer looking at next year's planned event before renewal.
   - `RESTRICTED`: access removed, or expired and not renewed (`FR-AUTH-volunteer-lifecycle`).
 
-  When Authentication cannot establish the state, `GetVolunteerAccessAsync(eventId)` fails with a dedicated unavailable result that the shared error handler maps to `503`; it never returns a default. Inside the sign-up transaction, Authentication reads the account row using SQL Server `UPDLOCK, HOLDLOCK`, so a role grant or removal cannot interleave with the sign-up (see Key decisions). Authentication owns the role, restriction, and event scope (architecture §5.2, §8.1). VOL stores none of them.
+  `ICurrentUser` returns the stable session account id and a failure-aware event-scoped result: `ROLE_ACTIVE`, `NONE`, `RESTRICTED`, or unavailable—never null and never a default. Removed or expired access is `RESTRICTED`; absence of a role without a restriction is `NONE`. Its `GetVolunteerAccessForUpdateAsync(eventId)` form reads the account/access row using SQL Server `UPDLOCK, HOLDLOCK` until the caller commits. Role grant, removal, expiry-state write, request decision, and request submission use the same account-before-request lock order. Authentication owns the role, restriction, and event scope (architecture §5.2, §8.1); VOL stores none of them.
 - `TimeProvider` (reused from .NET, architecture §8.2.2): injected so tests can fix "now" for shift-start and shift-end decisions.
 - **Front end** (new): the `UI-volunteer-schedule` view, with an open-shifts list, a sign-up action, and a my-schedule list with a cancel action. Sign-up is a single action on the open-shifts list, with no confirm dialog before it is sent, so a volunteer claims a shift within the two interactions `UI-volunteer-schedule` allows. The "signed up" confirmation shows only after the server answers `201` or `200` (step 6, `FR-SAVE-confirmed-success`). When the response's status is `PENDING`, it says the sign-up is awaiting administrator approval (5c2), and the my-schedule list marks that shift the same way. A `403 VOLUNTEER_ACCESS_INACTIVE` shows "Volunteer access inactive—administrator review required", the same text IDV shows (1a1). A `503 ACCESS_UNAVAILABLE` shows "Unable to verify access—try again" with a retry, never "no shifts are open". A confirm-before-send dialog is used only for cancel (`UC-VOL-cancel-shift` step 4). While a sign-up or cancel request is in flight, its button is disabled. After any `409` or `404` the front end shows the matching message (`404` uses the 4a1 "no longer available" text) and reloads the open list (4a2, 4c2). The service worker serves every `/api/v1/*` request network-only. It caches no shift list or access state and queues no `POST`, because a cached list or a queued sign-up would show what the server has not confirmed (§8.1, `FR-SAVE-confirmed-success`). Times arrive as ISO-8601 with their UTC offset and are displayed in `America/Chicago` on a 12-hour clock (§8.2.2).
+
+### The access request's states
+
+One record represents one account's request for one annual event. Only `PENDING` is created by `UC-VOL-request-access`; the later `UC-ADM-review-volunteer-request` design changes it to `APPROVED` or `DECLINED`. These are request-decision states, never authorization evidence. Authentication's current `ROLE_ACTIVE`, `NONE`, or `RESTRICTED` state remains authoritative for protected operations.
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: requestAccess (UC-VOL-request-access step 3)
+    PENDING --> APPROVED: administrator approves (UC-ADM-review-volunteer-request)
+    PENDING --> DECLINED: administrator declines (UC-ADM-review-volunteer-request)
+    PENDING --> PENDING: repeated request (2b, no change)
+    DECLINED --> DECLINED: same-event request refused (2c)
+```
 
 ### The assignment's states
 
@@ -175,6 +230,83 @@ stateDiagram-v2
 ## Sequence
 
 _[One sequence diagram per use case for its main success scenario, plus one for each extension that does not just return an error. **Label each interaction with the use case step it implements**, so a reviewer can check that every step is realized and nothing extra was invented. Use `alt` blocks for extensions that branch off the main flow. Give each use case its own `###` heading; that heading is the anchor your traceability matrix cites.]_
+
+### UC-VOL-request-access: requesting volunteer access
+
+```mermaid
+sequenceDiagram
+    actor U as Signed-in user
+    participant WEB as VolunteerAccessSection
+    participant API as VolunteerAccessRequestEndpoints
+    participant S as VolunteerAccessRequestService
+    participant CU as CurrentUser (Authentication)
+    participant EVT as AdminEventConfigService (ADM)
+    participant R as VolunteerAccessRequestRepository
+    U->>WEB: Select Become a volunteer (step 1)
+    WEB->>API: POST /api/v1/me/volunteer-access-requests (step 2)
+    API->>CU: Get authenticated account id (PRE-1, step 2)
+    API->>S: request(accountId) (step 2)
+    Note over S,R: one coordinated SQL Server transaction; lock order is current-event selector, account/access, request key
+    S->>EVT: GetCurrentEventForUpdateAsync() (step 2; selector locked until commit)
+    S->>CU: GetVolunteerAccessForUpdateAsync(eventId) (step 2; account locked until commit)
+    alt ROLE_ACTIVE (2a)
+        S-->>API: existing active access; no request written
+        API-->>WEB: 200 ROLE_ACTIVE
+        WEB-->>U: Display existing volunteer access (2a)
+    else RESTRICTED (2e)
+        S-->>API: VOLUNTEER_ACCESS_INACTIVE; no request written
+        API-->>WEB: 403
+        WEB-->>U: Administrator review required (2e)
+    else current event unavailable (§8.2.1)
+        S-->>API: VOLUNTEER_EVENT_UNAVAILABLE; no request written
+        API-->>WEB: 503 with retry
+        WEB-->>U: Unable to determine the volunteer event; retry
+    else access unavailable (§8.2.1)
+        S-->>API: ACCESS_UNAVAILABLE; no request written
+        API-->>WEB: 503 with retry
+        WEB-->>U: Unable to verify access; retry
+    else NONE
+        S->>R: findForUpdate(accountId, eventId) (step 2; row/key locked until commit)
+        alt request is PENDING (2b)
+            R-->>S: existing PENDING
+            S-->>API: existing request; no write
+            API-->>WEB: 200 PENDING
+            WEB-->>U: Volunteer access pending approval (step 4)
+        else request is DECLINED for this event (2c)
+            R-->>S: existing DECLINED
+            S-->>API: REQUEST_DECLINED_FOR_EVENT; no write
+            API-->>WEB: 409
+            WEB-->>U: Explain next-event request or manual grant (2c)
+        else request is APPROVED but authoritative access is NONE
+            R-->>S: inconsistent state
+            S-->>API: REQUEST_STATE_UNAVAILABLE; no write
+            API-->>WEB: 503 with retry
+            WEB-->>U: Unable to verify access; retry
+        else no request for this event, including a decline for an earlier event (2d)
+            S->>R: insertPending(accountId, eventId, timeProvider.GetUtcNow()) (step 3)
+            alt write fails or rollback is confirmed (3a)
+                R-->>S: failure; no confirmed request
+                S-->>API: REQUEST_NOT_RECORDED
+                API-->>WEB: 503 for unavailable persistence or safe 5xx for unexpected failure
+                WEB-->>U: Request not confirmed; retry (3a)
+            else commit outcome is unknown
+                R-->>S: outcome unknown
+                S-->>API: REQUEST_OUTCOME_UNKNOWN
+                API-->>WEB: 503; verify with status GET
+                WEB->>API: GET /api/v1/me/volunteer-access-requests
+            else committed
+                R-->>S: PENDING request
+                S-->>API: created request
+                API-->>WEB: 201 PENDING
+                WEB-->>U: Volunteer access pending approval (step 4)
+            end
+        end
+    end
+```
+
+The event is Administration's single configured current annual event. A prior-event `DECLINED` row is not queried as the current event's row, so extension 2d creates a new request without changing history. The POST carries no account id, event id, role, or status. A duplicate-key race is handled after rollback by re-reading the committed current-event request and returning extension 2b, never by reporting an unconfirmed success. The account/access and request-key locks linearize the returned request status at the transaction commit: if an administrator decision commits first, the POST returns that state; if the POST commits first, the later decision is a legitimate subsequent change.
+
+**Unknown outcome (`FR-SAVE-unknown-outcome`).** If the connection drops or a response without an application code arrives after the POST may have committed, the front end calls `GET /api/v1/me/volunteer-access-requests`. `PENDING` confirms step 4; no request confirms 3a; if the GET also fails, the UI reports that the outcome is not yet known. Retrying the POST is also safe because `(account_id, event_id)` identifies the request.
 
 ### UC-VOL-signup: signing up for a shift
 
@@ -362,18 +494,35 @@ All endpoints use the application-wide success/error envelope and documented sta
 
 | Endpoint | Caller (who may) | Request | Success | Errors, by extension |
 |---|---|---|---|---|
+| `GET /api/v1/me/volunteer-access-requests` | Any signed-in account, including a restricted account reading its own limited status | None | `200`: current configured event and authoritative access state (`ROLE_ACTIVE`, `NONE`, or `RESTRICTED`) plus that account's request status (`PENDING`, `APPROVED`, `DECLINED`, or none). The response exposes no other account and grants no permission. Event, access, and request are read in one coordinated transaction | Not signed in: `401`. Current event unavailable: `503 VOLUNTEER_EVENT_UNAVAILABLE`. Current access unavailable: `503 ACCESS_UNAVAILABLE`. Request-store read unavailable: `503 REQUEST_STATUS_UNAVAILABLE`. An impossible `APPROVED` + `NONE` combination: `503 REQUEST_STATE_UNAVAILABLE`. Unexpected failure: shared safe `5xx UNEXPECTED`; no partial or stale state is returned |
+| `POST /api/v1/me/volunteer-access-requests` | Any signed-in account; the service—not endpoint authorization—branches on `ROLE_ACTIVE`, `NONE`, or `RESTRICTED`; antiforgery required | No content; account and event come from trusted server services. A non-empty or malformed body is `422 VALIDATION_FAILED` and cannot select scope or state | `201`: new current-event `PENDING` request after commit (steps 3–4). `200`: existing `PENDING` request (2b) or existing `ROLE_ACTIVE` access (2a), with no write. No success grants a role | 2c: `409 REQUEST_DECLINED_FOR_EVENT`, nothing written. 2e: `403 VOLUNTEER_ACCESS_INACTIVE`, nothing written. Current event unavailable: `503 VOLUNTEER_EVENT_UNAVAILABLE`. Access unavailable: `503 ACCESS_UNAVAILABLE`. Impossible `APPROVED` + `NONE`: `503 REQUEST_STATE_UNAVAILABLE`. 3a with confirmed rollback/unavailable persistence: `503 REQUEST_NOT_RECORDED`; unknown commit outcome: `503 REQUEST_OUTCOME_UNKNOWN`, which the client verifies with GET; unexpected failure: shared safe `5xx UNEXPECTED`. Not signed in: `401`; invalid antiforgery proof: `400 ANTIFORGERY_INVALID` in the shared envelope |
 | `GET /api/v1/shifts/open` | Any signed-in account that is not restricted (`FR-AUTH-volunteer-lifecycle`) | None | `200`: a list (empty is valid, 2a) of shifts with `openSlots > 0` (required count minus `ACTIVE` and `PENDING` assignments) that have not started, in a `planned` or `active` event, leaving out any shift where this volunteer's sign-up was `DENIED`. Each has shift id, location id, name and address, date, start and end in `America/Chicago`, `openSlots`, and `assignedToMe` | 1a: `403 VOLUNTEER_ACCESS_INACTIVE` (access removed or expired), no shifts returned. Access state unavailable: `503 ACCESS_UNAVAILABLE`, retry (§8.2.1). Not signed in: `401` |
 | `POST /api/v1/shifts/{shiftId}/assignments` | Any signed-in account that is not restricted, for itself only. The volunteer comes from the session, never the path or body | None | `201`: new or reactivated assignment, with shift summary, `openSlots` after, and `status`: `ACTIVE` for a holder of the current volunteer role, `PENDING` otherwise (5c). `200`: the volunteer already held the slot (4b, 5b), same body with `alreadyAssigned: true`, and nothing is written | 1a: `403 VOLUNTEER_ACCESS_INACTIVE`, nothing written. Access state unavailable: `503 ACCESS_UNAVAILABLE`, nothing written, retry (§8.2.1). Both are checked before anything else. 4c: `409 SIGNUP_DENIED` (this volunteer's sign-up for this shift was denied). 4a: `409 SHIFT_FULL`. 4a: `409 SHIFT_NOT_OPEN` (started, or event not `planned`/`active`; never returned when the volunteer already holds the slot). Unknown shift: `404 SHIFT_NOT_FOUND`. 5a: `5xx`, no assignment written. Not signed in: `401` |
 | `DELETE /api/v1/shifts/{shiftId}/assignments/me` | Any signed-in user, for their own `ACTIVE` or `PENDING` assignment only | None | `200`: `{ assigned: false }`. Also returned when the assignment is already `CANCELLED` or `DENIED` (no change) | PRE-2: `404 NOT_ASSIGNED` (never signed up for this shift). `409 SHIFT_STARTED` (shift start ≤ now). 6a: `5xx`, assignment unchanged. Not signed in: `401` |
 | `GET /api/v1/me/schedule` | Any signed-in user, their own schedule only | None | `200`: upcoming shifts (`ACTIVE` and `PENDING` assignments whose shift has not ended, ordered by start), each with shift id, location name and address, date, start, end, and `status`. Also `finishedHours` (`ACTIVE` shifts that have ended) and `plannedHours` (`ACTIVE` shifts still to come), each a decimal number of hours | Not signed in: `401` |
 
-There is no endpoint that takes a volunteer id. One volunteer cannot read or change another volunteer's assignments through this API, by construction (`SEC-least-privilege`, architecture §8.1 Authorization). Administrators see assignments through ADM's endpoints, which call `AssignmentQueryService`.
+There is no participant endpoint that takes an account or volunteer id. One account cannot read or change another account's request or assignments through this API, by construction (`SEC-least-privilege`, architecture §8.1 Authorization). Administrators use ADM endpoints, which call VOL services rather than its tables.
 
 ## Key decisions
 
 _[Only the decisions a reader could not recover from the code: an invariant, who may do this and how it is enforced, a trade-off you chose, a reason you reused something rather than writing it. **Each one names what you chose, what you rejected, and why.** If you cannot name an alternative you considered, it probably was not a decision; leave it out._
 
 _A decision that affects the whole system rather than this area is an architecture decision. It belongs in your architecture-of-record as a `KD-*` entry, not here.]_
+
+**VOL owns the request; AUTH owns access; ADM owns the decision.** VOL stores the event-scoped request and is the only component that changes its request status. Authentication remains the sole source of current roles and restrictions, and Administration authorizes and coordinates approvals or declines through VOL's service contract. A request row is never authorization evidence (`BR-volunteer-role-approval`, architecture §8.1).
+Rejected: storing the request as an Authentication role, which would grant or imply permission before approval. Rejected: letting ADM edit VOL's table, which breaks the component boundary and persistence abstraction. Rejected: putting the self-service workflow in ADM, whose endpoints and views are administrator-only.
+
+**The server selects and stabilizes the annual event.** Both request endpoints use Administration's single configured current annual event. The browser supplies no event id, so a current-event decline cannot be bypassed by naming a different event. The coordinated request transaction locks the current-event selector until commit; event rollover takes the same lock. If the event cannot be established, the operation returns `503 VOLUNTEER_EVENT_UNAVAILABLE` and writes nothing (§8.2.1). When Administration advances the configured current event, the same account may create that event's request, which realizes `BR-volunteer-request-resubmission` without changing the prior row.
+Rejected: accepting an event id from the browser, which would let a caller choose the scope of the duplicate and decline checks. Rejected: selecting the nearest event by date inside VOL, which would duplicate Administration's event rule and invent tie-breaking behavior.
+
+**Current access takes precedence over request history.** The service checks `ICurrentUser.GetVolunteerAccessForUpdateAsync(eventId)` before looking up a request and holds the account/access lock through commit. `ROLE_ACTIVE` returns existing access (2a), `RESTRICTED` refuses self-request (2e), and unavailable state returns `503`; only `NONE` reaches request persistence. An `APPROVED` request paired with `NONE` is an inconsistent state, not authorization: return `503 REQUEST_STATE_UNAVAILABLE` and write nothing. This keeps an old `PENDING` or `APPROVED` row from overriding a later removal or expiry and prevents a request from granting a role.
+Rejected: deriving access from request status, which would duplicate Authentication's authorization state and let stale data restore permissions. Rejected: checking the request first, which could show pending or approved access to a restricted account.
+
+**Request submission is idempotent by account and event.** SQL Server enforces one row for `(account_id, event_id)`. The service reads first for the ordinary 2b path; the persistence adapter handles only that named unique-constraint violation, rolls back, and re-reads in a fresh EF Core scope. It returns the committed row only when one exists. Any other constraint failure remains a save failure (`FR-SAVE-confirmed-success`).
+Rejected: a client-generated idempotency key, because the business identity already fixes one request per account and event. Rejected: disabling the button as the only protection, because it does not cover concurrent requests or lost responses (`FR-SAVE-unknown-outcome`).
+
+**Request operations use one lock order and one consistent view.** `GetCurrentAsync` and `RequestAsync` coordinate through the one SQL Server database in this order: current-event selector, Authentication account/access row, then VOL request row or key range. `RequestAsync` holds them through its commit; `GetCurrentAsync` holds them until its response projection is complete. Event rollover takes the selector lock; grants, removals, expiry writes, and request decisions take account before request. A decision that commits before a POST/GET is returned; one that commits after is a legitimate later change. This prevents an event rollover, role change, or request decision from producing a combination that never existed.
+Rejected: three unrelated reads, which could combine different event, access, and request moments. Rejected: browser refresh as the only consistency mechanism, because the API promises authoritative current state. Rejected: a new distributed transaction, because all components share one database (`KD-deployment-shape`).
 
 **How overbooking is prevented.** Inside the EF Core sign-up transaction, VOL calls `ShiftService.LockForAssignmentAsync`. Its SQL Server persistence implementation executes a parameterized `SELECT` with `UPDLOCK, HOLDLOCK` for that shift row behind ADM's data-access abstraction (`KD-tcu-it-stack`, architecture §8.2.8). VOL then counts held assignments (`ACTIVE` plus `PENDING`) and inserts or reactivates one row. Two concurrent claims for the last slot run one after the other: the second sees capacity reached and gets `SHIFT_FULL`. Cancel takes the same shift lock, so a cancel and claim cannot interleave.
 Rejected: a stored `filledCount` column decremented on cancel, which can drift from the real assignments after a partial failure. Rejected: an optimistic version check with retry, which the SRS §5.2 scoping note cut as more than this event's load needs (`SCA-event-capacity`: 200 volunteers), and which surfaces as spurious failures under the sign-up rush. Rejected: an in-process lock, which breaks as soon as the application runs more than one instance. Contention is per shift, so locking one shift row never blocks sign-ups for other shifts (`PER-form-submission`).
@@ -424,7 +573,30 @@ Rejected: a `volunteer` profile table, or a status column VOL writes, either of 
 
 _[The **change** this area makes to the data: new tables or entities, new columns, the migration that adds them. Draw an ER diagram when there is more than one new table. Do not redraw the domain model; your [specification](../requirements/software-requirements-specification.md) owns it, so link it and show only the change. If the area changes nothing, say "No change" and give the reason in one line; that is a design decision too.]_
 
-One new table, `shift_assignment`, owned by VOL:
+Two new tables, owned by VOL:
+
+```mermaid
+erDiagram
+    AUTH_ACCOUNT ||--o{ VOLUNTEER_ACCESS_REQUEST : submits
+    RE_FROG_EVENT ||--o{ VOLUNTEER_ACCESS_REQUEST : scopes
+    AUTH_ACCOUNT ||--o{ SHIFT_ASSIGNMENT : holds
+    VOLUNTEER_SHIFT ||--o{ SHIFT_ASSIGNMENT : contains
+```
+
+`volunteer_access_request`:
+
+| Column | Meaning |
+|---|---|
+| `id` | Surrogate key |
+| `account_id` | References Authentication's account; always taken from the session |
+| `event_id` | References Administration's annual event selected by the server |
+| `status` | `PENDING`, `APPROVED`, or `DECLINED`; never used directly for authorization |
+| `requested_at` | When the request was first committed (`datetimeoffset`, UTC, §8.2.2) |
+| `status_changed_at` | When the current request status was committed (`datetimeoffset`, UTC) |
+
+Constraint: explicitly named **unique (`account_id`, `event_id`)**, so the persistence adapter can distinguish only this duplicate from other database errors. Index on (`event_id`, `status`) supports the later administrator pending-request list. Account and event foreign keys use restrictive, non-cascading deletion behavior. Request and status timestamps are retained with the record; deletion or archival timing remains unresolved under `OI-6`, so this design adds no cleanup job and does not silently delete requests when an account or event is removed.
+
+`shift_assignment`:
 
 | Column | Meaning |
 |---|---|
@@ -439,20 +611,21 @@ Constraint: **unique (`shift_id`, `volunteer_id`)**. Index on (`shift_id`, `stat
 
 This **realizes** the domain model's `Volunteer "*" --> "*" VolunteerShift : assigned to` association as its own record. The data dictionary's `VolunteerShift.assignmentStatus` (`assigned, claimed, cancelled, filled`) mixes the shift's state with each assignment's. Here "filled" is derived (held count ≥ required count), "claimed" and "assigned" are the same `ACTIVE` state (see the use-cases note on `UC-VOL-claim-open-shift`), `PENDING` is a claim awaiting approval, `DENIED` is a claim an administrator refused, and "cancelled" lives on the assignment. The shift table itself, including `required_count`, is ADM's.
 
-VOL adds nothing outside its table. The volunteer role, its event scope, and the removed or expired restriction are Authentication's storage (`FR-AUTH-volunteer-role`, `FR-AUTH-volunteer-lifecycle`). VOL's only dependency on them is the `volunteerAccess()` read contract in Components.
+VOL adds nothing outside its two tables. The volunteer role, its event scope, and the removed or expired restriction are Authentication's storage (`FR-AUTH-volunteer-role`, `FR-AUTH-volunteer-lifecycle`). VOL only reads that state through `volunteerAccess()`; request status does not replace it.
 
 ## Reuse & cross-cutting
 
 _[Which existing services, components, and conventions this area uses rather than rebuilding: authentication, the error handler, email, the clock, another area's service. Cite your architecture-of-record's section 8.2 for each convention by name rather than restating it.]_
 
 - **Authentication** (architecture §8.1): `CurrentUser` for the volunteer id and current volunteer access (`ROLE_ACTIVE`, `NONE`, `RESTRICTED`, or unavailable). Every VOL endpoint requires sign-in, volunteers included (`FR-AUTH-enforce-permissions`). The sign-up endpoints refuse restricted accounts (`FR-AUTH-volunteer-lifecycle`).
-- **Authorization** (§8.1): own-records-only is enforced by endpoint shape. No VOL endpoint accepts a volunteer id.
-- **Error handling** (§8.2.1): a failed write is reported as "not recorded", never as success (`FR-SAVE-confirmed-success`). The `201`/`200` is sent only after commit. An access state that cannot be established is refused as unavailable with retry, never treated as a negative result.
-- **Time** (§8.2.2): shift times are stored as SQL Server `datetimeoffset` values in UTC and shown in `America/Chicago` on a 12-hour clock. "Started" and "ended" are decided by injected .NET `TimeProvider`.
-- **Validation** (§8.2.5): VOL requests carry no body. The only inputs are the path's `shiftId` (must exist: `404`) and the session.
-- **Persistence and concurrency** (§8.2.8): EF Core and Microsoft SQL Server implement one transaction per sign-up or cancel, covering account lock, shift lock, checks, and write. Database-specific lock hints stay behind the AUTH and ADM persistence contracts.
-- **Logging** (§8.2.7): log the shift id and refusal code on refusals. Never log the volunteer's email.
-- **ADM** `ShiftService` and `AdminEventConfigService`: called through their services, never their repositories.
+- **Authorization** (§8.1): own-records-only is enforced by endpoint shape. No participant VOL endpoint accepts an account or volunteer id. Request status never authorizes an operation.
+- **API and antiforgery** (§8.1, §8.2.3): the request POST uses the application-wide ASP.NET Core cookie/antiforgery convention. An invalid proof is mapped through the shared handler to `400 ANTIFORGERY_INVALID` in `ApiResponse<T>`, never a framework-native response body. GET remains read-only.
+- **Error handling** (§8.2.1): a failed write is reported as "not recorded", never as success (`FR-SAVE-confirmed-success`). `REQUEST_NOT_RECORDED` is used only when rollback/non-commit is known; `REQUEST_OUTCOME_UNKNOWN` is used when commit acknowledgement is uncertain and causes the client to check GET. Transient event, access, or request-store reads return their distinct retryable `503` codes; unexpected failures use the shared safe `UNEXPECTED` response. No unavailable read is converted to `NONE` or “no request,” and no endpoint returns a partial state.
+- **Time** (§8.2.2): request timestamps and shift times are stored as SQL Server `datetimeoffset` UTC instants. Shift times shown to users use `America/Chicago` and a 12-hour clock. Request, shift-start, and shift-end decisions use injected .NET `TimeProvider`.
+- **Validation** (§8.2.5): access-request operations carry no body; account and event come from trusted server services. Assignment operations accept only the path's `shiftId` (must exist: `404`) and the session.
+- **Persistence and concurrency** (§8.2.8): EF Core and Microsoft SQL Server implement one smallest-complete transaction per request, sign-up, or cancel. Request reads/writes coordinate event-selector, account/access, and request-key locks in that order; assignment transactions cover account lock, shift lock, checks, and write. Database-specific handling stays behind the owning ADM, AUTH, and VOL persistence abstractions.
+- **Logging and operational notification** (§8.2.7): log only event or shift id, stable refusal/error code, correlation data, and technical diagnostics needed to investigate. Never log the volunteer's email, request history, or unnecessary account data. Actionable failures use the shared centralized error-notification mechanism; VOL does not choose a recipient, channel, severity threshold, escalation rule, or retention while `OI-23` and `OI-6` remain open.
+- **ADM** `ShiftService` and `AdminEventConfigService`: called through their services, never their repositories. The configured current event is a required dependency for both request operations.
 
 ## Tests
 
@@ -460,6 +633,33 @@ _[One row per flow: the main success scenario and **every** extension of every u
 
 | Use case, flow | Level | Asserts |
 |---|---|---|
+| UC-VOL-request-access main | integration | A signed-in account with `NONE` access and no current-event request gets `201`; one `PENDING` row is committed for the session account and configured event; no role or permission changes |
+| UC-VOL-request-access profile status | integration | `GET` returns only the signed-in account's authoritative access and current-event request state; it exposes no other account data |
+| UC-VOL-request-access step 4 | unit (front end) | A committed `201 PENDING` displays “Volunteer access pending approval” and explains that pending grants no permissions |
+| UC-VOL-request-access 2a | integration | `ROLE_ACTIVE` returns `200` with active access, writes no request, and does not change the role |
+| UC-VOL-request-access 2b, sequential | integration | Repeating the POST for an existing current-event `PENDING` request returns `200` with the same request and leaves one row |
+| UC-VOL-request-access 2b, concurrent | integration | Two concurrent first POSTs for the same account and event produce one row; the unique-constraint loser re-reads and returns the committed `PENDING` request rather than a failure |
+| UC-VOL-request-access 2b, narrow duplicate recovery | integration | A different constraint failure, or a duplicate violation whose fresh re-read finds no row, returns a save failure and never a false success |
+| UC-VOL-request-access, grant/removal race | integration | Race POST against a role grant and against removal: account-before-request locking gives a serial result; the response follows the state that committed first, and the completed operations leave no request that restores or contradicts authoritative access |
+| UC-VOL-request-access, event-rollover race | integration | Race POST against changing the configured current event: the selector lock yields a request for one event that was current at commit, or a retryable refusal; no request is silently written for a stale selector |
+| UC-VOL-request-access, decision race | integration | Race POST/GET against an administrator decision on the same request: request-row locking returns the decision if it committed first; otherwise `PENDING` is the committed state and the decision is a later change |
+| UC-VOL-request-access 2c | integration | A current-event `DECLINED` request returns `409 REQUEST_DECLINED_FOR_EVENT`; no request or role changes; response supports the next-event/manual-grant explanation |
+| UC-VOL-request-access 2d | integration | A prior event's `DECLINED` row remains unchanged while a new `PENDING` row is created for the configured current event |
+| UC-VOL-request-access 2e | integration | `RESTRICTED` returns `403 VOLUNTEER_ACCESS_INACTIVE`; no request or role changes even when an old request is `PENDING` or `APPROVED` |
+| UC-VOL-request-access 3a, write failure | integration | A simulated insert or commit failure returns `503 REQUEST_NOT_RECORDED` or safe `5xx`; no row or role is written and no success is shown |
+| UC-VOL-request-access 3a, lost response after commit | unit (front end) | After an unknown POST outcome, the UI calls the status GET; `PENDING` shows success, no request shows not recorded, and failed GET shows outcome unknown |
+| UC-VOL-request-access, retry after lost response | integration | A committed request whose response was lost is returned by the retry as existing `PENDING`; one row and no role change remain |
+| UC-VOL-request-access, unknown commit outcome | integration | Simulated connection loss during commit returns `503 REQUEST_OUTCOME_UNKNOWN`, never definite failure or success; the subsequent GET reports the committed result once known |
+| UC-VOL-request-access, current event unavailable | integration | Missing or unavailable configured current event returns `503 VOLUNTEER_EVENT_UNAVAILABLE`—not `ACCESS_UNAVAILABLE`; no request is read as current or written |
+| UC-VOL-request-access, access unavailable | integration | Authentication cannot establish current access: GET and POST return `503 ACCESS_UNAVAILABLE`, no request is written, and the UI offers retry without showing stale state |
+| UC-VOL-request-access, request-store read unavailable | integration | GET request lookup fails transiently: `503 REQUEST_STATUS_UNAVAILABLE`, no partial access/request combination and no “no request” result. Unexpected lookup failure uses the safe shared `UNEXPECTED` response |
+| UC-VOL-request-access, inconsistent approved state | integration | Authoritative access is `NONE` while the request is `APPROVED`: GET and POST return `503 REQUEST_STATE_UNAVAILABLE`, write nothing, and never treat the request as authorization |
+| UC-VOL-request-access, consistent status snapshot | integration | Concurrent event/access/request changes cannot make GET return a combination that never existed; its result is linearized by the coordinated transaction |
+| UC-VOL-request-access, trusted scope | integration | A non-empty body containing account, event, role, or status gets `422 VALIDATION_FAILED`; it cannot target another account/event or grant access, because session and configured event determine scope |
+| UC-VOL-request-access, fixed clock | integration | `requested_at` and `status_changed_at` equal the injected UTC instant for a new request |
+| UC-VOL-request-access, unauthenticated | integration | GET and POST return `401`; no request data is returned or written. POST with invalid antiforgery proof returns `400` and writes nothing |
+| UC-VOL-request-access, restrictive foreign keys | integration | Attempts to delete an account or event with a request do not cascade-delete its request; no cleanup occurs without an approved retention policy |
+| UC-VOL-request-access, log redaction | integration | Failures log the stable code and technical correlation data without email, request-history detail, or unnecessary account data; actionable failures use the shared operational mechanism without VOL-specific routing policy |
 | UC-VOL-signup main | integration | A holder of the current volunteer role (`ROLE_ACTIVE`) claims a shift with a free slot: `201`, one `ACTIVE` row, `openSlots` decreases by one |
 | UC-VOL-signup 1a, list | integration | A `RESTRICTED` account: `GET` open shifts gets `403 VOLUNTEER_ACCESS_INACTIVE` and no shifts |
 | UC-VOL-signup 1a, sign-up | integration | A `RESTRICTED` account, free slot: `POST` gets `403 VOLUNTEER_ACCESS_INACTIVE`, no row written, `openSlots` unchanged |
@@ -522,6 +722,7 @@ _[One row per flow: the main success scenario and **every** extension of every u
 _[Designing an area against real code is when the architecture's guesses meet reality. If this design needs a component the map does not have, moves a responsibility, or adds a dependency, **change [the architecture-of-record](architectural-design.md) in the same pull request** and list each change here in one line. If nothing changed, write "None". A design that silently disagrees with the architecture leaves two maps, and the agent will follow whichever it reads last.]_
 
 - [§5.2](architectural-design.md#52-use-case-areas-and-components), `VOL` row: *Depends on* changed from "Administration, Authentication, Notifications" to "Administration, Authentication". VOL calls no notification code (`OI-7`). Notifications depends on VOL, not the reverse. Location names and addresses come from Administration's event configuration ([INF.md](INF.md)). The earlier version of this line named "Location Info" and was never applied. This revision applies it and supersedes it.
+- [§5.2](architectural-design.md#52-use-case-areas-and-components), `VOL` row: *Responsibility* gains owning event-scoped volunteer access requests and exposing them to Administration for decisions (`UC-VOL-request-access`). Authentication still owns roles/restrictions and Administration still owns decisions.
 - [§5.2](architectural-design.md#52-use-case-areas-and-components), `ADM` row: *Responsibility* gains approving new volunteers and denying their sign-ups (`UC-ADM-review-volunteer`). VOL already sat in ADM's *Depends on*.
 
 ## Open questions & risks
@@ -529,6 +730,11 @@ _[Designing an area against real code is when the architecture's guesses meet re
 _[What this design could not settle and who can, and what could go wrong that you are accepting. A question for the client also goes in [`OPEN-ISSUES.md`](../requirements/OPEN-ISSUES.md).]_
 
 **Challenge-loop findings.** These are gaps in the requirements. The design picks a default for each, but the answer belongs in the specification.
+
+1. **Which annual event receives a request?** The use case says “current annual event” but does not define a browser-selectable event. *Resolved for this design with developer approval, 2026-11-13:* use Administration's single configured current annual event; if it cannot be established, return unavailable and write nothing. The browser never chooses the event.
+2. **The use case's Business Rules field omitted rules used by its extensions.** Extensions 2c–2e depend on `BR-volunteer-request-resubmission` and `BR-volunteer-role-lifecycle`. *Fixed in `use-cases.md` in this design change.*
+
+**Earlier scheduling findings:**
 
 1. **What counts as credited hours: ended shifts only, or all signed-up shifts?** The use case says "total hours"; the UI spec says "hours credited so far". *Resolved by the team:* show both, as `finishedHours` and `plannedHours` (see Key decisions). *Optional team fix:* make `UC-VOL-view-schedule` step 3 say so.
 2. **Can a volunteer cancel after a shift has started, or must they cancel some time before it?** The use case is silent. Design default: up to the start time, no earlier cut-off. *Client question.*
@@ -539,11 +745,12 @@ _[What this design could not settle and who can, and what could go wrong that yo
 7. **Restricted accounts and sign-up.** `FR-AUTH-volunteer-lifecycle` (2026-10-16) forbids volunteer operations to an account whose access was removed or has expired, but `UC-VOL-signup` had no extension for it. *Fixed (2026-10-30):* extension 1a added to the use case.
 8. **A returning volunteer is worse off than a newcomer.** After annual expiry, a returning volunteer cannot sign up at all, not even as pending, until an administrator renews them. A brand-new account can sign up as pending at once. Design default: follow `FR-AUTH-volunteer-lifecycle`. *Team question, `OI-21`.*
 9. **"Whether approval gates shift signup remains `OI-18`."** The note in `use-cases.md` and `FR-AUTH-shopping-eligibility`'s Source line said so, but `UC-VOL-signup` 5c already answers it (claim first, approve after), and `OI-18` is resolved with shift approval outside its scope. *Fixed (2026-10-30):* both now point to 5c.
-10. **Should cancel and view-schedule also refuse restricted accounts?** Removal clears held assignments and expiry falls after the event's shifts, so cancel has nothing to act on. Whether an expired volunteer may still see their past hours is open. Out of scope for this revision; settle it when those use cases are revised.
+10. **Should cancel and view-schedule also refuse restricted accounts?** Removal clears held assignments and expiry falls after the event's shifts have ended. Whether an expired volunteer may still see past hours is out of scope for this revision; settle it when those use cases are revised.
 
 **Coordination with other areas** (contract, not client):
 
 - **ADM:** `ShiftService.FindSignupCandidatesAsync`, `FindByIdAsync`, and `LockForAssignmentAsync` return UTC instants and use the shared SQL Server transaction contract described in Components. `required_count` starts from the event-location setting and may be changed per shift. `UC-ADM-review-volunteer` calls `ConfirmPendingAsync` or `DenyPendingAsync` in its transaction. ADM rejects capacity edits or removal that would violate held assignments; VOL only reads `required_count`.
+- **ADM, access requests:** `AdminEventConfigService.GetCurrentEventAsync` must provide the single configured current annual event before `UC-VOL-request-access` can be implemented. `UC-ADM-review-volunteer-request` reads and decides requests through `VolunteerAccessRequestService`; it does not edit VOL persistence directly.
 - **Authentication:** exposes `ICurrentUser.GetVolunteerAccessAsync(eventId)`: `ROLE_ACTIVE` for that event's role, `NONE`, or `RESTRICTED` for removed or expired access. It fails as unavailable rather than defaulting and, inside the sign-up transaction, locks the account row with SQL Server `UPDLOCK, HOLDLOCK`. Every grant or removal locks and writes the account row before touching assignments (see Key decisions). Session, cookie, and antiforgery handling for VOL's state-changing `POST` and `DELETE` come from application-wide ASP.NET Core configuration owned by Authentication (§8.1); VOL adds none. [AUTH.md](AUTH.md) owns this trusted-current-user contract. Every AUTH-owned role grant calls `ConfirmPendingAsync`.
 - **ADM, role grants:** [ADM.md](ADM.md) uses Authentication's event-scoped volunteer-access model. Every approved grant path calls `ConfirmPendingAsync(volunteerId, eventId)` in the same transaction.
 - **ADM, role removal:** `UC-ADM-remove-volunteer-access` step 4 clears active assignments and releases their capacity. That needs a VOL method that releases all of a person's held rows under each shift's lock. ADM's design adds it, per this document's rule on `AssignmentQueryService`. The released rows become `CANCELLED`, never `DENIED` or a new status, so a later re-grant lets the person claim those shifts again (step 5, not 4c).
@@ -577,4 +784,4 @@ _[Start a **fresh** agent session in plan mode, so it carries nothing from the s
 
 _For each item on its list, either fix this document or keep the guess and write one line saying why a wrong guess breaks no requirement. Paste the list, with your answer to each item, into the pull request description under How it was verified, inside a collapsed `<details><summary>Questions test</summary> … </details>` block so the description stays short. The design is ready when nothing on the list could break a requirement.]_
 
-For VOL, `<UC-ID>` is `UC-VOL-signup`, `UC-VOL-cancel-shift`, and `UC-VOL-view-schedule`. The rules to give the session are `BR-volunteer-assignment`, `BR-location-staffing`, `BR-event-schedule`, `BR-volunteer-role-approval`, and `BR-volunteer-role-lifecycle`, plus `FR-AUTH-volunteer-lifecycle`.
+For VOL, `<UC-ID>` is `UC-VOL-signup`, `UC-VOL-cancel-shift`, `UC-VOL-view-schedule`, and `UC-VOL-request-access`. For the access-request questions test, provide `BR-volunteer-role-approval`, `BR-volunteer-request-resubmission`, `BR-volunteer-role-lifecycle`, `FR-AUTH-volunteer-role`, `FR-AUTH-volunteer-lifecycle`, architecture §8, and this design.

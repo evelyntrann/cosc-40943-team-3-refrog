@@ -342,7 +342,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 **Priority:** High for the approved-volunteer access workflow.
 **Frequency of Use:** Once per prospective volunteer, with possible retries.
-**Business Rules:** `BR-volunteer-role-approval`
+**Business Rules:** `BR-volunteer-role-approval`, `BR-volunteer-request-resubmission`, `BR-volunteer-role-lifecycle`
 **Associated Information:** Account identity comes from sign-in, never a user-selected target account. Store request status and timestamps; only the requester and administrators may view the request. Failed writes do not grant access.
 **Related Use Cases:** `UC-ADM-review-volunteer-request`, `UC-IDV-verify-affiliation`
 **Assumptions:** Approval grants a role, not a shift assignment.
