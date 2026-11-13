@@ -1,0 +1,90 @@
+@page "/account"
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>Account | ReFrog</PageTitle>
+
+<h1>Account</h1>
+
+@if (loading)
+{
+    <p role="status">Loading your account…</p>
+}
+else if (session is not null)
+{
+    <section aria-labelledby="account-heading">
+        <h2 id="account-heading">Signed in</h2>
+        <p>@session.Email</p>
+        @if (session.IsAdministrator)
+        {
+            <p>Administrator</p>
+        }
+        <button type="button" disabled="@busy" @onclick="SignOutAsync">@(busy ? "Signing out…" : "Sign out")</button>
+    </section>
+}
+else
+{
+    <p role="alert">@error</p>
+    <a href="/sign-in?returnPath=%2Faccount">Sign in</a>
+}
+
+@code {
+    private CurrentSessionResponse? session;
+    private string? error;
+    private bool loading = true;
+    private bool busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            session = (await Http.GetFromJsonAsync<ApiResponse<CurrentSessionResponse>>("api/v1/me/session"))?.Data;
+            if (session is null)
+            {
+                error = "Sign in to view your account.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            error = "Your account is temporarily unavailable. Try again.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task SignOutAsync()
+    {
+        busy = true;
+        try
+        {
+            var token = (await Http.GetFromJsonAsync<ApiResponse<AntiforgeryTokenResponse>>(
+                "api/v1/auth/antiforgery"))?.Data?.Token;
+            if (string.IsNullOrEmpty(token))
+            {
+                error = "Sign-out is temporarily unavailable. Try again.";
+                return;
+            }
+
+            using var request = new HttpRequestMessage(HttpMethod.Delete, "api/v1/auth/session");
+            request.Headers.Add("RequestVerificationToken", token);
+            using var response = await Http.SendAsync(request);
+            if (response.IsSuccessStatusCode)
+            {
+                Navigation.NavigateTo("/");
+                return;
+            }
+
+            error = "Sign-out is temporarily unavailable. Try again.";
+        }
+        catch (HttpRequestException)
+        {
+            error = "Sign-out is temporarily unavailable. Try again.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

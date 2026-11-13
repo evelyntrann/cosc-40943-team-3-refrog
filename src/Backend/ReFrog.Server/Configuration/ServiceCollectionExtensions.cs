@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using ReFrog.Server.Features.Authentication;
 using ReFrog.Server.Features.Authentication.Persistence;
 using ReFrog.Server.Features.Info;
@@ -27,6 +29,9 @@ public static class ServiceCollectionExtensions
             // The user name is the verified email, which registration already validates
             // (FR-AUTH-account-signup: any domain), so Identity's narrower character list must not apply.
             options.User.AllowedUserNameCharacters = string.Empty;
+            options.Lockout.AllowedForNewUsers = true;
+            options.Lockout.MaxFailedAccessAttempts = 5;
+            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
         })
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<AuthDbContext>()
@@ -44,10 +49,13 @@ public static class ServiceCollectionExtensions
                 options.Events.OnValidatePrincipal = SecurityStampValidator.ValidatePrincipalAsync;
             });
         services.Configure<SecurityStampValidatorOptions>(options => options.ValidationInterval = TimeSpan.Zero);
+        services.AddSingleton<IPostConfigureOptions<CookieAuthenticationOptions>, CookieTimeProviderConfiguration>();
         services.AddAuthorization();
         services.AddAntiforgery();
         services.AddScoped<IAuthRepository, EfAuthRepository>();
+        services.AddScoped<IAdministratorSignInAudit, EfAdministratorSignInAudit>();
         services.AddScoped<RegistrationService>();
+        services.AddScoped<SessionService>();
         services.AddDbContext<InfoDbContext>(options =>
             InfoDbContext.Configure(options, configuration.GetConnectionString("ReFrog")));
         services.AddScoped<IEventInfoStore, EfEventInfoStore>();
