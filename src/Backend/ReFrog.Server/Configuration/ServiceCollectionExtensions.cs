@@ -70,6 +70,8 @@ public static class ServiceCollectionExtensions
             AdmDbContext.Configure(options, provider.GetRequiredService<SqlUnitOfWork>().Connection));
         services.AddScoped<IAdminAuditLog, EfAdminAuditLog>();
         services.AddScoped<AdminAuthorization>();
+        services.AddScoped<IShiftStore, EfShiftStore>();
+        services.AddScoped<ShiftService>();
         if (string.Equals(configuration["Email:Provider"], "MicrosoftGraph", StringComparison.OrdinalIgnoreCase))
         {
             services.AddHttpClient<IEmailSender, MicrosoftGraphEmailSender>();
