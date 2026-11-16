@@ -23,6 +23,90 @@ namespace ReFrog.Server.Features.Info.Persistence.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("ReFrog.Server.Features.Info.Persistence.DonationLocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("InfographicUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("float");
+
+                    b.Property<string>("MapPinUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("PodNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId");
+
+                    b.ToTable("DonationLocations", "info", t =>
+                        {
+                            t.HasCheckConstraint("CK_DonationLocation_Status", "[Status] IN ('OPEN', 'CLOSED', 'FULL')");
+                        });
+                });
+
+            modelBuilder.Entity("ReFrog.Server.Features.Info.Persistence.LocationSchedule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<TimeOnly>("CloseTime")
+                        .HasColumnType("time");
+
+                    b.Property<string>("DayOfWeek")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<TimeOnly>("OpenTime")
+                        .HasColumnType("time");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId");
+
+                    b.ToTable("LocationSchedules", "info", t =>
+                        {
+                            t.HasCheckConstraint("CK_LocationSchedule_Day", "[DayOfWeek] IN ('MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY')");
+
+                            t.HasCheckConstraint("CK_LocationSchedule_Hours", "[CloseTime] > [OpenTime]");
+                        });
+                });
+
             modelBuilder.Entity("ReFrog.Server.Features.Info.Persistence.ReFrogEvent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -33,6 +117,11 @@ namespace ReFrog.Server.Features.Info.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");
+
+                    b.Property<Guid>("CurrentEventKey")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("uniqueidentifier")
+                        .HasComputedColumnSql("CASE WHEN [Status] IN ('PLANNED', 'ACTIVE') THEN CAST('00000000-0000-0000-0000-000000000000' AS uniqueidentifier) ELSE [Id] END", true);
 
                     b.Property<string>("DailyOperatingHoursDescription")
                         .IsRequired()
@@ -59,9 +148,9 @@ namespace ReFrog.Server.Features.Info.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Status")
+                    b.HasIndex("CurrentEventKey")
                         .IsUnique()
-                        .HasFilter("[Status] = 'ACTIVE'");
+                        .HasDatabaseName("IX_ReFrogEvents_CurrentEvent");
 
                     b.ToTable("ReFrogEvents", "info", t =>
                         {
@@ -69,6 +158,29 @@ namespace ReFrog.Server.Features.Info.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_ReFrogEvent_Status", "[Status] IN ('PLANNED', 'ACTIVE', 'CLOSED', 'ARCHIVED')");
                         });
+                });
+
+            modelBuilder.Entity("ReFrog.Server.Features.Info.Persistence.DonationLocation", b =>
+                {
+                    b.HasOne("ReFrog.Server.Features.Info.Persistence.ReFrogEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ReFrog.Server.Features.Info.Persistence.LocationSchedule", b =>
+                {
+                    b.HasOne("ReFrog.Server.Features.Info.Persistence.DonationLocation", null)
+                        .WithMany("Schedules")
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ReFrog.Server.Features.Info.Persistence.DonationLocation", b =>
+                {
+                    b.Navigation("Schedules");
                 });
 #pragma warning restore 612, 618
         }
