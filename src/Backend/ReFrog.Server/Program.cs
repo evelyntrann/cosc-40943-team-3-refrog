@@ -32,7 +32,8 @@ var logUnexpected = LoggerMessage.Define(LogLevel.Error, new EventId(7902, "Unex
     "Unexpected request failure");
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path.StartsWithSegments("/api/v1/auth"))
+    if (context.Request.Path.StartsWithSegments("/api/v1/auth") ||
+        context.Request.Path.Equals("/api/v1/me/session"))
     {
         context.Response.Headers.CacheControl = "no-store";
         context.Response.Headers.Pragma = "no-cache";
@@ -62,6 +63,7 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapRegistrationEndpoints();
+app.MapSessionEndpoints();
 app.MapInfoEndpoints();
 app.Map("/api/{**path}", () => Results.Json(ApiResponse.Failure<object>(
     new ApiError(ApiErrorCategory.Validation, "NOT_FOUND", "The requested resource was not found.")),

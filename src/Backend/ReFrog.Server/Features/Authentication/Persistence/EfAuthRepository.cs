@@ -177,6 +177,7 @@ public sealed class EfAuthRepository(
             NormalizedEmail = pending.NormalizedEmail,
             EmailConfirmed = true,
             PasswordHash = pending.PasswordHash,
+            LockoutEnabled = true,
         };
         var created = await accounts.CreateAsync(account);
         if (!created.Succeeded)

@@ -1,0 +1,60 @@
+@page "/sign-in"
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>Sign in | ReFrog</PageTitle>
+
+<main class="auth-shell">
+    <section class="auth-card" aria-labelledby="sign-in-heading">
+        <p class="eyebrow">ReFrog account</p>
+        <h1 id="sign-in-heading">Welcome back</h1>
+        <p class="intro">Sign in with the email and password you used to create your account.</p>
+
+        <form @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+            <div class="field-group">
+                <label for="sign-in-email">Email address</label>
+                <input id="sign-in-email" type="email" autocomplete="email" @bind="form.Email" required />
+                @if (form.FieldError("email") is { } emailError)
+                {
+                    <p class="field-error" role="alert">@emailError</p>
+                }
+            </div>
+
+            <div class="field-group">
+                <label for="sign-in-password">Password</label>
+                <input id="sign-in-password" type="password" autocomplete="current-password" @bind="form.Password" required />
+                @if (form.FieldError("password") is { } passwordError)
+                {
+                    <p class="field-error" role="alert">@passwordError</p>
+                }
+            </div>
+
+            <button type="submit" disabled="@form.Busy">@(form.Busy ? "Signing in…" : "Sign in")</button>
+        </form>
+
+        @if (form.Error is not null)
+        {
+            <div class="form-alert" role="alert">@form.Error.Message</div>
+        }
+
+        <p class="register-link">Need an account? <a href="/register">Register</a></p>
+    </section>
+</main>
+
+@code {
+    private SignInForm form = null!;
+
+    [SupplyParameterFromQuery(Name = "returnPath")]
+    public string? ReturnPath { get; set; }
+
+    protected override void OnInitialized() => form = new SignInForm(Http);
+
+    private async Task SubmitAsync()
+    {
+        var session = await form.SubmitAsync(ReturnPath);
+        if (session is not null)
+        {
+            Navigation.NavigateTo(session.Destination);
+        }
+    }
+}

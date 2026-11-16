@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Antiforgery;
 using ReFrog.Contracts.Api;
 using ReFrog.Contracts.Authentication;
 
@@ -61,6 +62,61 @@ public static class AuthEndpoints
             var reply = await service.VerifyAsync(registrationId, input, cancellationToken);
             return Results.Json(reply.Response, statusCode: reply.StatusCode);
         });
+        return endpoints;
+    }
+
+    public static IEndpointRouteBuilder MapSessionEndpoints(this IEndpointRouteBuilder endpoints)
+    {
+        endpoints.MapPost("/api/v1/auth/session", async (
+            HttpRequest request, SessionService service, CancellationToken cancellationToken) =>
+        {
+            if (request.HttpContext.User.Identity?.IsAuthenticated == true)
+            {
+                return Results.Json(ApiResponse.Failure<SignInResponse>(new ApiError(
+                    ApiErrorCategory.Authorization, "ALREADY_SIGNED_IN", "You are already signed in.")),
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            var input = await ReadAsync<SignInRequest>(request, cancellationToken);
+            if (input is null)
+            {
+                return InvalidRequest<SignInResponse>();
+            }
+
+            var reply = await service.SignInAsync(input, cancellationToken);
+            return Results.Json(reply.Response, statusCode: reply.StatusCode);
+        }).AllowAnonymous();
+
+        endpoints.MapGet("/api/v1/auth/antiforgery", (HttpContext context, IAntiforgery antiforgery) =>
+        {
+            var tokens = antiforgery.GetAndStoreTokens(context);
+            return Results.Json(ApiResponse.Success(new AntiforgeryTokenResponse(tokens.RequestToken!)));
+        }).AllowAnonymous();
+
+        endpoints.MapDelete("/api/v1/auth/session", async (
+            HttpContext context, IAntiforgery antiforgery, SessionService service) =>
+        {
+            try
+            {
+                await antiforgery.ValidateRequestAsync(context);
+            }
+            catch (AntiforgeryValidationException)
+            {
+                return Results.Json(ApiResponse.Failure<SignOutResponse>(new ApiError(
+                    ApiErrorCategory.Validation, "ANTIFORGERY_INVALID", "Refresh the page and try again.")),
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            var reply = await service.SignOutAsync(context.User);
+            return Results.Json(reply.Response, statusCode: reply.StatusCode);
+        });
+
+        endpoints.MapGet("/api/v1/me/session", async (HttpContext context, SessionService service) =>
+        {
+            var reply = await service.CurrentAsync(context.User);
+            return Results.Json(reply.Response, statusCode: reply.StatusCode);
+        });
+
         return endpoints;
     }
 
