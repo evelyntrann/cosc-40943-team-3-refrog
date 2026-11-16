@@ -6,8 +6,8 @@
 
 > **Realizes:** `UC-IDV-verify-affiliation`, `FR-AUTH-affiliation-from-signin`, `FR-AUTH-verification-code`, `FR-AUTH-verification-limits`, `FR-AUTH-verification-ownership`, IDV's part of `FR-AUTH-shopping-eligibility` (the eligibility check Shopping calls)
 > **Depends on:** [Authentication](AUTH.md), `BR-shopper-tcu-affiliation`, `BR-shopper-verification`, `BR-tcu-email-domain`, `BR-volunteer-role-approval`, `BR-volunteer-role-lifecycle`, `FR-AUTH-enforce-permissions`, `FR-AUTH-volunteer-lifecycle`, `FR-VAL-server-validation`, `FR-VAL-field-feedback`, `FR-VAL-preserve-input`, `FR-SAVE-confirmed-success`, `FR-SAVE-unknown-outcome`, `ROB-external-service-failure`, `SEC-affiliation-data`, `SEC-authentication-provider`, `SEC-transport-encryption`, `UI-account-profile`, `KD-tcu-it-stack`
-> **See:** [Use cases](../requirements/use-cases.md#area-identity-verification-idv), [Business rules](../requirements/business-rules.md), [Specification](../requirements/software-requirements-specification.md), [Architecture of record](architectural-design.md) (§5.2 components, §8 crosscutting concepts, §9.2 `KD-tech-stack`)
-> **Designed against:** `d8893c1` (first draft); revised for `UC-IDV-verify-affiliation` against `main` `f781bf3` (which includes `KD-tech-stack`), 2026-10-30. `CurrentUser.volunteerAccess`, `VOLUNTEER_ACCESS_INACTIVE`, and `ACCESS_UNAVAILABLE` come from the VOL design merged in #66; re-checked against `main` after #66 and #69 (which added the `FR-AUTH-verification-*` requirements and `BR-tcu-email-domain`). No application code exists yet; every class below is new.
+> **See:** [Use cases](../requirements/use-cases.md#area-identity-verification-idv), [Business rules](../requirements/business-rules.md), [Specification](../requirements/software-requirements-specification.md), [Architecture of record](architectural-design.md) (§5.2 components, §8 crosscutting concepts, §9.2 `KD-tcu-it-stack`)
+> **Designed against:** `d8893c1` (first draft); revised for `UC-IDV-verify-affiliation` against `main` `f781bf3`, 2026-10-30; aligned with [AUTH.md](AUTH.md) against `main` `6b0c36b`, 2026-11-16. AUTH.md is authoritative for every contract IDV reuses. `VOLUNTEER_ACCESS_INACTIVE` and `ACCESS_UNAVAILABLE` come from the VOL design merged in #66. Authentication code exists under `src/Backend/ReFrog.Server/Features/Authentication`; no IDV code exists yet, so every IDV class below is new.
 
 ---
 
@@ -35,7 +35,7 @@ _[One class diagram for the whole area, and one line per class or file saying wh
 
 _**If your repository has no code for this area yet**, which is the normal case for your proving slice, list the files you expect the agent to create, with the paths your architecture-of-record's conventions give them, and mark them all new. The agent then builds into the structure you chose rather than one it improvised.]_
 
-The repository has no code yet, so every file is new. Paths use the `server/<module>/…` and `client/<module>/…` shorthand that [VOL.md](VOL.md) uses: `server` is the ASP.NET Core Application and `client` is the Blazor WebAssembly front end. The exact solution and project layout follows whatever the first code records under §8.2.4.
+Every IDV file is new. Paths follow the repository layout Authentication established: `src/Backend/ReFrog.Server/Features/<Area>/` for the ASP.NET Core Application and `src/Frontend/ReFrog.Client/Features/<Area>/` for the Blazor WebAssembly front end. The `IdentityVerification` folder name follows the `Authentication` precedent.
 
 ```mermaid
 classDiagram
@@ -46,8 +46,8 @@ classDiagram
         +RequestCodeAsync(email)
         +SubmitCodeAsync(code)
     }
-    class AffiliationController {
-        <<new>>
+    class AffiliationEndpoints {
+        <<new, ASP.NET Core>>
         +GetEligibility()
         +RequestCode(email, requestId)
         +VerifyCode(code)
@@ -59,44 +59,45 @@ classDiagram
         +VerifyCodeAsync(account, access, code)
         +CheckShoppingEligibilityAsync() ShoppingEligibility
     }
-    class IAuthTcuVerificationReader {
-        <<reused, Authentication>>
-        +GetForAccountAsync(accountId)
+    class TcuVerificationReader {
+        <<expected, Authentication; see Open questions>>
+        +forAccount(accountId)
     }
-    class IAuthVerificationChallengeService {
+    class VerificationChallengeService {
         <<reused, Authentication>>
-        +RequestAsync(accountId, TCU_AFFILIATION, email, requestId)
-        +VerifyAsync(accountId, TCU_AFFILIATION, code)
+        +request(accountId, TCU_AFFILIATION, email, requestId)
+        +verify(accountId, TCU_AFFILIATION, code)
     }
     class ICurrentUser {
         <<reused, Authentication>>
-        +AccountId
-        +GetCurrentVolunteerAccessAsync() ROLE_ACTIVE|NONE|RESTRICTED
+        +accountId()
+        +currentVolunteerAccess() ROLE_ACTIVE|NONE|RESTRICTED
     }
     class TimeProvider {
         <<reused, .NET, §8.2.2>>
     }
-    AffiliationSection --> AffiliationController : JSON/HTTPS
-    AffiliationController --> ICurrentUser
-    AffiliationController --> AffiliationService
+    AffiliationSection --> AffiliationEndpoints : JSON/HTTPS
+    AffiliationEndpoints --> ICurrentUser
+    AffiliationEndpoints --> AffiliationService
     AffiliationService --> ICurrentUser : for CheckShoppingEligibilityAsync
-    AffiliationService --> IAuthTcuVerificationReader
-    AffiliationService --> IAuthVerificationChallengeService
+    AffiliationService --> TcuVerificationReader
+    AffiliationService --> VerificationChallengeService
     AffiliationService --> TimeProvider
 ```
 
-- `client/idv/AffiliationSection.razor` (new): the identity section of `UI-account-profile`. It renders the status from `GET /api/v1/me/shopping-eligibility`. It shows "TCU email verified" and the "Volunteer" role as separate facts (2b1). It shows "Volunteer access inactive—administrator review required" for `RESTRICTED` (2c1), and in that state never shows "TCU email verified", so the screen a volunteer sees at step 8 cannot read as a pass (`BR-volunteer-role-lifecycle`). It shows "Unable to verify access—try again" with a retry for `503 ACCESS_UNAVAILABLE` (2d1), and the same for a network failure or a `5xx` without an IDV code on the `GET`; it never shows a last-known status (§8.2.1). It offers the email form and code form only when the account is not eligible and not restricted. The explanation of both qualifying paths sits beside the email form, so a shopper with neither sees why they cannot shop (5b1). Beside the email field it displays: "Please use a tcu.edu email if you are a TCU affiliate." This is guidance, not a client-side authorization check; the server remains authoritative. On `422` it names the bad field and keeps the typed email (§8.2.5). It offers resend after a rejected code (5a1), and disables resend until `resendAvailableAt`. It generates a new `requestId` (a GUID) for each explicit send and reuses it when it retries that same send after a dropped response.
-- `server/idv/AffiliationController` (new): three endpoints, behind the application-wide "signed in" authorization policy Authentication provides. The controller also requires an authenticated user itself, so it is never anonymous before that policy exists; tests sign in through a test authentication handler. It takes the account only from `ICurrentUser` and validates request shape, nothing else.
-- `server/idv/AffiliationService` (new): applies the IDV ordering rules: current restriction first, then active volunteer access, then persisted TCU email verification. It delegates code requests and submissions to Authentication with purpose `TCU_AFFILIATION`; it does not duplicate domain, rate-limit, lifetime, attempt, or supersession rules. `CheckShoppingEligibilityAsync()` is the only thing Shopping calls.
-- `IAuthTcuVerificationReader` and `IAuthVerificationChallengeService` (reused contracts, owned by Authentication): expose persisted verification and the single purpose-aware verification workflow described in [AUTH.md](AUTH.md). Authentication owns their Entity Framework Core mappings, Microsoft SQL Server transactions and locks, HMAC verification, and shared email adapter call. IDV adds no code tables, store implementations, verifier, migration, or email-provider integration.
-- `ICurrentUser` (reused contract, owned by Authentication): the account id and current volunteer access. [VOL.md](VOL.md) fixed event-scoped access for a shift. IDV has no shift and so no event, so it needs **`GetCurrentVolunteerAccessAsync()`**, which resolves the current annual event inside Authentication (see Key decisions and Open questions). It reads current state from the database on every call, never from role claims carried in the sign-in cookie, because `FR-AUTH-shopping-eligibility` forbids old session role claims from authorizing. It fails as unavailable rather than defaulting. IDV relies on this mapping, which Authentication must implement:
+- `src/Frontend/ReFrog.Client/Features/IdentityVerification/AffiliationSection.razor` (new): the identity section of `UI-account-profile`. It renders the status from `GET /api/v1/me/shopping-eligibility`. It shows "TCU email verified" and the "Volunteer" role as separate facts (2b1). It shows "Volunteer access inactive—administrator review required" for `RESTRICTED` (2c1), and in that state never shows "TCU email verified", so the screen a volunteer sees at step 8 cannot read as a pass (`BR-volunteer-role-lifecycle`). It shows "Unable to verify access—try again" with a retry for `503 ACCESS_UNAVAILABLE` (2d1), and the same for a network failure or a `5xx` without an IDV code on the `GET`; it never shows a last-known status (§8.2.1). It offers the email form and code form only when the account is not eligible and not restricted. The explanation of both qualifying paths sits beside the email form, so a shopper with neither sees why they cannot shop (5b1). Beside the email field it displays: "Please use a tcu.edu email if you are a TCU affiliate." This is guidance, not a client-side authorization check; the server remains authoritative. On `422` it names the bad field and keeps the typed email (§8.2.5). It offers resend after a rejected code (5a1), and disables resend until `resendAvailableAt`. It generates a new `requestId` (a GUID) for each explicit send and reuses it when it retries that same send after a dropped response.
+- `src/Backend/ReFrog.Server/Features/IdentityVerification/AffiliationEndpoints.cs` (new): maps three endpoints, in the same style as `AuthEndpoints`, behind the application-wide "signed in" authorization policy Authentication provides. The endpoint group also requires an authenticated user itself, so it is never anonymous before that policy exists; tests sign in through a test authentication handler. It takes the account only from `ICurrentUser` and validates request shape, nothing else.
+- `src/Backend/ReFrog.Server/Features/IdentityVerification/AffiliationService.cs` (new): applies the IDV ordering rules: current restriction first, then active volunteer access, then persisted TCU email verification. It delegates code requests and submissions to Authentication's `VerificationChallengeService` with purpose `TCU_AFFILIATION`; it does not duplicate normalization, rate-limit, lifetime, attempt, or supersession rules. `CheckShoppingEligibilityAsync()` is the only thing Shopping calls.
+- `VerificationChallengeService` (reused, owned by Authentication): the single purpose-aware code workflow defined in [AUTH.md](AUTH.md). Authentication owns its Entity Framework Core mappings, SQL Server transactions, HMAC verification, and the shared email adapter call. IDV adds no code tables, store implementations, verifier, migration, or email-provider integration.
+- `TcuVerificationReader` (expected from Authentication): reads Authentication's persisted `TCU_EMAIL_VERIFICATION` for an account and the account's live `TCU_AFFILIATION` challenge expiry. AUTH.md states that IDV reads this record but names no read contract; see Open questions. IDV codes against whatever contract Authentication provides and never reads the tables directly.
+- `ICurrentUser` (reused contract, owned by Authentication): `accountId()` and `currentVolunteerAccess()` as defined in [AUTH.md](AUTH.md). [VOL.md](VOL.md) fixed event-scoped access for a shift. IDV has no shift and so no event, so it uses **`currentVolunteerAccess()`**, which resolves the current annual event inside Authentication (see Key decisions and Open questions). It reads current state from the database on every call, never from role claims carried in the sign-in cookie, because `FR-AUTH-shopping-eligibility` forbids old session role claims from authorizing. It fails as unavailable rather than defaulting. IDV relies on this mapping, which Authentication's volunteer-lifecycle implementation supplies (AUTH.md Open questions, "Volunteer lifecycle implementation"):
   - `ROLE_ACTIVE`: the role is held for the current event.
   - `RESTRICTED`: the role was explicitly removed, or it expired at an event's end and has not been renewed (`BR-volunteer-role-lifecycle`). This holds between events too.
   - `NONE`: the account never held the role, or has only a pending or declined request (`BR-volunteer-role-approval`: a request conveys no permissions, and a decline imposes no restriction).
 
-  IDV's build adds **no** Authentication code: no sign-in, account table, cookie setup, or role resolution. It codes against `ICurrentUser` and `IVolunteerAccessStateProvider` and stubs them in tests. Using IDV end to end waits for Authentication to exist (`SEC-authentication-provider`, §8.1).
-- `EmailSender` (reused, shared delivery adapter, architecture §3 and §5.1): the one adapter every area sends email through. Verification codes go by email only, never to the in-app inbox (SRS §5.2 notifications). If IDV is built before any other area that sends email, IDV's build creates only the provider-neutral interface and a test fake. The provider is not chosen, so no real implementation is written.
-- `Clock` and the shared error handler (reused, §8.2.1, §8.2.2): same as VOL.
+  IDV's build adds **no** Authentication code: no sign-in, account table, cookie setup, or role resolution. It codes against `ICurrentUser` only and stubs it in tests; `IVolunteerAccessStateProvider` sits behind `ICurrentUser` inside Authentication.
+- `IEmailSender` (reused, shared delivery adapter, architecture §3 and §5.1; exists in `src/Backend/ReFrog.Server/Features/Authentication/IEmailSender.cs`): Authentication's `VerificationChallengeService` sends the code through it. IDV never calls it. Verification codes go by email only, never to the in-app inbox (SRS §5.2 notifications).
+- `TimeProvider` and the shared error handler (reused, §8.2.1, §8.2.2): the same injected .NET `TimeProvider` and `ApiResponse<T>` handling Authentication uses.
 
 ## Sequence
 
@@ -110,17 +111,16 @@ _[One sequence diagram per use case for its main success scenario, plus one for 
 sequenceDiagram
     actor S as Shopper
     participant UI as AffiliationSection
-    participant C as AffiliationController
+    participant C as AffiliationEndpoints
     participant CU as ICurrentUser
     participant SV as AffiliationService
-    participant DB as SQL Server (through AUTH contracts)
-    participant E as IEmailSender
+    participant A as AUTH (reader and VerificationChallengeService)
     actor V as Volunteer
     S->>UI: Wants to shop (step 1)
     UI->>C: GET /api/v1/me/shopping-eligibility (step 2)
-    C->>CU: AccountId, GetCurrentVolunteerAccessAsync() (step 2, restriction first)
+    C->>CU: accountId(), currentVolunteerAccess() (step 2, restriction first)
     C->>SV: StatusAsync(account, access) (step 2)
-    SV->>DB: read tcu_email_verification (step 2)
+    SV->>A: read persisted TCU verification (step 2)
     SV-->>UI: 200, not eligible (step 2)
     UI-->>S: TCU email form, with both paths explained (step 3, 5b1)
     S->>UI: Enter TCU email (step 3)
@@ -130,21 +130,19 @@ sequenceDiagram
         SV-->>UI: 422 VALIDATION_FAILED, field email (3a1)
         UI-->>S: Ask for a TCU email, keep the entry (3a2)
     else valid
-        SV->>DB: tx: lock the account's and the email's code rows, check requestId and limits, supersede live code, insert new code HMAC, commit (step 4)
-        SV->>E: send the code, after commit (step 4)
-        SV->>DB: record send outcome (step 4)
+        SV->>A: request(account, TCU_AFFILIATION, email, requestId): AUTH commits the challenge, then sends and records the outcome (step 4)
         SV-->>UI: 202 expiresAt, resendAvailableAt (step 4)
     end
     S->>UI: Enter code (step 5)
     UI->>C: POST /api/v1/me/tcu-email/verification {code} (steps 5-6)
     C->>SV: VerifyCodeAsync(...)
-    SV->>DB: tx: lock the account's code rows, read live code, check expiry, attempts, HMAC (step 6)
+    SV->>A: verify(account, TCU_AFFILIATION, code) (step 6)
     alt incorrect or expired (5a)
-        SV->>DB: count the failure, commit (5a1)
+        A-->>SV: failure counted by AUTH (5a1)
         SV-->>UI: 422 CODE_INVALID or CODE_EXPIRED (5a1)
         UI-->>S: Retry or resend (5a2, back to step 4 or 5)
     else matches
-        SV->>DB: mark consumed, upsert tcu_email_verification, commit (step 6)
+        A-->>SV: code consumed and TCU verification written in one AUTH transaction (step 6)
         SV-->>UI: 200, tcuEmailVerified (step 6)
         UI-->>S: "TCU email verified" (step 7)
     end
@@ -157,26 +155,26 @@ sequenceDiagram
 sequenceDiagram
     actor S as Shopper
     participant UI as AffiliationSection
-    participant C as AffiliationController
+    participant C as AffiliationEndpoints
     participant CU as ICurrentUser
     participant SV as AffiliationService
-    participant DB as SQL Server (through AUTH contracts)
+    participant DB as AUTH persisted TCU verification
     actor V as Volunteer
     S->>UI: Wants to shop (step 1)
     UI->>C: GET /api/v1/me/shopping-eligibility (step 2)
-    C->>CU: GetCurrentVolunteerAccessAsync() (step 2)
+    C->>CU: currentVolunteerAccess() (step 2)
     alt access state unavailable (2d)
         CU-->>C: unavailable
         C-->>UI: 503 ACCESS_UNAVAILABLE (2d1)
         UI-->>S: "Unable to verify access—try again", retry (2d1, 2d2)
     else RESTRICTED (2c)
         C->>SV: StatusAsync(account, RESTRICTED)
-        SV->>DB: read tcu_email_verification (2c1)
+        SV->>DB: read TCU_EMAIL_VERIFICATION (2c1)
         SV-->>UI: 200, eligible false, RESTRICTED (2c1)
         UI-->>S: "Volunteer access inactive—administrator review required" (2c1, 2c2)
     else ROLE_ACTIVE or NONE
         C->>SV: StatusAsync(account, access)
-        SV->>DB: read tcu_email_verification (step 2)
+        SV->>DB: read TCU_EMAIL_VERIFICATION (step 2)
         alt ROLE_ACTIVE (2b)
             SV-->>UI: 200, eligible, basis VOLUNTEER_ROLE, tcuEmailVerified as stored (2b1)
             UI-->>S: "Volunteer", plus "TCU email verified" if also true (2b1)
@@ -190,23 +188,23 @@ sequenceDiagram
     end
 ```
 
-If either read fails in any branch, the access read or the IDV store read, the result is the same `503 ACCESS_UNAVAILABLE` as 2d (§8.2.1).
+If either read fails in any branch, the access read or the read of Authentication's persisted TCU verification, the result is the same `503 ACCESS_UNAVAILABLE` as 2d (§8.2.1).
 
 **5b** has no server interaction. The not-eligible screen always explains that verified TCU email or a current approved volunteer role is required. No endpoint grants access any other way, and there is no visual-ID path (`OI-19`).
 
-**Shopping (`UC-SHP-log-item-taken` PRE-1).** On each protected submission, Shopping calls `CheckShoppingEligibilityAsync()`, which follows the same step 2 order: `ICurrentUser.GetCurrentVolunteerAccessAsync()`, then `tcu_email_verification`. It returns `RESTRICTED`, `ELIGIBLE(VOLUNTEER_ROLE)`, `ELIGIBLE(TCU_EMAIL)`, or `NOT_ELIGIBLE`, or it throws the shared unavailable exception.
+**Shopping (`UC-SHP-log-item-taken` PRE-1).** On each protected submission, Shopping calls `CheckShoppingEligibilityAsync()`, which follows the same step 2 order: `ICurrentUser.currentVolunteerAccess()`, then Authentication's persisted TCU verification. It returns `RESTRICTED`, `ELIGIBLE(VOLUNTEER_ROLE)`, `ELIGIBLE(TCU_EMAIL)`, or `NOT_ELIGIBLE`, or it throws the shared unavailable exception.
 
 ## API contract
 
 _[One row per endpoint, scheduled job, or message this area adds or changes, appended per use case. **This section is never dropped**: before the code exists it is the only thing the person (or agent session) building the front end and the one building the back end both read. Name the caller and who may call it, the request fields, the success response, and the error each extension returns. Leave field types and exact JSON to the agent unless a wrong guess would break something, such as a format another system depends on. Use the error shape your architecture-of-record's section 8.2 fixes; do not invent one here.]_
 
-The endpoints use the application-wide success/error envelope and documented status-code mapping fixed by architecture §8.2.3. `VOLUNTEER_ACCESS_INACTIVE` and `ACCESS_UNAVAILABLE` are the same codes VOL uses. "Access unavailable" reaches the shared handler as its own exception mapped to `503`, never the generic `500`. Times are ISO-8601 with their UTC offset. Enum values (`basis`, `volunteerAccess`) and error codes travel as strings. Every retry time is in the response body. No endpoint accepts an account id or role from the browser. AUTH-owned verification write failures roll back and are never reported as saved (§8.2.1, §8.2.8).
+The endpoints use the shared `ApiResponse<T>` envelope defined in [AUTH.md](AUTH.md) (architecture §8.2.3) and its documented status-code mapping. `VOLUNTEER_ACCESS_INACTIVE` and `ACCESS_UNAVAILABLE` are the same codes VOL uses. "Access unavailable" reaches the shared handler as its own exception mapped to `503`, never the generic `500`. Times are ISO-8601 with their UTC offset. Enum values (`basis`, `volunteerAccess`) and error codes travel as strings. Every retry time is in the response body. No endpoint accepts an account id or role from the browser. AUTH-owned verification write failures roll back and are never reported as saved (§8.2.1, §8.2.8).
 
 | Endpoint or operation | Caller (who may) | Request | Success | Errors, by extension |
 |---|---|---|---|---|
 | `GET /api/v1/me/shopping-eligibility` | Any signed-in account, for itself only | None | `200`: `eligible`, `basis` (`TCU_EMAIL`, `VOLUNTEER_ROLE`, or none), `tcuEmailVerified`, `volunteerAccess` (`ROLE_ACTIVE`, `NONE`, or `RESTRICTED`), and `pendingCodeExpiresAt` only for a code that is not consumed or superseded, has fewer than five failures, and has not reached `expires_at`. Never the code, and not the verified email address. | 2a: `200`, eligible, `TCU_EMAIL`. 2b: `200`, eligible, `VOLUNTEER_ROLE`, `tcuEmailVerified` as stored. 2c: `200`, not eligible, `RESTRICTED`. 2d (access or database state unavailable): `503 ACCESS_UNAVAILABLE`. Not signed in: `401`. |
-| `POST /api/v1/me/tcu-email/codes`: first send and resend | Any signed-in account that is not `RESTRICTED`, for itself only | `email`; `requestId` (client-generated GUID, new for each explicit send, reused only to retry that same send) | `202`: `expiresAt`, `resendAvailableAt`. It means the provider accepted the send, never that the email arrived. A repeat of the same `requestId` and email returns the original `202` only if that send was accepted, and sends nothing. | 3a: `422 VALIDATION_FAILED` naming `email`. 2c: `403 VOLUNTEER_ACCESS_INACTIVE`. 2d: `503 ACCESS_UNAVAILABLE`. Cooldown or hourly limit: `429 TOO_MANY_REQUESTS` with the retry time. The account is already verified: `409 ALREADY_VERIFIED`. Same `requestId` with a different email: `409 REQUEST_ID_REUSED`. Provider failure or timeout, or a retry whose send has no recorded outcome yet: `503 EMAIL_NOT_SENT`; the new code stays committed and the previous one stays superseded. Save failure: `5xx`, nothing saved or sent, and a retry with the same `requestId` is safe. Not signed in: `401`. Nothing is written for any error except `EMAIL_NOT_SENT`. |
-| `POST /api/v1/me/tcu-email/verification` | Any signed-in account that is not `RESTRICTED`, for itself only | `code` (exactly six ASCII digits `0`–`9` after trimming surrounding whitespace; other Unicode digits are malformed; bound as a string so leading zeros are kept) | `200`: `tcuEmailVerified: true`, `verifiedAt`, and the same status fields as the `GET`. Sent only after the commit (`FR-SAVE-confirmed-success`). | 5a, wrong code with attempts left on it: `422 CODE_INVALID`. 5a, expired, superseded, already consumed, invalidated by its fifth failure, or no live code: `422 CODE_EXPIRED`. Both offer resend. Not exactly six digits after trimming: `422 VALIDATION_FAILED` naming `code`. Account failure budget exceeded: `429 TOO_MANY_REQUESTS` with the retry time. 2c: `403 VOLUNTEER_ACCESS_INACTIVE`. 2d: `503 ACCESS_UNAVAILABLE`. Save failure: `5xx`, nothing saved; on any `5xx` without one of these codes, or a dropped response, the client re-reads the `GET` (`FR-SAVE-unknown-outcome`). Not signed in: `401`. |
+| `POST /api/v1/me/tcu-email/codes`: first send and resend | Any signed-in account that is not `RESTRICTED`, for itself only | `email`; `requestId` (client-generated GUID, new for each explicit send, reused only to retry that same send) | `202`: `expiresAt`, `resendAvailableAt`. It means the provider accepted the send, never that the email arrived. A repeat of the same `requestId` and email returns the original `202` only if that send was accepted, and sends nothing. | 3a: `422 VALIDATION_FAILED` naming `email`. 2c: `403 VOLUNTEER_ACCESS_INACTIVE`. 2d: `503 ACCESS_UNAVAILABLE`. Cooldown or hourly limit: `429 TOO_MANY_REQUESTS` with the retry time. The account is already verified: `409 ALREADY_VERIFIED`. Same `requestId` with a different email: `409 REQUEST_ID_REUSED`. Provider failure or timeout, or a retry whose send has no recorded outcome yet: `503 EMAIL_NOT_SENT`; the new code stays committed and the previous one stays superseded. Save failure: `503 NOT_RECORDED`, nothing saved or sent, and a retry with the same `requestId` is safe. Not signed in: `401`. Nothing is written for any error except `EMAIL_NOT_SENT`. |
+| `POST /api/v1/me/tcu-email/verification` | Any signed-in account that is not `RESTRICTED`, for itself only | `code` (exactly six ASCII digits `0`–`9` after trimming surrounding whitespace; other Unicode digits are malformed; bound as a string so leading zeros are kept) | `200`: `tcuEmailVerified: true`, `verifiedAt`, and the same status fields as the `GET`. Sent only after the commit (`FR-SAVE-confirmed-success`). | 5a, wrong code with attempts left on it: `422 CODE_INVALID`. 5a, expired, superseded, already consumed, invalidated by its fifth failure, or no live code: `422 CODE_EXPIRED`. Both offer resend. Not exactly six digits after trimming: `422 VALIDATION_FAILED` naming `code`. Account failure budget exceeded: `429 TOO_MANY_REQUESTS` with the retry time. 2c: `403 VOLUNTEER_ACCESS_INACTIVE`. 2d: `503 ACCESS_UNAVAILABLE`. Save failure: `503 NOT_RECORDED`, nothing saved; on that, on any `5xx` without one of these codes, or a dropped response, the client re-reads the `GET` (`FR-SAVE-unknown-outcome`). Not signed in: `401`. |
 | `AffiliationService.CheckShoppingEligibilityAsync()` (in-process; Shopping) | Shopping's server code, on every protected submission; the account comes from `ICurrentUser` | None | `ELIGIBLE` with its basis, `NOT_ELIGIBLE`, or `RESTRICTED` | State unavailable: throws the shared unavailable exception (`503 ACCESS_UNAVAILABLE` at Shopping's HTTP boundary). Never returns `NOT_ELIGIBLE` for an unavailable lookup. |
 
 There is no visual-ID override endpoint (5b, resolved `OI-19`). Volunteer requests, grants, removals, and renewals are not IDV endpoints; ADM and Authentication own them.
@@ -217,50 +215,39 @@ _[Only the decisions a reader could not recover from the code: an invariant, who
 
 _A decision that affects the whole system rather than this area is an architecture decision. It belongs in your architecture-of-record as a `KD-*` entry, not here.]_
 
-**Restriction first, then either qualifying path.** `GetCurrentVolunteerAccessAsync()` is read before anything else. `RESTRICTED` ends the check whatever `tcu_email_verification` holds (2c, `FR-AUTH-volunteer-lifecycle`). `ROLE_ACTIVE` qualifies without email verification and never writes it (2b). `NONE` falls to the saved email verification. `RESTRICTED` is the only account restriction any requirement defines (`FR-AUTH-volunteer-lifecycle`); shopping-abuse review takes no automatic action (`BR-shopping-abuse-review`), so IDV checks no other. Rejected: one shared "verified" flag set by either path, because it would mark volunteers as email-verified and would survive role removal (`FR-AUTH-shopping-eligibility`).
+**Restriction first, then either qualifying path.** `currentVolunteerAccess()` is read before anything else. `RESTRICTED` ends the check whatever `TCU_EMAIL_VERIFICATION` holds (2c, `FR-AUTH-volunteer-lifecycle`). `ROLE_ACTIVE` qualifies without email verification and never writes it (2b). `NONE` falls to the saved email verification. `RESTRICTED` is the only account restriction any requirement defines (`FR-AUTH-volunteer-lifecycle`); shopping-abuse review takes no automatic action (`BR-shopping-abuse-review`), so IDV checks no other. Rejected: one shared "verified" flag set by either path, because it would mark volunteers as email-verified and would survive role removal (`FR-AUTH-shopping-eligibility`).
 
-**IDV asks Authentication for the current event's access, with no event id.** VOL passes a shift's event when it asks for access, but IDV has no shift. `GetCurrentVolunteerAccessAsync()` lets Authentication, which §5.2 already makes owner of event-scoped access and renewal state, decide which annual event is current. Rejected: IDV asking ADM for the current event and passing it in, because that adds an IDV→ADM dependency §5.2 does not list, and Shopping would have to repeat it. This is a contract the future `authentication.md` must adopt (see Open questions).
+**IDV asks Authentication for the current event's access, with no event id.** VOL passes a shift's event to `volunteerAccess(eventId)`, but IDV has no shift. `currentVolunteerAccess()` lets Authentication, which §5.2 already makes owner of event-scoped access and renewal state, decide which annual event is current. Rejected: IDV asking ADM for the current event and passing it in, because that adds an IDV→ADM dependency §5.2 does not list, and Shopping would have to repeat it. [AUTH.md](AUTH.md) adopts this contract on `CurrentUser`.
 
 **Access comes from the database on every request, never from the cookie.** ASP.NET Core's cookie sign-in usually carries roles as claims, and `User.IsInRole` would read them. IDV never does: it asks `ICurrentUser`, which reads current state. Rejected: role claims, because a role removed or expired after sign-in would keep authorizing until the cookie expired, which `FR-AUTH-shopping-eligibility` and `FR-AUTH-volunteer-lifecycle` forbid.
 
-**Any failure in either read is 2d.** Access state comes from Authentication and email verification from IDV's store. If either read fails, the answer is `503 ACCESS_UNAVAILABLE`. Rejected: reporting eligibility when one source answered and the other failed. `FR-AUTH-shopping-eligibility` permits skipping the second source, but the partial case adds branches and tests for nothing. Restriction state is still required on every path (§8.2.1). The two reads need no shared transaction; IDV writes nothing on this path.
+**Any failure in either read is 2d.** Access state and persisted TCU email verification both come from Authentication, through separate reads. If either read fails, the answer is `503 ACCESS_UNAVAILABLE`. Rejected: reporting eligibility when one source answered and the other failed. `FR-AUTH-shopping-eligibility` permits skipping the second source, but the partial case adds branches and tests for nothing. Restriction state is still required on every path (§8.2.1). The two reads need no shared transaction; IDV writes nothing on this path.
 
-**IDV asks Authentication for the current event's access, with no event id.** VOL passes a shift's event to `volunteerAccess(eventId)`, but IDV has no shift. `currentVolunteerAccess()` lets Authentication, which §5.2 already makes owner of event-scoped access and renewal state, decide which annual event is current. Rejected: IDV asking ADM for the current event and passing it in, because that adds an IDV→ADM dependency §5.2 does not list, and Shopping would have to repeat it. [AUTH.md](AUTH.md) adopts this contract.
+**Send after the challenge commits, as AUTH defines.** Authentication's "Send after challenge commit" decision governs the code request: the challenge commits first, `IEmailSender` runs after, and the delivery outcome is recorded afterwards. IDV maps the results to its responses. Consequence, approved 2026-10-16: if sending fails, the new code remains the live one and the old code stays superseded (`503 EMAIL_NOT_SENT`, retry within the limits). If the commit fails, nothing is sent and the previous code is untouched. If the provider accepts but recording that outcome fails, the response is `503 EMAIL_NOT_SENT` and the failure is logged; the code stays live, so if the email does arrive it still verifies.
 
-**Commit the code first, then send the email outside the transaction.** The request transaction checks limits, supersedes the live code, inserts the new one, and commits. Only then does `IEmailSender` run, and its outcome is written afterwards in its own small write. Rejected: sending inside the transaction, which holds a database transaction open across a network call and can email a code whose row then rolls back. Consequence, approved 2026-10-16: if sending fails, the new code remains the live one and the old code stays superseded (`503 EMAIL_NOT_SENT`, retry within the limits). If the commit fails, nothing is sent and the previous code is untouched. If the provider accepts but recording that outcome fails, the response is `503 EMAIL_NOT_SENT` and the failure is logged; the code stays live, so if the email does arrive it still verifies.
+**Concurrency is Authentication's, not IDV's.** Code requests and verifications for `TCU_AFFILIATION` use Authentication's "SQL Server concurrency uses conditional writes and constraints" decision. That means atomic conditional updates for consuming a code and counting a wrong one, a serializable transaction for code requests so the rolling limits count exactly, the filtered unique index of one live challenge per `(purpose, subject_id)`, and the unique `(purpose, subject_id, request_id)` index for idempotent sends. Consumption and the `TCU_EMAIL_VERIFICATION` write commit or roll back together (§8.2.8). IDV adds no locks, lock hints, isolation levels, or indexes of its own. Rejected: IDV-specific `UPDLOCK, HOLDLOCK` key-range locks, which the earlier draft carried and which AUTH.md rejects.
 
-**The send and its outcome write ignore the request's cancellation.** ASP.NET Core cancels a request's token when the browser drops the connection. If the send or the outcome write used that token, a phone losing signal mid-send would abort them and leave `send_outcome` empty, so the shopper's retry could only ever get `503 EMAIL_NOT_SENT`. After the commit, both run to completion, bounded by the email adapter's own timeout. Rejected: passing the request token through, which is the .NET default habit.
+**Authentication's contracts are IDV's persistence boundary.** `AffiliationService` depends on Authentication's `VerificationChallengeService` and its TCU-verification read contract. It does not use a database context, raw SQL, or verification tables directly (architecture §8.2.8, `MNT-data-access-abstraction`).
 
-**One account's code writes run one at a time.** Each code request and each verification starts by taking an update key-range lock on that account's rows in `tcu_email_code` (SQL Server `UPDLOCK, HOLDLOCK` through the (`account_id`, `created_at`) index), inside its transaction. A second request or submission for the same account waits until the first commits, then sees its result. That makes the 60-second cooldown, supersede-on-resend, the attempt counts, and the ten-per-15-minutes budget exact under concurrency. Two concurrent submissions of the correct code consume it once. A filtered unique index allowing one live code per account stays as the database's backstop; a violation is answered as the cooldown's `429`. Consumption and the `tcu_email_verification` upsert commit or roll back together (§8.2.8). These hints lock and read current rows whether or not the database has `READ_COMMITTED_SNAPSHOT` on, which Azure SQL Database turns on by default.
-Rejected:
-- Checking "is there a live code" in C# and then writing, because two requests can both pass the check.
-- Relying on the filtered unique index alone: in SQL Server a second request's `UPDATE` can miss the row a first request has just inserted, supersede it, and insert its own. Both then get `202` inside the cooldown. The PostgreSQL design was protected by that database's re-check behavior; SQL Server needs the explicit lock (`KD-tcu-it-stack` trade-off).
-- A `SERIALIZABLE` isolation level for the whole transaction, which range-locks the per-email count as well as the account's rows and blocks unrelated accounts, with more deadlocks.
-- `sp_getapplock`, an application lock tied to no data, which a maintainer cannot see in the schema (`MNT-operational-handoff`).
-
-**The per-email hourly limit takes a second lock, always after the account's.** A code request also takes `UPDLOCK, HOLDLOCK` on the destination email's rows (the (`email`, `created_at`) index), after the account lock. So two accounts sending to one address at the same moment cannot both take its fifth slot (`FR-AUTH-verification-limits`). Every request takes the two locks in the same order, so two requests cannot deadlock on them. Rejected: counting the email's rows without a lock, which lets a concurrent pair exceed the limit at its boundary.
-
-**Authentication's contracts are IDV's persistence boundary.** `AffiliationService` depends on `IAuthVerificationChallengeService` and `IAuthTcuVerificationReader`; it does not use a database context, raw SQL, or verification tables directly (architecture §8.2.8, `MNT-data-access-abstraction`).
-
-**AUTH stores codes as keyed HMAC values with versioned keys.** The AUTH-owned verifier and challenge store implement the HMAC, key rotation, secure generation, fixed-time comparison, and expired-key behavior defined in [AUTH.md](AUTH.md). IDV supplies no cryptography or key configuration (§8.2.6).
+**AUTH stores codes as keyed HMAC values with versioned keys.** The AUTH-owned challenge service implements secure six-digit generation, HMAC-SHA-256 with versioned deployment keys, and constant-time comparison as defined in [AUTH.md](AUTH.md). IDV supplies no cryptography or key configuration (§8.2.6). The behavior for a code whose key version is no longer configured is not defined in AUTH.md; see Open questions.
 
 **One AUTH-owned challenge service, not an IDV token system.** Authentication's purpose-aware service enforces "only the latest code", "accepted at most once", and the approved failure limits for both registration and `TCU_AFFILIATION` (`FR-AUTH-verification-code`, `FR-AUTH-verification-limits`). IDV neither selects an ASP.NET Core Identity token provider nor implements a parallel verifier.
 
-**Limits are counted from database rows, not ASP.NET Core's rate-limiting middleware.** The middleware counts in memory, per server instance, and forgets on restart. `FR-AUTH-verification-limits` requires limits that hold across sessions on the server, so every limit is counted from `tcu_email_code` and `tcu_email_code_failure` rows. Rejected: the middleware, for those reasons.
+**Limits are counted from database rows, not ASP.NET Core's rate-limiting middleware.** The middleware counts in memory, per server instance, and forgets on restart. `FR-AUTH-verification-limits` requires limits that hold across sessions on the server, so every limit is counted by Authentication from `VERIFICATION_CHALLENGE` and `VERIFICATION_FAILURE` rows. Rejected: the middleware, for those reasons.
 
 **One shared email adapter.** Authentication's challenge service sends through the shared `IEmailSender` (charter; architecture §3, §5.1). IDV calls the challenge service and never calls an email provider directly. Provider acceptance means "requested", never "received" or "verified"; a timeout is `503 EMAIL_NOT_SENT` with no automatic background resend.
 
-**Exact `tcu.edu` only, with a lenient shape check, checked only on the server.** The domain rule is `BR-tcu-email-domain`. Trim the address and lowercase it with `ToLowerInvariant()`, so the stored address does not depend on the server's culture (under a Turkish culture, culture-aware lowercasing turns `I` into a dotless `ı`). It is well formed if it has exactly one `@`, a non-empty local part with no whitespace or control characters, and at most 254 characters. The local part's characters are otherwise not restricted, so a real TCU address is never rejected for its spelling (`BR-shopper-tcu-affiliation`). Then accept it only if the part after the `@` equals `tcu.edu` (approved 2026-10-16; source `OI-10`). Control of the inbox, proven by the code, is the real check. Subdomains such as `frog.tcu.edu` and lookalikes such as `tcu.edu.co` are rejected. The lowercased address is what is stored and what per-email limits count.
+**Exact `tcu.edu` only, with a lenient shape check, checked only on the server.** The domain rule is `BR-tcu-email-domain`. Trim the address. It is well formed if it has exactly one `@`, a non-empty local part with no whitespace or control characters, and at most 254 characters. The local part's characters are otherwise not restricted, so a real TCU address is never rejected for its spelling (`BR-shopper-tcu-affiliation`). Then accept it only if the part after the `@` equals `tcu.edu`, compared case-insensitively and independent of the server's culture (approved 2026-10-16; source `OI-10`). Control of the inbox, proven by the code, is the real check. Subdomains such as `frog.tcu.edu` and lookalikes such as `tcu.edu.co` are rejected. Normalization belongs to Authentication: AUTH's normalized email (`normalized_email`, from the ASP.NET Core Identity normalizer) is what `TCU_EMAIL_VERIFICATION` stores and what per-email limits count, the same as at registration.
 Rejected:
 - Any domain ending in `tcu.edu`, because the approved boundary is the exact domain.
 - A duplicate domain check in the Blazor component, because §8.2.4 forbids duplicating business rules between client and server.
 - Sharing the validator with the client through a shared assembly, which is a repository-structure choice for §8.2.4, not for IDV. One round trip for one field costs the shopper nothing noticeable.
 
-**Duplicate send actions are absorbed by `requestId`.** A retry of the same send, for example after a dropped response, returns the first outcome without a new code or email. The account lock means a retry that arrives while the first attempt is still in its transaction waits, then finds the row and returns the same outcome. A retry after `503 EMAIL_NOT_SENT` returns `503 EMAIL_NOT_SENT` again; it never re-dispatches an uncertain send. A retry that finds the row with no `send_outcome` yet gets the same response: the first send is still in flight, or the server stopped after the commit. Only a recorded acceptance ever produces `202` (`ROB-external-service-failure`, `ROB-submission-status`). If the outcome stays empty because the server stopped, the code still occupies the live slot and counts toward the limits, and the shopper recovers with an explicit resend after the cooldown. An explicit resend uses a new `requestId` and is subject to the cooldown (approved 2026-10-16). Rejected: relying on the cooldown alone, because then the client cannot tell a retry of its own send from a refused second send.
+**Duplicate send actions are absorbed by `requestId`.** A retry of the same send, for example after a dropped response, returns the first outcome without a new code or email. Authentication's unique `(purpose, subject_id, request_id)` index means a retry finds the first attempt's challenge and returns its recorded outcome, never a second send. A retry after `503 EMAIL_NOT_SENT` returns `503 EMAIL_NOT_SENT` again; it never re-dispatches an uncertain send. A retry that finds the row with no `send_outcome` yet gets the same response: the first send is still in flight, or the server stopped after the commit. Only a recorded acceptance ever produces `202` (`ROB-external-service-failure`, `ROB-submission-status`). If the outcome stays empty because the server stopped, the code still occupies the live slot and counts toward the limits, and the shopper recovers with an explicit resend after the cooldown. An explicit resend uses a new `requestId` and is subject to the cooldown (approved 2026-10-16). Rejected: relying on the cooldown alone, because then the client cannot tell a retry of its own send from a refused second send.
 
 **A verified account cannot request another code.** Once verified, the profile shows the saved confirmation (2a) and offers no email form; a code request returns `409 ALREADY_VERIFIED` and changes nothing. Rejected: replacing the verified address, because no requirement asks for it (decided 2026-10-30, no added scope).
 
-**Verification belongs to the account, not the email address** (`FR-AUTH-verification-ownership`). A code verifies only the account and address it was issued for. Verification never moves to another account because the email matches. It survives sign-in email changes on the same account, because the table is keyed by `account_id`. A second account may verify the same TCU address with its own code, because the FR says another account using the same email "shall complete its own verification". So `tcu_email_verification.email` is not unique. Rejected: keying by email address, which would let a second account inherit someone's verification.
+**Verification belongs to the account, not the email address** (`FR-AUTH-verification-ownership`). A code verifies only the account and address it was issued for. Verification never moves to another account because the email matches. It survives sign-in email changes on the same account, because Authentication's `TCU_EMAIL_VERIFICATION` is keyed by `account_id`. A second account may verify the same TCU address with its own code, because the FR says another account using the same email "shall complete its own verification". So `TCU_EMAIL_VERIFICATION.normalized_email` is not unique, as AUTH.md states. Rejected: keying by email address, which would let a second account inherit someone's verification.
 
 **Successful verifications are not audited.** `verified_at` on the current row is the only record. Rejected: the per-verification audit history the earlier draft carried, because architecture §8.2.9 limits auditing to administrator sign-in and administrator changes, and SRS §7.4.5 requires client approval for additional personal data. Developer decision, 2026-10-30.
 
@@ -268,7 +255,7 @@ Rejected:
 
 The values are `FR-AUTH-verification-code` (format, lifetime, latest code only) and `FR-AUTH-verification-limits` (attempt and request limits). All counts are enforced on the server from database rows, so they hold across sessions and concurrent requests. A refused request returns `429 TOO_MANY_REQUESTS` with the retry time; a resend supersedes the previous code without resetting the account-wide failure count.
 
-Only a `CODE_INVALID` result counts as a failure: it increments that code's `failed_attempts` and writes one `tcu_email_code_failure` row. A submission against an expired, superseded, consumed, or missing code (`CODE_EXPIRED`), a malformed code (`VALIDATION_FAILED`), or one refused with `429` counts toward neither limit. A code request that ends in `503 EMAIL_NOT_SENT` still wrote its row, so it counts toward the cooldown and the hourly limits. When several limits apply, the retry time is the latest of them. The failure budget refuses only code submissions, never code requests. No network or IP-address limit is approved.
+Only a `CODE_INVALID` result counts as a failure: it increments that challenge's `failed_attempts` and writes one `VERIFICATION_FAILURE` row. A submission against an expired, superseded, consumed, or missing code (`CODE_EXPIRED`), a malformed code (`VALIDATION_FAILED`), or one refused with `429` counts toward neither limit. A code request that ends in `503 EMAIL_NOT_SENT` still wrote its row, so it counts toward the cooldown and the hourly limits. When several limits apply, the retry time is the latest of them. The failure budget refuses only code submissions, never code requests. No network or IP-address limit is approved.
 
 ## Data model
 
@@ -282,16 +269,16 @@ The IDV module stores no role, restriction, event, verification code, HMAC key, 
 
 _[Which existing services, components, and conventions this area uses rather than rebuilding: authentication, the error handler, email, the clock, another area's service. Cite your architecture-of-record's section 8.2 for each convention by name rather than restating it.]_
 
-- **Authentication** (§8.1): `ICurrentUser` and `IVolunteerAccessStateProvider`. Session, cookie, and antiforgery handling for IDV's state-changing requests come from the application-wide ASP.NET Core configuration Authentication owns; IDV adds none.
-- **Email:** the shared `EmailSender` adapter (§3, §5.1). The provider is not chosen, and no provider name appears in IDV code.
-- **Error handling and API** (§8.2.1, §8.2.3): the shared handler, the codes above, and `/api/v1/me/...` naming consistent with VOL.
-- **Time** (§8.2.2): `Clock` for expiry, cooldown, and rolling windows. `expiresAt` is displayed in `America/Chicago` on a 12-hour clock.
+- **Authentication** (§8.1): `ICurrentUser`, `VerificationChallengeService`, and the persisted TCU verification, all defined in [AUTH.md](AUTH.md). Session, cookie, and antiforgery handling for IDV's state-changing requests come from the application-wide ASP.NET Core configuration Authentication owns; IDV adds none.
+- **Email:** only through Authentication's challenge service, which uses the shared `IEmailSender` adapter (§3, §5.1). The production provider is not chosen (`OI-25`), and no provider name appears in IDV code.
+- **Error handling and API** (§8.2.1, §8.2.3): AUTH's `ApiResponse<T>` envelope, the shared handler, the codes above, and `/api/v1/me/...` naming consistent with AUTH and VOL.
+- **Time** (§8.2.2): the injected `TimeProvider` for expiry, cooldown, and rolling windows. `expiresAt` is displayed in `America/Chicago` on a 12-hour clock.
 - **Validation** (§8.2.5): the server check is the one that counts. The client displays the approved `tcu.edu` guidance but does not duplicate the domain rule or authorize access.
 - **Configuration and secrets** (§8.2.6): HMAC keys and their versions, and provider credentials, come from deployment secrets.
 - **Logging** (§8.2.7): log outcomes such as code requested, delivery failed, or limit hit, with the account id only. Never log the code, the HMAC, a key, or the email address.
-- **Persistence** (§8.2.8): one transaction for each code request and each verification, as described in Key decisions.
+- **Persistence** (§8.2.8): one Authentication transaction for each code request and each verification, as described in Key decisions; IDV itself persists nothing.
 - **Auditing** (§8.2.9): none. IDV changes are not administrator changes.
-- **Testing** (§8.2.10): synthetic accounts, a fake `IEmailSender`, a fixed `TimeProvider`, and a stubbed `ICurrentUser`. Integration tests run against a real SQL Server, never an in-memory provider or SQLite, because those support neither the filtered unique index nor the lock hints the concurrency rows test. Concurrency rows run with `READ_COMMITTED_SNAPSHOT ON`.
+- **Testing** (§8.2.10): synthetic accounts, a fake `IEmailSender`, a fixed `TimeProvider`, and a stubbed `ICurrentUser`. Integration tests run against a real SQL Server, never an in-memory provider or SQLite, because those support neither the filtered unique indexes nor the serializable transactions the concurrency rows test (AUTH.md Tests: "real SQL Server integration tests").
 - **Service worker:** `/api/v1/me/shopping-eligibility` is network-only like every other `/api/v1/*` call; the Blazor PWA's service worker caches only the app's own static files, nothing is cached for an offline display (decided 2026-10-30), and no `POST` is queued, the same as VOL.
 
 ## Tests
@@ -302,7 +289,7 @@ _[One row per flow: the main success scenario and **every** extension of every u
 
 | Use case, flow | Level | Asserts |
 |---|---|---|
-| UC-IDV-verify-affiliation main | integration | `NONE` account, valid `tcu.edu` email: `202`, the fake `IEmailSender` gets one code. Submitting it gives `200`, one `tcu_email_verification` row, and the code consumed. The `GET` then returns eligible with `TCU_EMAIL` |
+| UC-IDV-verify-affiliation main | integration | `NONE` account, valid `tcu.edu` email: `202`, the fake `IEmailSender` gets one code. Submitting it gives `200`, one `TCU_EMAIL_VERIFICATION` row, and the challenge consumed. The `GET` then returns eligible with `TCU_EMAIL` |
 | main, persists across sessions | integration | After verification, a new session's `GET` returns eligible with no code step (`FR-AUTH-affiliation-from-signin`) |
 | main, wire format | integration | The `GET`'s `basis` and `volunteerAccess`, and every error code, are the strings in the API contract, not numbers |
 | 2a | integration | Verified `NONE` account: `GET` gives `200`, eligible, `TCU_EMAIL`. No code is created |
@@ -311,11 +298,11 @@ _[One row per flow: the main success scenario and **every** extension of every u
 | 2b and 2c, front end | unit (front end) | Shows "Volunteer" and "TCU email verified" as separate facts. A role-only account never shows "TCU email verified". `RESTRICTED` shows the inactive message, no email form, and never "TCU email verified", even when `tcuEmailVerified` is true |
 | 2c, status | integration | `RESTRICTED` and verified: `GET` gives `200`, not eligible, `RESTRICTED`, `tcuEmailVerified: true` |
 | 2c, writes | integration | `RESTRICTED`: both `POST`s give `403 VOLUNTEER_ACCESS_INACTIVE`, and nothing is written or sent |
-| 2d | integration | `GetCurrentVolunteerAccessAsync()` unavailable, or the store read failing: the `GET` and both `POST`s give `503 ACCESS_UNAVAILABLE`. The existing `tcu_email_verification` row is unchanged. A retry after recovery succeeds |
+| 2d | integration | `currentVolunteerAccess()` unavailable, or the persisted TCU verification read failing: the `GET` and both `POST`s give `503 ACCESS_UNAVAILABLE`. The existing `TCU_EMAIL_VERIFICATION` row is unchanged. A retry after recovery succeeds |
 | 2d, front end | unit (front end) | `503 ACCESS_UNAVAILABLE`, a network failure, and a `5xx` without an IDV code on the `GET` each show "Unable to verify access—try again" with retry, and no earlier status |
-| 3a | unit | `a@tcu.edu` and `A@TCU.EDU` accepted and stored lowercase. `a@frog.tcu.edu`, `a@tcu.edu.co`, `a@xtcu.edu`, malformed addresses, and blank fail with `422 VALIDATION_FAILED` naming `email`, with no row and no email |
+| 3a | unit | `a@tcu.edu` and `A@TCU.EDU` accepted and stored as the same AUTH normalized email. `a@frog.tcu.edu`, `a@tcu.edu.co`, `a@xtcu.edu`, malformed addresses, and blank fail with `422 VALIDATION_FAILED` naming `email`, with no row and no email |
 | 3a, shape | unit | `first.last+x@tcu.edu` and `o'neil@tcu.edu` are accepted. `a@b@tcu.edu`, `@tcu.edu`, an address containing a space, and a 255-character address are refused with `422` naming `email` |
-| 3a, culture | unit | With the current culture set to `tr-TR`, `KIM@TCU.EDU` is stored as `kim@tcu.edu` |
+| 3a, culture | unit | With the current culture set to `tr-TR`, `KIM@TCU.EDU` is accepted and normalizes to the same AUTH normalized email as `kim@tcu.edu` |
 | 3a, front end | unit (front end) | The email field displays "Please use a tcu.edu email if you are a TCU affiliate." On `422` the typed email stays in the field and the field is named; the component sends a non-`tcu.edu` address to the server rather than rejecting it itself |
 | 5a, wrong code | integration | Wrong code: `422 CODE_INVALID`, `failed_attempts` incremented, one failure row, no verification |
 | 5a, fifth failure | integration | The fifth wrong code invalidates the code: even the correct code then gets `422 CODE_EXPIRED` |
@@ -328,19 +315,19 @@ _[One row per flow: the main success scenario and **every** extension of every u
 | Access mapping assumed from Authentication | integration | With `ICurrentUser` stubbed to the contract's mapping: an expired role (`RESTRICTED`) with verified email is not eligible, and a declined request (`NONE`) with verified email is eligible with `TCU_EMAIL` |
 | Revocation, existing session | integration | Role removed mid-session (stub changes to `RESTRICTED`): the next `CheckShoppingEligibilityAsync()` returns `RESTRICTED` |
 | Cross-account | integration | A code issued to account A, submitted by account B, does not verify B (B has no live code: `CODE_EXPIRED`), and A's code is untouched |
-| Concurrent verification | integration | With `READ_COMMITTED_SNAPSHOT ON`, two concurrent submissions of the correct code: exactly one `200`, one consumption, one verification row |
-| Concurrent requests | integration | With `READ_COMMITTED_SNAPSHOT ON`, two concurrent requests from one account with different `requestId`s: one `202` and one `429`, one live code, and one email sent |
+| Concurrent verification | integration | Two concurrent submissions of the correct code: exactly one `200`, one consumption, one verification row |
+| Concurrent requests | integration | Two concurrent requests from one account with different `requestId`s: one `202` and one `429`, one live code, and one email sent |
 | Concurrent requests to one email | integration | With four requests to `x@tcu.edu` already in the hour, two different accounts request a code to it at the same moment: exactly one `202` and one `429` |
 | Duplicate send action | integration | The same `requestId` twice: one code, one email, both `202` with the same `expiresAt`. The same `requestId` with a different email: `409 REQUEST_ID_REUSED` |
 | Delivery failure | integration | `IEmailSender` throws or times out: `503 EMAIL_NOT_SENT`. The new code row is live, the previous code is superseded, and a retry with the same `requestId` returns `503 EMAIL_NOT_SENT` without sending |
 | Retry while the send is in flight | integration | A same-`requestId` retry while the first request's `send_outcome` is still empty (`IEmailSender` blocked) returns `503 EMAIL_NOT_SENT`, never `202`, and sends nothing. A row left with an empty outcome blocks a new `requestId` only until the cooldown passes |
-| Dropped connection during send | integration | The client aborts the request while the fake `IEmailSender` is blocked. After the sender is released, the row's `send_outcome` is recorded, and a same-`requestId` retry returns that outcome |
-| Save failure | integration | Failing the verification commit: `5xx`, the code is not consumed, and there is no verification row. Failing a code request's commit: `5xx`, no new code row, no email, and the previous code still live. A database failure before the first write: `503 ACCESS_UNAVAILABLE` |
+| Dropped connection during send | integration | Depends on the cancellation open question. The client aborts the request while the fake `IEmailSender` is blocked. After the sender is released, the row's `send_outcome` is recorded, and a same-`requestId` retry returns that outcome |
+| Save failure | integration | Failing the verification commit: `503 NOT_RECORDED`, the code is not consumed, and there is no verification row. Failing a code request's commit: `503 NOT_RECORDED`, no new code row, no email, and the previous code still live. A database failure before the first write: `503 ACCESS_UNAVAILABLE` |
 | Outcome not recorded | integration | The fake `IEmailSender` accepts, and the outcome write fails: `503 EMAIL_NOT_SENT`, the code is live and verifies |
 | Request limits | integration | A second request within 60 seconds gets `429`, and is allowed at 60 seconds. The sixth request in a rolling hour gets `429` per account, and separately per destination email from two accounts. Boundaries use the fixed `TimeProvider` |
 | Already verified | integration | A verified account's code request, for any address, gets `409 ALREADY_VERIFIED`; no code row, no email, and the saved verification is unchanged |
-| Ownership | integration | Account A verified `x@tcu.edu`. Account B entering `x@tcu.edu` is not verified until B completes its own code, after which both are verified. A sign-in email change on A keeps A's verification with no new code, and the new sign-in email is not TCU-verified (`FR-AUTH-verification-ownership`) |
-| Key rotation | unit | A code hashed under key version 1 still verifies after version 2 becomes current. A code whose key version is no longer configured gets `CODE_EXPIRED` and counts no failure |
+| Ownership | integration | Account A verified `x@tcu.edu`. Account B entering `x@tcu.edu` is not verified until B completes its own code, after which both are verified. A sign-in email change on A keeps A's verification with no new code, and the new sign-in email is not TCU-verified (`FR-AUTH-verification-ownership`); this half waits for the sign-in-email-change open question |
+| Key rotation | unit | Depends on the key-version open question. A code hashed under key version 1 still verifies after version 2 becomes current. A code whose key version is no longer configured gets `CODE_EXPIRED` and counts no failure |
 | Code generation | unit | Codes are six digits with leading zeros kept. A replacement never equals the code it supersedes |
 | Logging | integration | Application and database-command logs from the main flow, 5a, and delivery failure contain no code, HMAC, key, or email address, including when the fake `IEmailSender` throws with the recipient in its message. Delivery failure is logged at error level |
 | Signed out | integration | All three endpoints give `401` |
@@ -354,7 +341,7 @@ In the 2026-11-04 stack revision (architecture version 0.6):
 - §5.1: the Web Front End is a Blazor **WebAssembly** PWA served by the Application and calling it only through its JSON/HTTPS API; Blazor Server is not used for participant screens.
 - §8.2.8: the persistence library is Entity Framework Core with its SQL Server provider and migrations, behind per-area store interfaces; only those implementations use Entity Framework Core or SQL Server-specific SQL and lock hints. The packages are added when a person confirms them.
 
-§5.2 is unchanged: IDV's dependencies are still Authentication and the email delivery channel, and `GetCurrentVolunteerAccessAsync()` is a method on the existing Authentication component, not a new dependency.
+§5.2 matches [AUTH.md](AUTH.md)'s "Changes to the architecture-of-record": IDV depends on Authentication only, and reaches the email delivery channel through Authentication's challenge service rather than directly. `currentVolunteerAccess()` is a method on the existing Authentication component, not a new dependency.
 
 ## Open questions & risks
 
@@ -362,13 +349,17 @@ _[What this design could not settle and who can, and what could go wrong that yo
 
 | Item | Owner | Effect and what resolves it |
 |---|---|---|
-| `CurrentUser.currentVolunteerAccess()` | Authentication (and ADM for "which event is current") | IDV and Shopping need the current event's access without an event id. [AUTH.md](AUTH.md) adopts this method next to VOL's `volunteerAccess(eventId)`. Between events, the method's answer for a past volunteer follows `BR-volunteer-role-lifecycle`. |
+| `CurrentUser.currentVolunteerAccess()` | Authentication (and ADM for "which event is current") | Method resolved: [AUTH.md](AUTH.md) defines it on `CurrentUser`. The `ROLE_ACTIVE` / `RESTRICTED` / `NONE` mapping IDV relies on waits for AUTH.md's "Volunteer lifecycle implementation" row; until then AUTH's provider returns `NONE`. Between events, the answer for a past volunteer follows `BR-volunteer-role-lifecycle`. |
 | Shopping's contract | SHP owner | [SHP.md](SHP.md) calls `AffiliationService.isVerified` and refuses with `AFFILIATION_NOT_VERIFIED`, which leaves out the volunteer path and the restriction that `FR-AUTH-shopping-eligibility` requires. SHP should call `checkShoppingEligibility()` and map `RESTRICTED`, `NOT_ELIGIBLE`, and unavailable. This design does not edit SHP.md. |
 | `OI-22`: expiry restricts past volunteers | Client | Under `BR-volunteer-role-lifecycle`, a past volunteer who is a TCU student cannot shop at the next event until renewed, even with verified email. This design builds the rule as written. |
 | `OI-6` retention | Client and TCU data governance | Retention and pruning of verified emails and of code and failure rows. |
-| Response envelope | Team | Resolved by architecture §8.2.3: IDV uses the application-wide shared success/error envelope and documented status-code mapping. |
+| Response envelope | Team | Resolved by [AUTH.md](AUTH.md)'s `ApiResponse<T>` (architecture §8.2.3). |
 | Code machinery shared with registration | Authentication owner | Resolved in [AUTH.md](AUTH.md): AUTH owns one purpose-aware challenge service and persisted TCU verification for registration and later IDV verification. The IDV revision removes its duplicate code tables and verifier. |
-| Authentication not built | Team (build order) | IDV can be built and tested against a stubbed `CurrentUser`, but it cannot run end to end, or create its `account` foreign key, until Authentication exists. |
+| Authentication partly built | Team (build order) | Registration and sign-in exist. Per AUTH.md's registration build note, the shared `VerificationChallengeService` is not yet separated from registration's `RegistrationCode`, and `ICurrentUser` is not yet present. IDV can be built and tested against stubs, but cannot run end to end until Authentication provides them. |
+| TCU-verification read contract | Authentication owner | AUTH.md says IDV reads the persisted TCU verification but names no read interface. IDV needs the account's verification (and `verified_at`) and, for `pendingCodeExpiresAt`, the live `TCU_AFFILIATION` challenge's expiry. Until AUTH.md names a contract, IDV's `TcuVerificationReader` is a placeholder. |
+| Retired key version | Authentication owner | AUTH.md defines versioned HMAC keys but not what happens to a code whose key version is no longer configured. IDV's Key rotation test assumes `CODE_EXPIRED` with no failure counted. |
+| Send ignores request cancellation | Authentication owner | IDV's earlier draft decided that after the challenge commits, the send and its outcome write run to completion even if the browser drops the connection, so `send_outcome` is not left empty. AUTH.md owns the send and does not state this; IDV's "Dropped connection during send" test assumes it. |
+| Sign-in email change | Authentication owner | `FR-AUTH-verification-ownership` requires verification to survive a sign-in email change, but AUTH.md has no operation for changing the sign-in email. The second half of IDV's Ownership test cannot run until one exists. |
 | Email provider | Team / EAS | The `202` means provider acceptance only. A slow provider shows up as `503 EMAIL_NOT_SENT` with retry; no background resend is designed. |
 
 ---
