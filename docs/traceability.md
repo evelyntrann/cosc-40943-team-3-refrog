@@ -93,7 +93,7 @@ Release values follow the course's release plan: `v0.1.0` is the proving slice (
 | `FR-SAVE-confirmed-success` | | v0.1.0 | ❌ Not started | | | |
 | `UC-AUTH-register-account` | | v0.2.0 | ❌ Not started | | | |
 | `UC-AUTH-sign-in` | | v0.2.0 | ❌ Not started | | | |
-| `UC-ADM-manage-shifts` | [design/ADM.md](design/ADM.md) | v0.2.0 | 📐 Designed | | | |
+| `UC-ADM-manage-shifts` | [design/ADM.md](design/ADM.md#uc-adm-manage-shifts-create-and-configure-volunteer-shifts) | v0.2.0 | 📐 Designed | | | |
 | `UC-VOL-signup` | [design/VOL.md](design/VOL.md#uc-vol-signup-signing-up-for-a-shift) | v0.2.0 | 📐 Designed | | | |
 | `UC-VOL-cancel-shift` | [design/VOL.md](design/VOL.md) | v0.2.0 | 📐 Designed | | | |
 | `UC-ADM-review-volunteer` | [design/ADM.md](design/ADM.md) | v0.2.0 | 📐 Designed | | | |

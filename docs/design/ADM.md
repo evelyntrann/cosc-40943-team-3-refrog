@@ -7,13 +7,13 @@
 > **Realizes:** `UC-ADM-view-dashboard`, `UC-ADM-manage-shifts`, `UC-ADM-notify-volunteers`, `UC-ADM-review-volunteer`  
 > **Depends on:** `BR-location-staffing`, `BR-event-schedule`, `BR-volunteer-assignment`; `FR-AUTH-enforce-permissions`, `FR-VAL-server-validation`, `FR-VAL-field-feedback`, `FR-SAVE-confirmed-success`, `FR-NOTIFY-preserve-business-state`; `SEC-role-based-access`, `SEC-audit-log`, `ROB-duplicate-submission`, plus the applicable requirements in the [specification](../requirements/software-requirements-specification.md).  
 > **See:** [Use cases](../requirements/use-cases.md), [Software Requirements Specification](../requirements/software-requirements-specification.md), [Business Rules](../requirements/business-rules.md), [Architecture of record](architectural-design.md).  
-> **Designed against:** **TBD: insert the actual commit SHA of `main` reviewed before opening the PR.** Record the actual main commit used to check the requirements and architecture.
+> **Designed against:** `1bf931e`, which includes `UC-AUTH-sign-in` (#109) (`UC-ADM-manage-shifts` revision, issue #108). The other ADM sections were drafted before code existed and keep their earlier text apart from the `/api/v1` routes.
 
 ---
 
 ## Overview
 
-The Administration (`ADM`) area lets authorized ReFrog organizers view a consolidated dashboard of volunteer coverage, donations and shopping across locations; configure shifts for the event; deliberately send volunteers a message about open shifts, and review new volunteers’ pending shift claims. It lives inside the Application container defined by [architecture section 5.1](architectural-design.md#51-containers) and implements the Administration component in [section 5.2](architectural-design.md#52-use-case-areas-and-components). It relies on cross-cutting Authentication for administrator identity and authorization, reads Volunteer Scheduling assignments and Donation and Shopping event records, reads active locations and event settings, and calls the shared Notifications component for administrator-triggered delivery. **ADM owns shift definitions and review decisions, but VOL owns the `shift_assignment` records and controls all assignment status changes. Authentication owns accounts and roles. ADM does not own volunteer sign-ups, donation/shopping entry, authentication, or the email provider.** Edits to an existing assigned shift require an explicit safeguard: impacted volunteers must be shown before changes are confirmed; the client has not yet decided the notification policy for those edits.
+The Administration (`ADM`) area lets authorized ReFrog organizers view a consolidated dashboard of volunteer coverage, donations and shopping across locations; configure shifts for the event; deliberately send volunteers a message about open shifts, and review new volunteers’ pending shift claims. It lives inside the Application container defined by [architecture section 5.1](architectural-design.md#51-containers) and implements the Administration component in [section 5.2](architectural-design.md#52-use-case-areas-and-components). It relies on cross-cutting Authentication for administrator identity and authorization, reads Volunteer Scheduling assignments and Donation and Shopping event records, reads the current event, its locations, and their operating hours through INF's `EventConfigService` ([INF.md](INF.md)), and calls the shared Notifications component for administrator-triggered delivery. **ADM owns shift definitions, each location's default volunteer count for an event, and review decisions. INF owns events, locations, and operating hours; VOL owns the `shift_assignment` records and controls all assignment status changes; Authentication owns accounts and roles. ADM never writes INF or VOL tables, and it does not own volunteer sign-ups, donation/shopping entry, authentication, or the email provider.** Edits to an existing assigned shift require an explicit safeguard: impacted volunteers must be shown before changes are confirmed; the client has not yet decided the notification policy for those edits.
 
 ## Components & classes
 
@@ -25,9 +25,6 @@ classDiagram
     class AdminController {
         <<new>>
         +getDashboard()
-        +createShift(request)
-        +previewShiftChange(shiftId, request)
-        +changeShift(shiftId, request)
         +sendOpenShiftNotice(audience)
         +listPendingVolunteers()
         +approveVolunteer(volunteerId)
@@ -36,10 +33,36 @@ classDiagram
     class AdminService {
         <<new>>
         +dashboardSummary()
-        +createValidatedShift(data)
-        +assessShiftChange(id, data)
-        +applyConfirmedShiftChange(id, data)
-        +setLocationSlotDefault(eventId, locationId, requiredCount)
+    }
+    class AdminShiftEndpoints {
+        <<new>>
+        +getShiftOptions()
+        +setLocationStaffing(eventId, locationId, request)
+        +createShift(request)
+        +previewShiftChange(shiftId, request)
+        +changeShift(shiftId, request)
+    }
+    class ShiftAdminService {
+        <<new>>
+        +GetOptionsAsync()
+        +SetLocationDefaultAsync(eventId, locationId, count)
+        +CreateAsync(request, actorId)
+        +AssessChangeAsync(shiftId, request)
+        +ApplyConfirmedChangeAsync(shiftId, request, actorId)
+    }
+    class EventConfigService {
+        <<reused, INF>>
+        +GetCurrentEventAsync() Event
+        +GetCurrentEventForUpdateAsync() Event
+        +GetLocationsForEventAsync(eventId) List~Location~
+    }
+    class AdminAuthorization {
+        <<new seam, delegates to AUTH ICurrentUser>>
+        +RequireAdministratorAsync() actorId
+    }
+    class AdminAuditLog {
+        <<new, ADM-owned>>
+        +RecordAsync(actorId, action, target)
     }
     class VolunteerReviewService {
         <<new, administration>>
@@ -72,15 +95,12 @@ classDiagram
         +notifyOpenShifts(audience)
     }
     class AdminRepository {
-        <<new>>
-        +listLocationsAndEvents()
+        <<new, adm schema>>
         +readShiftDefinitions()
         +saveShift()
+        +readLocationDefaults(eventId)
+        +saveLocationDefault()
         +readActivityAggregates()
-    }
-    class Authz {
-        <<reused / cross-cutting>>
-        +requireAdministrator(session)
     }
     class VolunteerScheduling {
         <<reused / VOL>>
@@ -99,15 +119,18 @@ classDiagram
         <<reused / cross-cutting>>
         +send(recipientBatch, message)
     }
-    class Audit {
-        <<reused / cross-cutting>>
-        +recordAdminChange()
-    }
-    AdminController --> Authz
+    AdminController --> AdminAuthorization
     AdminController --> AdminService
     AdminController --> AdminNotificationService
     AdminController --> VolunteerReviewService
-    AdminService --> ShiftService
+    AdminShiftEndpoints --> AdminAuthorization
+    AdminShiftEndpoints --> ShiftAdminService
+    ShiftAdminService --> EventConfigService
+    ShiftAdminService --> AdminRepository
+    ShiftAdminService --> ShiftService
+    ShiftAdminService --> AssignmentQueryService
+    ShiftAdminService --> AdminAuditLog
+    AdminService --> EventConfigService
     AdminService --> AssignmentQueryService
     VolunteerReviewService --> AssignmentService
     VolunteerReviewService --> AuthenticationAccount
@@ -116,28 +139,33 @@ classDiagram
     AdminService --> VolunteerScheduling
     AdminService --> DonationData
     AdminService --> ShoppingData
-    AdminService --> Audit
     AdminNotificationService --> VolunteerScheduling
     AdminNotificationService --> AdminRepository
     AdminNotificationService --> Notifications
-    AdminNotificationService --> Audit
+    AdminNotificationService --> AdminAuditLog
 ```
 
 | Planned file / boundary | New or reused | Responsibility |
 |---|---|---|
-| `administration/AdminController` | New | Admin-only HTTP entry points and field-level error presentation; delegates business decisions |
-| `administration/AdminService` | New | Dashboard aggregation, per-location default staffing configuration, per-shift override validation, existing-shift change preview and protected writes |
-| `src/Backend/Administration/ShiftService` | New (ADM-owned) | `FindSignupCandidatesAsync(now)`, `FindByIdAsync(id)`, `LockForAssignmentAsync(id)`; supplies stable shift IDs and UTC instants. The lock method uses parameterized SQL Server `UPDLOCK, HOLDLOCK` behind the persistence abstraction and joins VOL's EF Core transaction. |
+| `administration/AdminController` | New | Admin-only HTTP entry points for the dashboard, notifications, and volunteer review; delegates business decisions |
+| `administration/AdminService` | New | Dashboard aggregation |
+| `src/Backend/ReFrog.Server/Features/Administration/AdminShiftEndpoints` | New | `/api/v1/admin` shift and location-staffing routes; checks request shape only and returns the shared envelope |
+| `src/Backend/ReFrog.Server/Features/Administration/ShiftAdminService` | New | `UC-ADM-manage-shifts`: shift options, location default counts, create-shift validation against INF's event window and operating hours, idempotent create, and (PR 2) change preview and guarded edits |
+| `src/Backend/ReFrog.Server/Features/Administration/ShiftService` | New (ADM-owned) | `FindSignupCandidatesAsync(now)`, `FindByIdAsync(id)`, `LockForAssignmentAsync(id)`; supplies stable shift IDs and UTC instants. The lock method uses parameterized SQL Server `UPDLOCK, HOLDLOCK` behind the persistence abstraction and joins VOL's EF Core transaction. |
+| `src/Backend/ReFrog.Server/Features/Administration/Persistence/AdmDbContext` | New | ADM's store in the `adm` schema with its own migration history, the same pattern as `InfoDbContext` (`src/Backend/ReFrog.Server/Features/Info/Persistence/InfoDbContext.cs`) |
+| `src/Backend/ReFrog.Server/Features/Administration/AdminAuthorization` | New seam | `RequireAdministratorAsync` returns the acting account ID from the validated cookie plus a live role lookup (`UserManager.IsInRoleAsync`), the same check `SessionService.CurrentAsync` makes, never the cookie's role claim alone ([AUTH.md](AUTH.md), "Current user trust"). Signed out: `401 AUTHENTICATION_REQUIRED`; not an administrator: `403 ADMINISTRATOR_REQUIRED`; role state unreadable: `503 AUTHENTICATION_UNAVAILABLE`, never a guess (§8.2.1). If AUTH later provides a shared `ICurrentUser`, only this class changes |
+| `src/Backend/ReFrog.Server/Features/Administration/AdminAuditLog` (`IAdminAuditLog`) | New, ADM-owned | Records an administrator change to shifts and location defaults in the same transaction as the change (§8.2.9). Administrator sign-in attempts stay in AUTH's own `IAdministratorSignInAudit` (#109); the two record different events and are not merged |
+| `src/Backend/ReFrog.Server/Features/Info/EventConfigService` | Reused, INF-owned | The current event, its locations, and their weekly operating hours ([INF.md](INF.md)). ADM never reads `info` tables directly |
+| Admin shift page (Blazor, `src/Frontend/ReFrog.Client/Features/Administration/`) | New | Create-shift form showing field errors with valid input kept; confirms only after `201` (`FR-SAVE-confirmed-success`) |
 | `administration/VolunteerReviewService` | New (ADM-owned) | Reviews pending volunteers; approves the account and confirms all its pending claims in one transaction, or denies one claim; dispatches outcome message after commit |
 | `src/Backend/Volunteer/AssignmentService` / `AssignmentQueryService` | Reused, VOL-owned | `ConfirmPendingAsync`, `DenyPendingAsync`, `CountsByShiftAsync`, and `IsActiveAsync`; ADM never edits VOL records directly |
 | Authentication user account | Reused, Authentication-owned | Event-scoped `ROLE_ACTIVE`, `NONE`, or `RESTRICTED` access under `BR-volunteer-role-lifecycle`; approved role-grant paths are defined by `BR-volunteer-role-approval` |
 | `administration/AdminNotificationService` | New | Explicit send action, audience selection, available-shift context, delivery result and retry behavior |
-| `administration/AdminRepository` | New | Persistence queries for event/location configuration, shift definitions and dashboard aggregates |
-| Authentication/authorization middleware | Reused, cross-cutting | Enforce administrator authorization on *every* ADM endpoint server-side |
+| `administration/AdminRepository` | New | Persistence for shift definitions, location default counts, and dashboard aggregates in the `adm` schema |
+| Authentication/authorization | Reused, cross-cutting | Every ADM endpoint calls `AdminAuthorization` server-side |
 | Volunteer Scheduling service | Reused, `VOL` | Own sign-ups, cancellations, assignments, assignment records and derived coverage (ACTIVE and PENDING counted separately) |
 | Donation and Shopping services/read models | Reused, `DON`/`SHP` | Source-of-truth item activity used in dashboard totals |
 | Notification delivery adapter | Reused, cross-cutting | Selected external delivery provider and its failure handling |
-| Shared audit facility | Reused, cross-cutting | Capture administrator changes and authentication audit events without secrets |
 
 **Integration boundary fixed by VOL:** ADM uses `AssignmentQueryService.CountsByShiftAsync(shiftIds)` for active/pending counts, and VOL uses `ShiftService.FindSignupCandidatesAsync(now)`, `FindByIdAsync(id)`, and `LockForAssignmentAsync(id)`. `ShiftService` returns UTC instants; user-facing time is `America/Chicago`. One location-level `required_count` default is configured per event; a shift copies it at creation and may be overridden by an administrator. `ACTIVE + PENDING <= shift.required_count` must hold after every successful change. Assignment approval/denial goes through VOL's `AssignmentService`, never direct writes to `shift_assignment`.
 
@@ -152,12 +180,12 @@ sequenceDiagram
     participant API as AdminController
     participant AUTH as Authorization
     participant ADM as AdminService
-    participant LOC as Location/event store
+    participant LOC as EventConfigService (INF)
     participant VOL as Volunteer Scheduling
     participant DON as Donation records
     participant SHP as Shopping records
     A->>UI: Open dashboard (step 1)
-    UI->>API: GET /api/admin/dashboard
+    UI->>API: GET /api/v1/admin/dashboard
     API->>AUTH: requireAdministrator (step 2)
     alt Not an administrator (extension 2a)
         AUTH-->>API: Denied
@@ -186,62 +214,100 @@ The dashboard includes **every configured relevant location even when no donatio
 ```mermaid
 sequenceDiagram
     actor A as Administrator
-    participant UI as Admin web interface
-    participant API as AdminController
-    participant AUTH as Authorization
-    participant SVC as AdminService
-    participant DB as Shift/location/event store
-    participant VOL as Volunteer Scheduling
-    participant AUD as Shared audit
+    participant UI as Admin shift page
+    participant API as AdminShiftEndpoints
+    participant AZ as AdminAuthorization
+    participant SVC as ShiftAdminService
+    participant EVT as EventConfigService (INF)
+    participant DB as ADM store (adm schema)
+    participant AUD as AdminAuditLog
     A->>UI: Choose create shift (step 1)
-    UI->>API: Load location and event choices (step 2)
-    API->>AUTH: requireAdministrator
-    alt Not an administrator (extension 2a)
-        AUTH-->>API: Denied
-        API-->>UI: 401/403
-        UI-->>A: Access denied
-    else Authorized
-        API-->>UI: Active locations, operating windows
-        UI-->>A: Show event/location default requiredCount, operating days, date/time; allow per-shift override
-        A->>UI: Enter details and confirm (step 3)
-        UI->>API: POST /api/admin/shifts
-        API->>AUTH: requireAdministrator
-        API->>SVC: createValidatedShift (step 4)
-        SVC->>DB: Validate operating days/time and positive location-default or overridden requiredCount
-        alt Invalid details (extension 4a)
-            SVC-->>API: Validation error by field
-            API-->>UI: 422 INVALID_SHIFT_DETAILS
-            UI-->>A: Preserve inputs; request corrections (step 3)
+    UI->>API: GET /api/v1/admin/shift-options (step 2)
+    API->>AZ: RequireAdministratorAsync
+    alt Not signed in or not an administrator (2a)
+        AZ-->>API: Denied
+        API-->>UI: 401, or 403 ADMINISTRATOR_REQUIRED
+        UI-->>A: Access denied (2a1)
+    else Administrator
+        API->>SVC: GetOptionsAsync
+        SVC->>EVT: GetCurrentEventAsync, GetLocationsForEventAsync
+        SVC->>DB: Location default counts for that event
+        API-->>UI: Event window, locations, weekly operating hours, default counts (step 2)
+        A->>UI: Enter location, date, start, end, optional count; confirm (step 3)
+        UI->>API: POST /api/v1/admin/shifts with requestId (step 3)
+        API->>AZ: RequireAdministratorAsync (actor from the session)
+        API->>SVC: CreateAsync (step 4)
+        SVC->>EVT: Current event and the location's operating hours
+        alt Invalid details (4a)
+            SVC-->>API: Field errors
+            API-->>UI: 422 VALIDATION_FAILED naming each field
+            UI-->>A: Keep valid input; ask for corrections (4a1, back to step 3)
         else Valid details
-            SVC->>DB: Persist shift in one transaction
-            alt Save failed (extension 4b)
-                DB-->>SVC: Failure / transaction rollback
-                SVC-->>API: Save not confirmed
-                API-->>UI: 503/500 SAVE_FAILED
-                UI-->>A: Not saved; retry possible
-            else Saved
-                SVC->>AUD: Record shift creation
-                SVC-->>API: Created shift
-                API-->>UI: 201 Created (step 5)
-                UI-->>A: Shift available for sign-up
+            SVC->>DB: Begin transaction; insert shift (step 4)
+            SVC->>AUD: Record shift creation in the same transaction
+            alt Save failed (4b)
+                DB-->>SVC: Rollback, nothing stored
+                API-->>UI: 503 NOT_RECORDED
+                UI-->>A: Shift not created; retry keeps the same requestId (4b1, 4b2)
+            else Committed
+                API-->>UI: 201 shift with UTC start and end
+                UI-->>A: Shift is open for sign-up (step 5)
             end
         end
     end
-    opt Edit/remove existing shift with volunteers (extension 6a)
-        A->>UI: Request change to existing shift
-        UI->>API: Preview affected assignments
-        API->>AUTH: requireAdministrator
-        API->>VOL: Read ACTIVE and PENDING held counts/impacted assignments
-        API-->>UI: Impact preview; confirmation required
-        UI-->>A: Show affected volunteers before confirming
-        Note over UI,API: Change must not silently remove assigned volunteers;
-        Note over UI,API: notification policy requires client approval.
+```
+
+**Location default count.** The use case's Associated Information has the administrator set each location's required volunteer count once per event; every new shift there starts with it.
+
+```mermaid
+sequenceDiagram
+    actor A as Administrator
+    participant API as AdminShiftEndpoints
+    participant AZ as AdminAuthorization
+    participant SVC as ShiftAdminService
+    participant EVT as EventConfigService (INF)
+    participant DB as ADM store (adm schema)
+    participant AUD as AdminAuditLog
+    A->>API: PUT /api/v1/admin/events/{eventId}/locations/{locationId}/staffing (Associated Information: required volunteer count)
+    API->>AZ: RequireAdministratorAsync
+    alt Not an administrator (2a)
+        API-->>A: 401 or 403 ADMINISTRATOR_REQUIRED
+    else Administrator
+        API->>SVC: SetLocationDefaultAsync
+        SVC->>EVT: Event and location exist
+        alt Unknown event or location
+            API-->>A: 404
+        else Count not a positive integer (4a)
+            API-->>A: 422 VALIDATION_FAILED (defaultRequiredCount)
+        else Valid
+            SVC->>DB: Upsert default in one transaction; existing shifts unchanged
+            SVC->>AUD: Record the change in the same transaction
+            API-->>A: 200, or 503 NOT_RECORDED on rollback (4b)
+        end
     end
+```
+
+**Extension 6a: edit or remove a shift that has volunteers (built in the second pull request).**
+
+```mermaid
+sequenceDiagram
+    actor A as Administrator
+    participant UI as Admin shift page
+    participant API as AdminShiftEndpoints
+    participant AZ as AdminAuthorization
+    participant VOL as AssignmentQueryService (VOL)
+    A->>UI: Request change to an existing shift (6a)
+    UI->>API: GET /api/v1/admin/shifts/{shiftId}/impact
+    API->>AZ: RequireAdministratorAsync
+    API->>VOL: CountsByShiftAsync and the held assignments
+    API-->>UI: Affected volunteers; whether the change is permitted
+    UI-->>A: Show affected volunteers before any confirmation (6a1)
+    Note over UI,API: A change that alters a held shift is refused with 409 ASSIGNED_SHIFT_CHANGE_UNRESOLVED until the client decides how volunteers are told (6a2).
 ```
 
 **Capacity and concurrency contract:** When configuring an event, an administrator sets a positive default maximum volunteer count for each location. Each new shift copies that location-event default into its `required_count`; admins may override individual shifts. The shift row is the lock VOL uses to serialize sign-ups and cancellations (`lockForAssignment`). Editing capacity to a number below the current **held** count (`ACTIVE + PENDING`) or deleting a shift with held assignments must be **rejected with `409 CAPACITY_BELOW_HELD` / `409 ASSIGNED_SHIFT_CHANGE_UNRESOLVED`**, with no partial write. Changing the location default affects only shifts created afterwards unless the team expressly defines another rule; existing shift capacities are not silently rewritten.
 
-**Scope note:** The use case's main success flow only specifies *creation*. The extension mentions editing/removing already-assigned shifts but does not settle what notification, reassignment, or cancellation is allowed. This design specifies the mandatory impact preview and **does not claim** approval for a destructive edit workflow. Until resolved, requests that would alter an assigned shift should be blocked after preview rather than silently applied.
+**Scope note:** The use case's main success flow only specifies *creation*. The extension mentions editing/removing already-assigned shifts but does not settle what notification, reassignment, or cancellation is allowed. This design specifies the mandatory impact preview and **does not claim** approval for a destructive edit workflow. Until resolved, requests that would alter an assigned shift should be blocked after preview rather than silently applied. The build is split in two pull requests: the first delivers shift options, location default counts, and creation (main flow, 2a, 4a, 4b); the second delivers the shift list, impact preview, and guarded edit/remove (6a), because 6a needs VOL's assignment counts.
 
 ### UC-ADM-notify-volunteers: Notify volunteers of open shifts
 
@@ -257,7 +323,7 @@ sequenceDiagram
     A->>UI: Choose notify about open shifts (step 1)
     UI-->>A: Select everyone or no sign-ups (step 2)
     A->>UI: Choose audience and confirm (step 3)
-    UI->>API: POST /api/admin/notifications/open-shifts
+    UI->>API: POST /api/v1/admin/notifications/open-shifts
     API->>AUTH: requireAdministrator
     alt Not an administrator
         AUTH-->>API: Denied
@@ -336,20 +402,21 @@ sequenceDiagram
 
 ## API contract
 
-The endpoints below are **proposed contract names**, not a claim that these routes exist. Final code and OpenAPI should use the architecture's shared response/error conventions (section 8.2), with the same logical outcomes.
+Every route is under `/api/v1/admin` and answers in the shared `ApiResponse<T>` envelope with the error categories and codes fixed by architecture §8.2.3 and [AUTH.md](AUTH.md): `401 AUTHENTICATION_REQUIRED` when signed out, `403 ADMINISTRATOR_REQUIRED` for a signed-in non-administrator (2a), `503 AUTHENTICATION_UNAVAILABLE` when the role cannot be read, `400 ANTIFORGERY_INVALID` when a write (`POST`, `PUT`, `PATCH`, `DELETE`) lacks a valid `RequestVerificationToken` header from `GET /api/v1/auth/antiforgery` (the same rule as sign-out), `422 VALIDATION_FAILED` with field messages, and `503 NOT_RECORDED` when a write is not confirmed. The `UC-ADM-manage-shifts` rows are fixed by this revision; the other rows keep their earlier content.
 
 | Endpoint or job | Caller (who may) | Request | Success | Errors, by extension |
 |---|---|---|---|---|
-| `GET /api/admin/dashboard` | Authenticated ReFrog administrator | Optional approved event filter (default current configured event) | `200`: all configured locations, recorded donation counts, shopping counts, shift required count, `ACTIVE` count, `PENDING` count, held count (`ACTIVE+PENDING`), available slots and unfilled indicators; zero/no-activity locations included | `401` unauthenticated; `403` non-admin (2a); `503` if required source unavailable, **not** a misleading partial “current” total |
-| `GET /api/admin/shift-options` | Authenticated administrator | None or configured event | `200`: selectable active locations, operating days/windows, event dates | `401`/`403`; `503` configuration unavailable |
-| `POST /api/admin/shifts` | Authenticated administrator | Location reference; shift start/end (local event time or approved representation); required volunteer count (defaults to location/event setting unless per-shift override); request-retry key if architecture standardizes it | `201`: created shift ID, location, start/end and capacity, available to `VOL` | `401`/`403` (2a); `422 INVALID_SHIFT_DETAILS` (4a); `409` overlapping/duplicate shift where prohibited by confirmed model; `503/500 SAVE_FAILED` (4b). Do not claim creation without committed storage |
-| `GET /api/admin/shifts/{shiftId}/impact` | Authenticated administrator | Intended edit/removal (preview only) | `200`: affected assigned volunteers/assignments and whether the change is currently permitted | `401`/`403`; `404` unknown shift; `409` stale shift state |
-| `PATCH /api/admin/shifts/{shiftId}` / `DELETE /api/admin/shifts/{shiftId}` | Authenticated administrator, **only once client policy is approved** | Explicit confirmed edit/removal and expected version | Shift updated/removed only when policy allows; audit entry | `401`/`403`; `404`; `409 CAPACITY_BELOW_HELD` if new cap would be less than ACTIVE+PENDING; `409 ASSIGNED_SHIFT_CHANGE_UNRESOLVED` for other destructive edits until client decides extension 6a; validation/save errors as above |
-| `PUT /api/v1/admin/events/{eventId}/locations/{locationId}/staffing` | Authenticated administrator | Positive `defaultRequiredCount` per location/event, location open days/windows | `200`: saved default for *new* shifts; existing shifts remain unchanged | `401`/`403`; `422 INVALID_STAFFING_CONFIG`; `5xx` save failure |
+| `GET /api/v1/admin/dashboard` | Authenticated ReFrog administrator | Optional approved event filter (default current configured event) | `200`: all configured locations, recorded donation counts, shopping counts, shift required count, `ACTIVE` count, `PENDING` count, held count (`ACTIVE+PENDING`), available slots and unfilled indicators; zero/no-activity locations included | `401` unauthenticated; `403` non-admin (2a); `503` if required source unavailable, **not** a misleading partial “current” total |
+| `GET /api/v1/admin/shift-options` | Administrator | None | `200`: the current event (id, dates, status), its locations with weekly operating hours, and each location's default count (null if not set) | `401`; `403 ADMINISTRATOR_REQUIRED` (2a); `409 NO_CURRENT_EVENT` when no event is planned or active; `503 UNAVAILABLE` when INF cannot answer |
+| `POST /api/v1/admin/shifts` | Administrator; the actor comes from the session, never the body | `requestId` (one per form fill), `locationId`, `date`, `startTime`, `endTime` in America/Chicago local time, optional `requiredCount` (else the location's default) | `201`: `shiftId`, `locationId`, `startsAt` and `endsAt` as ISO 8601 with offset, `requiredCount`. The same `requestId` with the same input returns the same shift | 2a: `401` / `403 ADMINISTRATOR_REQUIRED`. 4a: `422 VALIDATION_FAILED` naming `locationId`, `date`, `startTime`, `endTime`, or `requiredCount`. Same `requestId`, changed input: `409 REQUEST_ID_REUSED`. No planned or active event: `409 NO_CURRENT_EVENT`. 4b: `503 NOT_RECORDED`, nothing stored |
+| `GET /api/v1/admin/shifts` (second PR) | Administrator | None | `200`: the current event's shifts with held counts, for choosing one to change (6a) | `401` / `403`; `409 NO_CURRENT_EVENT` |
+| `GET /api/v1/admin/shifts/{shiftId}/impact` (second PR) | Authenticated administrator | Intended edit/removal (preview only) | `200`: affected assigned volunteers/assignments and whether the change is currently permitted | `401`/`403`; `404` unknown shift; `409` stale shift state |
+| `PATCH /api/v1/admin/shifts/{shiftId}` / `DELETE /api/v1/admin/shifts/{shiftId}` (second PR) | Authenticated administrator, **only once client policy is approved** | Explicit confirmed edit/removal and expected version | Shift updated/removed only when policy allows; audit entry | `401`/`403`; `404`; `409 CAPACITY_BELOW_HELD` if new cap would be less than ACTIVE+PENDING; `409 ASSIGNED_SHIFT_CHANGE_UNRESOLVED` for other destructive edits until client decides extension 6a; validation/save errors as above |
+| `PUT /api/v1/admin/events/{eventId}/locations/{locationId}/staffing` | Administrator | `defaultRequiredCount` (positive integer). Operating days and hours are INF's and are not set here | `200`: the saved default; it applies to shifts created afterwards and existing shifts are unchanged | `401` / `403 ADMINISTRATOR_REQUIRED` (2a); `404` unknown event or location; `422 VALIDATION_FAILED` (`defaultRequiredCount`); `503 NOT_RECORDED` |
 | `GET /api/v1/admin/volunteer-reviews` | Authenticated administrator | Optional event filter | `200`: accounts with pending claims, contact/display fields permitted for review, claimed shifts and counts | `401`/`403`; `503` if required source unavailable |
 | `POST /api/v1/admin/volunteers/{volunteerId}/approve` | Authenticated administrator | No body; person chosen from review list | `200`: `volunteerStatus=APPROVED`, all current PENDING assignments become ACTIVE atomically; idempotent repeat changes nothing | `401`/`403`; `404` unknown account; `5xx` transaction failure; notification failure reported separately without rollback |
 | `POST /api/v1/admin/volunteers/{volunteerId}/shifts/{shiftId}/deny` | Authenticated administrator | One PENDING signup to deny | `200`: specified signup becomes DENIED, freeing one held slot; account and other sign-ups unchanged; idempotent repeat changes nothing | `401`/`403`; `404` unknown account/assignment; `409` if approval already made claim ACTIVE (policy needs client/team decision); `5xx` failure; notification status separate |
-| `POST /api/admin/notifications/open-shifts` | Authenticated administrator, explicit UI confirmation | Audience = `all_volunteers` or `no_shift_signups`; no arbitrary recipient list or automatic trigger | `200` or `202`: provider accepted sending; show number of resolved recipients if available, not guaranteed delivery | `401`/`403`; `422` invalid audience; `503 NOTIFICATION_NOT_SENT` (4a); if partial sends occur, return a **truthful partial result** and do not blindly resend to successful recipients |
+| `POST /api/v1/admin/notifications/open-shifts` | Authenticated administrator, explicit UI confirmation | Audience = `all_volunteers` or `no_shift_signups`; no arbitrary recipient list or automatic trigger | `200` or `202`: provider accepted sending; show number of resolved recipients if available, not guaranteed delivery | `401`/`403`; `422` invalid audience; `503 NOTIFICATION_NOT_SENT` (4a); if partial sends occur, return a **truthful partial result** and do not blindly resend to successful recipients |
 
 **Cross-area contract to confirm:** Shift creation must expose one stable identifier and shared interpretation of required count / assigned count to `VOL`; donation and shopping provide aggregated counts by location and event with no personally identifying data needed by the dashboard. Recipient selection is owned by `VOL`/identity records, while the shared Notification adapter sends messages. API authentication derives administrator identity from the verified session/token; a request body cannot self-declare administrator privileges.
 
@@ -359,7 +426,7 @@ The endpoints below are **proposed contract names**, not a claim that these rout
 
 **2. Central shift definition; Volunteer Scheduling owns enrollments.** Choose: store shift configuration once and have `VOL` reference it, with assigned count read from authoritative assignments. Reject: a separate ADM roster or sign-up counter. Reason: two owners for capacity/assignments cause misleading coverage and booking conflicts (`UC-ADM-manage-shifts`, `UC-VOL-signup`, `BR-location-staffing`).
 
-**3. Server-side, per-location schedule validation.** Choose: require real active location, valid event day/time, positive capacity, and location-specific operating windows in the server transaction; present field corrections in the UI. Reject: a universal 2-volunteer minimum or client-only form checks. Reason: King Family Commons may need 3, other sites 2, and operating days differ (`BR-location-staffing`, `BR-event-schedule`, extension 4a). Use `America/Chicago` per architecture §8.2.2.
+**3. Server-side, per-location schedule validation.** Choose: in the server, before the transaction, check that the location belongs to the current event and is not closed; the date is inside the event's start and end dates; the location has operating hours on that weekday and the shift's start and end fall inside them; the end is after the start on the same day; and the count is a positive integer, taken from the location's default when omitted. Every failure names its field and keeps the valid input. No rule refuses overlapping or duplicate shifts at one location, because none is specified (`OI-30`). Reject: a universal 2-volunteer minimum or client-only form checks. Reason: King Family Commons may need 3, other sites 2, and operating days differ (`BR-location-staffing`, `BR-event-schedule`, extension 4a, §8.2.5).
 
 **4. Safe assigned-shift changes.** Choose: preview affected volunteer assignments and block changes that would invalidate those assignments until notification/cancellation policy is approved. Reject: silently deleting or moving occupied shifts. Reason: extension 6a expressly requires showing affected volunteers but has an unconfirmed subsequent workflow.
 
@@ -367,7 +434,7 @@ The endpoints below are **proposed contract names**, not a claim that these rout
 
 **6. “Sent” means provider-accepted, not necessarily delivered.** Choose: show confirmation only for an acknowledged dispatch, and show failure/partial failure accurately. Reject: treating a request attempt as delivery success or blindly retrying after an ambiguous provider timeout. Reason: extension 4a and robustness requirements; provider and retry semantics still need agreement.
 
-**7. Authorization and auditing are shared.** Choose: enforce administrator role within the server security boundary and record shift/configuration changes through the shared audit facility. Reject: hiding admin buttons as the only security check or building separate ADM authentication/audit stores. Reason: `SEC-role-based-access`, `FR-AUTH-enforce-permissions`, `SEC-audit-log`.
+**7. Authorization and auditing are shared.** Choose: every ADM endpoint calls `AdminAuthorization.RequireAdministratorAsync`, which reads current server-side role state and supplies the acting account ID; each shift or default change writes its admin audit entry in the same transaction as the change, so a rolled-back change leaves no audit row and a committed one always has it. Every admin write also requires an antiforgery token, as sign-out does, because the cookie alone would let another site submit the form. Reject: hiding admin buttons as the only security check, trusting the cookie's role claim alone, cookie-only writes, logging instead of auditing, or a separate ADM authentication/audit store. Reason: `SEC-role-based-access`, `FR-AUTH-enforce-permissions`, `SEC-audit-log`, §8.2.9.
 
 **8. Location default and shift override must not invalidate claims.** Choose: store the per-event per-location default slot count, copy it into each newly created shift, allow explicit per-shift override, and reject changes below `ACTIVE + PENDING` held assignments. VOL locks the shift row when signing up/cancelling, and ADM acquires the same row lock while editing its cap. Reject: editing capacity without reading pending claims, and bulk updating existing shift caps when a default changes. Reason: this is a consistent limit on staffing reservations.
 
@@ -375,76 +442,72 @@ The endpoints below are **proposed contract names**, not a claim that these rout
 
 **10. Review notification cannot undo a committed decision.** Choose: notify after successful approval/denial, report provider acceptance/failure and avoid repeat sends on idempotent review. Reject: delivering before commit, or rolling back a business decision because messaging failed (`FR-NOTIFY-preserve-business-state`).
 
+**11. INF owns events, locations, and operating hours; ADM owns shifts and default counts.** Choose: ADM reads the current event, its locations, and weekly operating hours through INF's `EventConfigService`, and stores only shifts and each location's default count, referring to INF's records by ID with no foreign key across the `adm` and `info` schemas. Reject: an ADM-owned event and location store (the earlier assumption in this document and VOL.md), because the event table already ships in INF (#102) and two owners would mean two copies of operating hours; also reject cross-schema foreign keys, which would couple two areas' migrations. Reason: one owner per table, and areas reach each other only through services (architecture §5.2).
+
+**12. Shift time is entered in Chicago and stored as UTC.** Choose: the administrator enters a date and local start and end times; the server converts them from `America/Chicago` to UTC `DateTimeOffset` values, which is VOL's contract, and refuses a local time that does not exist on a daylight-saving change as a 4a error. Reject: storing local time, which VOL would have to reinterpret. Reason: §8.2.2 and VOL.md's `ShiftService` contract.
+
+**13. Creating a shift is idempotent.** Choose: the page sends one `requestId` per form fill, stored uniquely with the shift; a retry with the same input returns the existing shift, and the same ID with different input is refused. Reject: no key, which lets a lost response plus a retry create two shifts. Reason: `ROB-duplicate-submission`, and the same pattern as registration ([AUTH.md](AUTH.md)).
+
 ## Data model
 
-These are logical changes and ownership boundaries, **not a final migration or mandated schema**. The actual repository schema and framework have to be inspected at the recorded `main` commit before migrations are authored.
+The `UC-ADM-manage-shifts` tables below are fixed against `1bf931e`; column types and lengths are left to the build. The dashboard, notification, and review entities keep their earlier logical description.
 
 ```mermaid
 erDiagram
-    EVENT ||--o{ LOCATION_OPERATING_WINDOW : configures
-    LOCATION_OPERATING_WINDOW ||--o{ SHIFT : defaults_capacity
-    LOCATION ||--o{ LOCATION_OPERATING_WINDOW : has
-    EVENT ||--o{ SHIFT : schedules
-    LOCATION ||--o{ SHIFT : hosts
+    INF_EVENT ||--o{ SHIFT : "referenced by id"
+    INF_LOCATION ||--o{ SHIFT : "referenced by id"
+    INF_LOCATION ||--o{ LOCATION_STAFFING : "referenced by id"
     SHIFT ||--o{ VOLUNTEER_ASSIGNMENT : receives
     USER_ACCOUNT ||--o{ VOLUNTEER_ASSIGNMENT : books
-    LOCATION ||--o{ DONATION_RECORD : receives
-    LOCATION ||--o{ SHOPPING_RECORD : records
-    ADMINISTRATOR ||--o{ ADMIN_AUDIT_EVENT : acts
-    EVENT {
-        string id
-        date start_date
-        date end_date
+    ADMINISTRATOR ||--o{ ADMIN_AUDIT_ENTRY : acts
+    INF_EVENT {
+        guid id "info.ReFrogEvents, INF-owned"
     }
-    LOCATION {
-        string id
-        boolean active
-    }
-    LOCATION_OPERATING_WINDOW {
-        string event_id
-        string location_id
-        string operating_days_and_times
-        int default_required_count
+    INF_LOCATION {
+        guid id "info.DonationLocations, INF-owned"
     }
     SHIFT {
-        string id
-        string event_id
-        string location_id
-        datetime starts_at
-        datetime ends_at
-        int required_count
+        guid id "adm.Shifts"
+        guid event_id "no foreign key into info"
+        guid location_id "no foreign key into info"
+        datetimeoffset starts_at "UTC"
+        datetimeoffset ends_at "UTC, after starts_at"
+        int required_count "greater than 0"
+        guid create_request_id "unique"
+        guid created_by_account_id
+        datetimeoffset created_at
+        rowversion version "stale-edit check, second PR"
+    }
+    LOCATION_STAFFING {
+        guid event_id "key part"
+        guid location_id "key part"
+        int default_required_count "greater than 0"
+    }
+    ADMIN_AUDIT_ENTRY {
+        guid actor_account_id
+        string action
+        string target_type
+        string target_id
+        datetimeoffset occurred_at
     }
     VOLUNTEER_ASSIGNMENT {
-        string shift_id
-        string volunteer_id
+        guid shift_id "VOL-owned"
+        guid volunteer_id
         string status "PENDING ACTIVE CANCELLED DENIED"
     }
     USER_ACCOUNT {
-        string id
-        string volunteer_status "NONE or APPROVED"
-    }
-    DONATION_RECORD {
-        string location_id
-        int recorded_item_count
-    }
-    SHOPPING_RECORD {
-        string location_id
-        int recorded_item_count
-    }
-    ADMIN_AUDIT_EVENT {
-        string actor_id
-        string action
-        datetime occurred_at
+        guid id "AUTH-owned"
     }
 ```
 
-- **ADM new or revised data:** shift definition referencing an event and location, with UTC start/end and `required_count` copied from the location/event default or explicitly overridden; configuration for per-location operating days/hours where not already stored; admin audit entries as required by shared security. Choose one canonical home for event/location data with `LOC` before creating tables.
+- **ADM new data (`adm` schema, `AdmDbContext`):** `Shifts` and `LocationStaffing` as drawn, plus `AdminAuditEntries` for administrator changes (no personal data beyond the actor's account ID). A default change never rewrites existing shifts. Event and location IDs are references to INF's records, checked through `EventConfigService` when a shift is created; no foreign key crosses the `adm` and `info` schemas (key decision 11).
+- **INF data this build needs (`info` schema, `InfoDbContext`):** `DonationLocation` and `LocationSchedule` from [INF.md](INF.md)'s data model, added by INF when this use case is built. `UC-INF-view-locations` reads the same tables, so its owner is told first.
 - **Reused data:** Volunteer `shift_assignment` records (`VOL`), Authentication account/role records (volunteer `NONE`/`APPROVED`) and contact data, donation records (`DON`), and shopping records (`SHP`). **No new personal records are needed solely for dashboard totals.**
 - **No independent “available slots” table:** compute `max(required_count – (ACTIVE + PENDING), 0)` from one committed snapshot, while showing over-capacity as a separate problem if it occurs. VOL implements sign-up capacity checks while holding the ADM shift row lock; ADM takes that same lock for capacity edits and rejects capacities below held count. `ACTIVE` alone counts for approved staffing/hours; `PENDING` holds capacity but is separately shown as awaiting approval.
 - **Notification outcome:** the shared Notifications component may need a minimal dispatch ID, audience and accepted/failed status for accurate reporting and retry; this is an **integration question**, not authorization to build a broad campaign/marketing or analytics system. Any retained recipient-level delivery data follows approved privacy and retention policy (`OI-6`).
-- **Migration:** Add or adapt shift/event-location configuration in the chosen database schema, preserving existing records and foreign keys. The migration name and physical columns are intentionally deferred until the actual codebase and approved stack are available.
+- **Migration:** a first `AdmDbContext` migration creates the `adm` schema with `Shifts`, `LocationStaffing`, and `AdminAuditEntries`, with the check constraints drawn above and a unique index on `create_request_id`. It is its own commit, like INF's `InitialInfo`.
 
-**VOL contract is authoritative:** ADM's shift table holds `required_count`, and VOL's separate `shift_assignment` table holds `PENDING`, `ACTIVE`, `CANCELLED`, or `DENIED` with unique `(shift_id, volunteer_id)`. ADM does **not** re-create that table. Authentication accounts gain `volunteerStatus=NONE | APPROVED`; approval sets this account status/role in the same transaction in which VOL confirms pending assignments. A location-level event staffing default is stored with the location/event configuration, whose exact canonical owner is to be agreed with LOC.
+**VOL contract is authoritative:** ADM's `Shifts` table holds `required_count`, and VOL's separate `shift_assignment` table holds `PENDING`, `ACTIVE`, `CANCELLED`, or `DENIED` with unique `(shift_id, volunteer_id)`. ADM does **not** re-create that table. Authentication accounts gain `volunteerStatus=NONE | APPROVED`; approval sets this account status/role in the same transaction in which VOL confirms pending assignments. Each location's default count for an event is ADM's `LocationStaffing`; the location itself and its operating hours are INF's.
 
 ## Reuse & cross-cutting
 
@@ -453,6 +516,7 @@ erDiagram
 - **Errors and input:** Reuse shared structured error response, server-side input validation, field messages and input preservation (architecture §§8.2.1, 8.2.3, 8.2.5).
 - **Persistence and concurrency:** Treat each shift create/edit as one atomic business operation; no acknowledged success before commit. Guard duplicate retries and races with appropriate database constraints/transactions (architecture §8.2.8).
 - **Logging/auditing/privacy:** Reuse centralized safe logging and administrator audit events; avoid exposing volunteers' contact data in dashboard or routine error messages. Retention is client/TCU governed, not guessed (architecture §§8.2.6–8.2.9; `OI-6`).
+- **INF/ADM boundary:** Read the current event, its locations, and weekly operating hours only through INF's `EventConfigService`; never query `info` tables. When no event is planned or active, shift options and creation return `409 NO_CURRENT_EVENT` (key decision 11).
 - **VOL/ADM boundary:** Reuse `ShiftService.findSignupCandidates(now)`, `findById(id)`, `lockForAssignment(id)` as called by VOL; `AssignmentQueryService.countsByShift` and `AssignmentService.confirmPending/denyPending` as provided by VOL. Hold the same shift lock for capacity changes.
 - **Volunteer approval:** Authenticate administrator; update account Volunteer role and VOL PENDING rows atomically; after commit send review notice and preserve decision if sending fails.
 - **Notifications:** Reuse one shared delivery adapter (also used for affiliation email and eventual reminders if specified), with no assumption about the selected provider or automatic push capability.
@@ -467,14 +531,16 @@ Tests below are **specifications**, not code. They correspond to each main path 
 | `UC-ADM-view-dashboard` 2a | Integration | Unauthenticated user gets `401`; signed-in non-admin gets `403`; neither receives dashboard data |
 | `UC-ADM-view-dashboard` 3a | Integration | Location with no activity stays visible with zero/no-activity representation, not omitted or treated as unavailable |
 | Dashboard source outage | Integration | If mandatory source is unavailable, request clearly fails rather than claiming stale/partial data is complete |
-| `UC-ADM-manage-shifts` main | Integration | Admin creates a valid shift; committed shift has correct location/event, timing, required capacity, and appears in `VOL` sign-up; audit event recorded |
-| `UC-ADM-manage-shifts` 2a | Integration | Non-admin and unauthenticated users cannot create, edit, delete, or preview protected assigned-volunteer information |
-| `UC-ADM-manage-shifts` 4a | Unit + integration | Reject zero/negative capacity, unknown/inactive location, out-of-window day/time, malformed times; retain correct fields for correction; enforce location-specific requirements |
-| `UC-ADM-manage-shifts` 4b | Integration | Storage error rolls back, produces no false confirmation or half-saved shift, supports safe retry |
-| `UC-ADM-manage-shifts` 6a | Integration | Proposed edit/removal with assigned volunteers first shows impacted people; destructive action is blocked while policy unresolved; no silent assignment loss |
-| Shift duplicate/concurrency | Integration | Concurrent identical create/retry cannot produce unintentional duplicate shift definitions; stale edit is rejected where versioning is supported |
-| Location/event default staffing | Integration | Administrator sets the location’s default required count; new shifts at that location inherit it; overrides change only selected shifts; existing shift caps do not change when default changes |
-| ADM/VOL shared shift contract | Integration | VOL sees `findSignupCandidates`, `findById`, `lockForAssignment`; UTC times are returned; shift row lock serializes sign-up and ADM capacity edit |
+| `UC-ADM-manage-shifts` main | Integration (SQL Server) | An administrator creates a valid shift: `201`; stored start and end are the correct UTC instants for the Chicago input; the count is the location's default or the override; exactly one admin audit entry; VOL's `FindSignupCandidatesAsync` returns the shift |
+| `UC-ADM-manage-shifts` 2a | Integration | Signed out gets `401 AUTHENTICATION_REQUIRED` and a signed-in non-administrator gets `403 ADMINISTRATOR_REQUIRED` on shift options, create, and staffing; an administrator whose role was removed after sign-in is refused on the next request; an unreadable role store gives `503 AUTHENTICATION_UNAVAILABLE`; nothing is stored |
+| Admin write antiforgery | Integration | An administrator's create or staffing write without a valid `RequestVerificationToken` gets `400 ANTIFORGERY_INVALID` and stores nothing |
+| `UC-ADM-manage-shifts` 4a | Unit + integration | Each case names its field and stores nothing: zero or negative count, unknown or closed location, date outside the event window, a weekday with no operating hours, a time outside them, end not after start, a local time that does not exist on a daylight-saving change, and no count with no location default; valid fields are returned unchanged |
+| `UC-ADM-manage-shifts` 4b | Integration | A store failure returns `503 NOT_RECORDED` with no shift and no audit row (one rollback); a retry with the same `requestId` then creates exactly one shift |
+| `UC-ADM-manage-shifts` duplicate submission | Integration | The same `requestId` and input twice gives one shift and the same response; the same `requestId` with changed input gives `409 REQUEST_ID_REUSED` |
+| `UC-ADM-manage-shifts` no current event | Integration | With no planned or active event, shift options and create return `409 NO_CURRENT_EVENT` |
+| Location default count | Integration | Setting a default applies to shifts created afterwards; an override changes only its shift; changing the default leaves existing shift counts unchanged; the change is audited |
+| ADM/VOL shared shift contract | SQL Server concurrency | `LockForAssignmentAsync` joined to a transaction opened by another EF Core context holds the shift row until that transaction commits, so a concurrent ADM capacity change waits; UTC instants are returned |
+| `UC-ADM-manage-shifts` 6a (second PR) | Integration | A proposed edit or removal of a shift with held assignments first returns the affected volunteers; applying it is refused with `409 ASSIGNED_SHIFT_CHANGE_UNRESOLVED`; nothing changes |
 | Capacity reduction to held count | Integration | One `ACTIVE` plus one `PENDING`, required 2; lowering to 1 yields `409 CAPACITY_BELOW_HELD`, no shift mutation |
 | Capacity concurrent signup | Integration | Concurrent admin cap edit and volunteer sign-up cannot make held `ACTIVE + PENDING` exceed required count |
 | `UC-ADM-review-volunteer` main approval | Integration | Admin approving a NONE account sets APPROVED role and all that person's PENDING assignments ACTIVE in one committed transaction; no held count changes |
@@ -496,18 +562,21 @@ Tests below are **specifications**, not code. They correspond to each main path 
 
 **Administration includes `UC-ADM-review-volunteer` in its responsibility in architecture §5.2.** The existing architecture already identifies Administration, Volunteer Scheduling, shared Authentication/Notifications and the supporting Donation/Shopping areas. **A future clarification is needed** on canonical event/location operating-window ownership and notification-provider/dispatch semantics; if this changes component responsibilities or dependencies, update `architectural-design.md` and record an appropriate `KD-*` decision **in the same PR** before implementing that change.
 
+**`UC-ADM-manage-shifts` revision (issue #108):** architecture §5.2 now records INF as the owner of events, locations, and operating hours, with Administration and Volunteer Scheduling depending on INF for them, and replaces the note that folded location setup into Administration with `OI-31`. [VOL.md](VOL.md) and [INF.md](INF.md) were updated in the same pull request to name INF's `EventConfigService`.
+
 ## Open questions & risks
 
 | Question / risk | Owner or source | Impact / interim handling |
 |---|---|---|
-| **Actual `main` commit and real source paths not verified** | Area owner / repo | Fill in `Designed against` SHA and adjust proposed paths against repository conventions before the PR is submitted |
 | **Requirements baseline** | Team owner | Verify the latest approved use cases and architecture before merging this design |
 | **Role/account + VOL transactional write boundary** | ADM, VOL and Authentication owners | Approval requires account role change and assignment confirmations in one DB transaction; confirm shared DB/transaction manager |
 | **Approval-versus-denial race** | Team and client | A DENY arriving after account approval would target an ACTIVE signup; default is to refuse `409`, but acceptance/alternative must be documented in use case |
 | **Assigned-shift edit/removal policy (extension 6a)** | Wendy Macias / ReFrog organizers | Need decision on cancellations, impact confirmation and whether/how assigned volunteers are told; until decided, preview only and block destructive changes |
 | **Email/push/provider selection and send result semantics** | Team architecture/operations owner and client | No assumed platform, delivery guarantee, repeat cadence, or partial-retry design; provider adapter must expose reliable acceptance/failure status |
 | **Which volunteer contacts are eligible for broad notification** | Client and `VOL`/Identity owners | Resolve recipient eligibility/availability, communication preference and whether “everyone” includes volunteers with no contact method; do not invent opt-in rules |
-| **Where event/location schedule settings live** | `ADM` and `LOC` owners | Choose one owner; ensure location operating days/time are consistent for both public view and shift validation |
+| **Who creates events, locations, and operating hours (`OI-31`)** | Team, then client | INF owns them (key decision 11) but no use case writes them; until `OI-31` is answered they are loaded by a deployment script, and the use case's "operating days … editable only by administrators" cannot be met |
+| **May shifts overlap at one location (`OI-30`)** | Client | No overlap rule is enforced; if the client wants one, it is a new 4a check |
+| **Two EF Core contexts in one transaction** | ADM and VOL owners | `LockForAssignmentAsync` must join VOL's transaction from a different context; the concurrency test row proves it before VOL relies on it |
 | **Concurrent staffing edits/assignment and duplicate submits** | `ADM`/`VOL` owners | Agree on shift/capacity invariant, shared IDs, transaction/locking and duplicate request strategy before independent implementations |
 | **Retention and hosting ownership (`OI-6`, `OI-12`, related hosting questions)** | Client, TCU governance and team | Do not invent retention periods or hosting; implement under approved operational policy |
 | **No unsupported analytics or auto-alert scope** | Area owner/reviewer | Keep MVP to the four documented ADM use cases; no automatic per-cancellation volunteer blast, marketing campaign features, real-time inventory, or abuse flagging inside ADM |

@@ -39,7 +39,7 @@ _Example, from the Cafeteria Ordering System:_
 
 _Ordering takes a patron's meal order from menu selection to a confirmed, payroll-charged order. It is the `ORD` area of the API ([containers](architectural-design.md#51-containers), [use case areas](architectural-design.md#52-use-case-areas-and-components)), reads the day's menu from `menu`, and asks the Payroll System to authorize the deduction before an order is stored (`DE-payroll-integration`).]_
 
-Event & Location Information (`INF`) provides public, unauthenticated access to active ReFrog event schedules, operational role participation guidelines, physical site locations, and a cross-platform progressive web app (PWA) installation guide. It is the `INF` area of the API (formerly `LOC`, [containers](architectural-design.md#51-containers), [use case areas](architectural-design.md#52-use-case-areas-and-components)). It reads active event schedules, participation content, and location configurations initialized by `ADM`. Because location and operational details change each season (e.g., adding an 8th pod, varying weekday operating hours), `INF` serves dynamic location listings, map pin navigation URLs (for Google/Apple Maps), and visual guide/infographic assets. It also provides an automated installation walkthrough (`UC-INF-view-install-guide`) detecting whether a user is on Android, iOS, Windows, macOS, or Linux to present tailored home screen installation buttons/steps and a PWA installation FAQ. It prioritizes concise, actionable event instructions for donors, shoppers, and volunteers over static historical narrative.
+Event & Location Information (`INF`) provides public, unauthenticated access to active ReFrog event schedules, operational role participation guidelines, physical site locations, and a cross-platform progressive web app (PWA) installation guide. It is the `INF` area of the API (formerly `LOC`, [containers](architectural-design.md#51-containers), [use case areas](architectural-design.md#52-use-case-areas-and-components)). It owns the event, its locations, and their operating hours, and exposes them to other areas through `EventConfigService`; Administration and Volunteer Scheduling read them there and never query `info` tables (`ADM.md` key decision 11). Because location and operational details change each season (e.g., adding an 8th pod, varying weekday operating hours), `INF` serves dynamic location listings, map pin navigation URLs (for Google/Apple Maps), and visual guide/infographic assets. It also provides an automated installation walkthrough (`UC-INF-view-install-guide`) detecting whether a user is on Android, iOS, Windows, macOS, or Linux to present tailored home screen installation buttons/steps and a PWA installation FAQ. It prioritizes concise, actionable event instructions for donors, shoppers, and volunteers over static historical narrative.
 
 ## Components & classes
 
@@ -99,11 +99,11 @@ classDiagram
         <<new>>
         +buildUniversalMapUrl(latitude, longitude, label) String
     }
-    class AdminEventConfigService {
-        <<reused, ADM>>
-        +getActiveEvent() ReFrogEvent
-        +getLocationsForEvent(eventId) List~DonationLocation~
-        +getEventGuidelines(eventId, role) List~EventGuideline~
+    class EventConfigService {
+        <<new, INF-owned, read by ADM and VOL>>
+        +GetCurrentEventAsync() ReFrogEvent
+        +GetCurrentEventForUpdateAsync() ReFrogEvent
+        +GetLocationsForEventAsync(eventId) List~DonationLocation~
     }
     class ClientPlatformDetector {
         <<new, client>>
@@ -119,17 +119,17 @@ classDiagram
 
     InfoController --> InfoService
     InfoService --> MapLinkBuilder
-    InfoService ..> AdminEventConfigService : reads published event/location/guide data
+    InfoService ..> EventConfigService : reads event and location data
 ```
 
 - `info/InfoController` (new): public HTTP entry point serving event overview information, location summaries, location details, and role participation guidelines. Does not require authentication.
 - `info/InfoService` (new): reads published event configuration, location schedules, and role guidelines, assembling responsive DTOs for the client.
 - `info/MapLinkBuilder` (new): utility formatting external navigation URLs (Google Maps / Apple Maps universal web links) from coordinates and address labels.
-- `adm/AdminEventConfigService` (reused, `ADM`): service providing published event metadata, dates, site schedules, and media/infographic references configured by administrators.
+- `src/Backend/ReFrog.Server/Features/Info/EventConfigService` (new, INF-owned): the read service other areas use for INF's data. `GetCurrentEventAsync` returns the **current event**, the one event whose status is `PLANNED` or `ACTIVE`; `GetCurrentEventForUpdateAsync` returns it under a lock held until the caller commits (VOL's access requests and later event rollover take it); `GetLocationsForEventAsync` returns the event's locations with their weekly operating hours. It has no write methods until a use case configures events (`OI-31`).
 - `client/info/ClientPlatformDetector` (new): client-side utility inspecting `navigator.userAgent` and platform hints to identify user OS (Android, iOS, Windows, macOS, Linux).
 - `client/info/PwaInstallManager` (new): handles browser `beforeinstallprompt` interception, standalone display mode detection (`display-mode: standalone`), and prompt invocation.
 
-**Event-info build note (issue #99).** `UC-INF-view-event-info` is built in `src/Backend/ReFrog.Server/Features/Info/` (`InfoEndpoints`, `InfoService`, `IEventInfoStore`, and `Persistence/` with `InfoDbContext` and `EfEventInfoStore`), `src/Backend/ReFrog.Shared/Info/`, and `src/Frontend/ReFrog.Client/Features/Info/` (`EventInfoPanel` on the landing page, `EventInfoView`). No use case configures events yet (architecture §5.2), so `AdminEventConfigService` does not exist: INF owns the `ReFrogEvent` table and reads it through its own store, and no write path is built. When an `ADM` event-configuration use case is specified, it writes this table and INF's read side stays unchanged. `InfoDbContext` keeps its tables and migration history in the `info` schema so area migrations do not collide in the shared database. Only an event with status `ACTIVE` is shown; every other status, or none, is extension 2a. At most one event may be `ACTIVE` (filtered unique index), and an event cannot end before it starts (check constraint).
+**Event-info build note (issue #99).** `UC-INF-view-event-info` is built in `src/Backend/ReFrog.Server/Features/Info/` (`InfoEndpoints`, `InfoService`, `IEventInfoStore`, and `Persistence/` with `InfoDbContext` and `EfEventInfoStore`), `src/Backend/ReFrog.Shared/Info/`, and `src/Frontend/ReFrog.Client/Features/Info/` (`EventInfoPanel` on the landing page, `EventInfoView`). INF owns the `ReFrogEvent` table and reads it through its own store, and no write path is built because no use case configures events yet (`OI-31`). When one is specified, its screen calls an INF write service; no other area writes `info` tables. `InfoDbContext` keeps its tables and migration history in the `info` schema so area migrations do not collide in the shared database. Only an event with status `ACTIVE` is shown; every other status, or none, is extension 2a. At most one event may be `ACTIVE` (filtered unique index), and an event cannot end before it starts (check constraint). **Revision for `UC-ADM-manage-shifts` (issue #108):** the current event that ADM and VOL use is the one event whose status is `PLANNED` or `ACTIVE`, so the filtered unique index widens from `ACTIVE` to `PLANNED` or `ACTIVE` when `EventConfigService` is built. This page still shows dates only for `ACTIVE` (`OI-28`).
 
 ## Sequence
 
@@ -413,7 +413,7 @@ _[Which existing services, components, and conventions this area uses rather tha
 - **Public Access & Security:** Outside the authenticated trust boundary (§8.1); endpoints require no JWT or session tokens.
 - **Error Handling:** Conforms to architecture §8.2.1; missing records return `404` with standard error JSON.
 - **Timezone:** Displays all site hours in `America/Chicago` (§8.2.2).
-- **Administration Component Reuse:** `INF` reads records created and configured by administrators (`UC-ADM-manage-shifts` and event setup).
+- **Other areas read INF:** `ADM` and `VOL` read the current event, locations, and operating hours through `EventConfigService`; `INF` reads nothing from them.
 
 ## Tests
 
@@ -455,6 +455,7 @@ _[Designing an area against real code is when the architecture's guesses meet re
 
 - **Component rename & scope expansion:** Rename `Location Info` (`LOC`) to `Event & Location Information` (`INF`) in the component table (§5.2) and traceability matrix.
 - **Responsibility update:** `INF` responsibility expands from strictly site coordinates/hours to also serving active event dates, general participation guidelines (donor, shopper, volunteer instructions), and visual guide/infographic references.
+- **Ownership (issue #108):** `INF` owns events, locations, and operating hours and depends on no other area; `ADM` and `VOL` depend on `INF` for them through `EventConfigService`. The §5.2 rename above is applied in the same pull request.
 
 ## Open questions & risks
 

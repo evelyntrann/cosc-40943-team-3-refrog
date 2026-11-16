@@ -41,6 +41,7 @@ _[These are slugs, like every other identifier in your project, so an inserted d
 | 0.5 | 2026-11-04 | Team 3 | Recorded TCU IT's required stack (`KD-tcu-it-stack`), EAS ownership, automated error notification, and database abstraction |
 | 0.6 | 2026-11-04 | Team 3 | Added AUTH for registration, sign-in, sign-out, and recovery; exact `tcu.edu` registration verification establishes persisted affiliation while later verification remains in IDV |
 | 0.7 | 2026-11-04 | Team 3 | Recorded AUTH's design, shared API envelope, verification ownership, and administrator bootstrap |
+| 0.8 | 2026-11-13 | Uyen Tran | §5.2: renamed `LOC` to `INF` (from INF.md); INF owns the event, locations, and operating hours, read by ADM and VOL through `EventConfigService`, replacing 0.3's "locations come from Administration"; configuration gap recorded as `OI-31` (issue #108) |
 | 0.7 | 2026-11-04 | Alfonsotomax | §5.1: the Web Front End is Blazor WebAssembly hosted by the Application; §8.2.8: Entity Framework Core is the persistence library behind per-area store interfaces ([IDV.md](IDV.md) stack revision) |
 
 ---
@@ -265,10 +266,10 @@ _[Check before Checkpoint 1: every area in your use case file appears in the fir
 
 | Use case area | Component | Responsibility | Depends on | Status |
 |---|---|---|---|---|
-| `VOL` | Volunteer Scheduling | Owns event-scoped volunteer access requests and a volunteer's shift sign-ups, cancellations, and their own schedule and hours | Administration, Authentication | provisional |
+| `VOL` | Volunteer Scheduling | Owns event-scoped volunteer access requests and a volunteer's shift sign-ups, cancellations, and their own schedule and hours | Administration, Authentication, Event & Location Information | provisional |
 | `IDV` | Identity Verification | Owns determining whether a signed-in shopper is eligible to shop from Authentication's persisted TCU verification and current volunteer-access state | Authentication | [IDV.md](IDV.md) |
-| `LOC` | Location Info | Owns the list of active ReFrog locations, hours, and event info shown to every participant | Administration | provisional |
-| `ADM` | Administration | Owns annual volunteer access review and renewal approval, volunteer access request decisions and manual email-based role grants and removals (team design decision, 2026-10-16), shift creation and configuration, manually triggering a notification to volunteers about open shifts (confirmed 2026-10-02, not an automatic alert), and the cross-location dashboard of donation counts, shopping counts and estimated weight, and volunteer-coverage activity | Authentication, Volunteer Scheduling, Shopping, Donation, Shopping-Abuse Monitoring, Email delivery channel | provisional |
+| `INF` | Event & Location Information | Owns the annual event (its dates and status), its locations and their operating hours, and the public event, location, and participation information shown to every participant; other areas read the event and locations through its `EventConfigService` | none | [INF.md](INF.md) |
+| `ADM` | Administration | Owns annual volunteer access review and renewal approval, volunteer access request decisions and manual email-based role grants and removals (team design decision, 2026-10-16), shift creation and configuration, manually triggering a notification to volunteers about open shifts (confirmed 2026-10-02, not an automatic alert), and the cross-location dashboard of donation counts, shopping counts and estimated weight, and volunteer-coverage activity | Authentication, Event & Location Information, Volunteer Scheduling, Shopping, Donation, Shopping-Abuse Monitoring, Email delivery channel | [ADM.md](ADM.md) |
 | `ABU` | Shopping-Abuse Monitoring | Owns flagging and administrator review of potentially-excessive shopping activity | Shopping, Authentication | provisional |
 | `SHP` | Shopping | Owns recording what a shopper takes during a visit, the category and stored weight estimate for each item, the visit's server-calculated estimated weight, and the derived event total (`FR-SHP-estimated-weight`) | Identity Verification, Administration | provisional |
 | `DON` | Donation | Owns recording what a donor drops off at a location | Administration | provisional |
@@ -283,7 +284,7 @@ Volunteer role handling is detailed in [Administration](ADM.md) and [Authenticat
 
 `DON` does not depend on Authentication. `OI-4` is resolved: donation logging needs no sign-in, so a donor may stay anonymous and a volunteer may submit the form for them (section 3, section 8.1).
 
-One gap this table surfaces rather than silently papers over: no use case currently specifies who configures the base list of active ReFrog locations each year, separate from shift creation. Folded into Administration's responsibility here as the closest fit, but it is not backed by a dedicated use case yet.
+One gap this table surfaces rather than silently papers over: no use case currently specifies who creates the annual event, its locations, and their operating hours, although the specification requires administrators to configure them without code changes (`USE-admin-no-code`). Event & Location Information owns that data and exposes it read-only; until `OI-31` is answered it is loaded by deployment script, and a future configuration use case writes it through an INF service.
 
 ## 6. Runtime View
 
