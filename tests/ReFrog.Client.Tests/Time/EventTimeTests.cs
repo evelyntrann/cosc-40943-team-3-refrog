@@ -43,6 +43,17 @@ public sealed class EventTimeTests
     }
 
     [TestMethod]
+    public void TheWindowsFallbackIdIsTheSameZone()
+    {
+        // The fallback is used only on a host without IANA data; here both ids resolve, so their rules can be compared.
+        var windows = TimeZoneInfo.FindSystemTimeZoneById(EventTime.WindowsTimeZoneId);
+        foreach (var local in new[] { new DateTime(2027, 5, 3, 14, 0, 0), new DateTime(2026, 12, 7, 14, 0, 0) })
+        {
+            Assert.AreEqual(EventTime.Zone.GetUtcOffset(local), windows.GetUtcOffset(local));
+        }
+    }
+
+    [TestMethod]
     public void InstantDisplaysAsItsChicagoDateAndTime()
     {
         Assert.AreEqual("Monday, May 3, 2027, 2:00 p.m.",

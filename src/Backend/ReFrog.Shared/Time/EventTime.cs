@@ -11,9 +11,20 @@ public static class EventTime
 {
     public const string TimeZoneId = "America/Chicago";
 
-    private static readonly Lazy<TimeZoneInfo> LazyZone = new(() => TimeZoneInfo.FindSystemTimeZoneById(TimeZoneId));
+    /// <summary>The same zone's Windows id, for a Windows host without ICU time-zone data (NLS mode).</summary>
+    public const string WindowsTimeZoneId = "Central Standard Time";
+
+    // PublicationOnly: a lookup that fails is retried on the next call instead of being cached as a permanent failure.
+    private static readonly Lazy<TimeZoneInfo> LazyZone = new(FindZone, LazyThreadSafetyMode.PublicationOnly);
 
     public static TimeZoneInfo Zone => LazyZone.Value;
+
+    private static TimeZoneInfo FindZone() =>
+        TimeZoneInfo.TryFindSystemTimeZoneById(TimeZoneId, out var zone) ||
+        TimeZoneInfo.TryFindSystemTimeZoneById(WindowsTimeZoneId, out zone)
+            ? zone
+            : throw new TimeZoneNotFoundException(
+                $"The host has neither the {TimeZoneId} nor the {WindowsTimeZoneId} time zone installed.");
 
     /// <summary>
     /// Converts a Chicago date and time to its UTC instant. False when the local time does not exist because the
