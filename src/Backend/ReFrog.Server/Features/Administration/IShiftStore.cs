@@ -18,6 +18,12 @@ public enum SaveOutcome
     NotRecorded,
 }
 
+/// <summary>
+/// The result of storing a shift. On <see cref="SaveOutcome.DuplicateRequest"/>, <see cref="Existing"/> is the shift
+/// already stored for that request id.
+/// </summary>
+public sealed record ShiftSaveResult(SaveOutcome Outcome, StoredShift? Existing = null);
+
 /// <summary>ADM's persistence abstraction for shifts and location defaults (architecture §8.2.8; ADM.md data model).</summary>
 public interface IShiftStore
 {
@@ -39,10 +45,15 @@ public interface IShiftStore
 
     /// <summary>
     /// Inserts the shift together with any audit entry already staged by <see cref="IAdminAuditLog"/>, in one
-    /// transaction. <see cref="SaveOutcome.DuplicateRequest"/> when its request id is already stored.
+    /// transaction. If its request id is already stored (a concurrent retry), stores nothing and returns
+    /// <see cref="SaveOutcome.DuplicateRequest"/> with that shift. Any other failure stores nothing and discards the
+    /// staged audit entry.
     /// </summary>
-    Task<SaveOutcome> AddShiftAsync(StoredShift shift, Guid actorId, DateTimeOffset createdAt, CancellationToken cancellationToken);
+    Task<ShiftSaveResult> AddShiftAsync(StoredShift shift, Guid actorId, DateTimeOffset createdAt, CancellationToken cancellationToken);
 
-    /// <summary>Inserts or replaces a location's default, with any staged audit entry, in one transaction.</summary>
+    /// <summary>
+    /// Inserts or replaces a location's default, with any staged audit entry, in one transaction; concurrent saves
+    /// for the same location run one after the other. A failure stores nothing and discards the staged entry.
+    /// </summary>
     Task<SaveOutcome> SetLocationDefaultAsync(Guid eventId, Guid locationId, int count, CancellationToken cancellationToken);
 }

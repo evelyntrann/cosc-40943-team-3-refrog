@@ -110,17 +110,15 @@ public sealed class ShiftAdminService(
         var shift = new StoredShift(Guid.NewGuid(), current.Id, check.LocationId, check.StartsAt, check.EndsAt,
             check.RequiredCount, request.RequestId);
         audit.Record(actorId, "SHIFT_CREATED", "Shift", shift.Id.ToString());
-        switch (await store.AddShiftAsync(shift, actorId, clock.GetUtcNow(), cancellationToken))
+        var saved = await store.AddShiftAsync(shift, actorId, clock.GetUtcNow(), cancellationToken);
+        return saved.Outcome switch
         {
-            case SaveOutcome.Saved:
-                return Created(shift);
-            case SaveOutcome.DuplicateRequest:
-                // A concurrent retry stored it first.
-                var stored = await store.FindByRequestIdAsync(request.RequestId, cancellationToken);
-                return stored is not null && SameShift(stored, check) ? Created(stored) : RequestIdReused();
-            default:
-                return NotRecorded<ShiftResponse>();
-        }
+            SaveOutcome.Saved => Created(shift),
+            // A concurrent retry stored it first; the store returns that shift, read under its lock.
+            SaveOutcome.DuplicateRequest when saved.Existing is { } stored =>
+                SameShift(stored, check) ? Created(stored) : RequestIdReused(),
+            _ => NotRecorded<ShiftResponse>(),
+        };
     }
 
     public async Task<AdminReply<LocationStaffingResponse>> SetLocationDefaultAsync(

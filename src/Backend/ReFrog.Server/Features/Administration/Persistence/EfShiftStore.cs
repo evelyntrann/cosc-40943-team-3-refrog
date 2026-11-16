@@ -1,5 +1,4 @@
 using System.Data.Common;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using ReFrog.Server.Persistence;
 
@@ -57,33 +56,55 @@ public sealed class EfShiftStore(AdmDbContext db, SqlUnitOfWork unitOfWork, ILog
             .ToDictionaryAsync(x => x.LocationId, x => x.DefaultRequiredCount, cancellationToken);
     }
 
-    public Task<SaveOutcome> AddShiftAsync(
+    public async Task<ShiftSaveResult> AddShiftAsync(
         StoredShift shift, Guid actorId, DateTimeOffset createdAt, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(shift);
-        db.Shifts.Add(new Shift
+        StoredShift? existing = null;
+        var outcome = await InTransactionAsync(async ct =>
         {
-            Id = shift.Id,
-            EventId = shift.EventId,
-            LocationId = shift.LocationId,
-            StartsAt = shift.StartsAt,
-            EndsAt = shift.EndsAt,
-            RequiredCount = shift.RequiredCount,
-            CreateRequestId = shift.CreateRequestId,
-            CreatedByAccountId = actorId,
-            CreatedAt = createdAt,
-        });
-        return SaveAsync(cancellationToken);
+            // Holds the request id's key range until commit, so a concurrent retry waits and then finds this shift
+            // instead of failing on the unique index (ROB-duplicate-submission).
+            var stored = await db.Shifts
+                .FromSqlInterpolated(
+                    $"SELECT * FROM [adm].[Shifts] WITH (UPDLOCK, HOLDLOCK) WHERE [CreateRequestId] = {shift.CreateRequestId}")
+                .AsNoTracking()
+                .SingleOrDefaultAsync(ct);
+            if (stored is not null)
+            {
+                existing = ToStored(stored);
+                return false;
+            }
+
+            db.Shifts.Add(new Shift
+            {
+                Id = shift.Id,
+                EventId = shift.EventId,
+                LocationId = shift.LocationId,
+                StartsAt = shift.StartsAt,
+                EndsAt = shift.EndsAt,
+                RequiredCount = shift.RequiredCount,
+                CreateRequestId = shift.CreateRequestId,
+                CreatedByAccountId = actorId,
+                CreatedAt = createdAt,
+            });
+            return true;
+        }, cancellationToken);
+        return outcome == SaveOutcome.Saved || existing is null
+            ? new ShiftSaveResult(outcome)
+            : new ShiftSaveResult(SaveOutcome.DuplicateRequest, existing);
     }
 
-    public async Task<SaveOutcome> SetLocationDefaultAsync(
-        Guid eventId, Guid locationId, int count, CancellationToken cancellationToken)
-    {
-        try
+    public Task<SaveOutcome> SetLocationDefaultAsync(
+        Guid eventId, Guid locationId, int count, CancellationToken cancellationToken) =>
+        InTransactionAsync(async ct =>
         {
-            var existing = await db.LocationStaffing.SingleOrDefaultAsync(
-                x => x.EventId == eventId && x.LocationId == locationId, cancellationToken);
-            if (existing is null)
+            // Locks the (event, location) key, even when no row exists yet, so two first-time saves cannot both insert.
+            var row = await db.LocationStaffing
+                .FromSqlInterpolated(
+                    $"SELECT * FROM [adm].[LocationStaffing] WITH (UPDLOCK, HOLDLOCK) WHERE [EventId] = {eventId} AND [LocationId] = {locationId}")
+                .SingleOrDefaultAsync(ct);
+            if (row is null)
             {
                 db.LocationStaffing.Add(new LocationStaffing
                 {
@@ -94,35 +115,33 @@ public sealed class EfShiftStore(AdmDbContext db, SqlUnitOfWork unitOfWork, ILog
             }
             else
             {
-                existing.DefaultRequiredCount = count;
+                row.DefaultRequiredCount = count;
             }
-        }
-        catch (DbException exception)
-        {
-            LogNotRecorded(logger, exception.GetType().Name, null);
-            return SaveOutcome.NotRecorded;
-        }
 
-        return await SaveAsync(cancellationToken);
-    }
+            return true;
+        }, cancellationToken);
 
-    /// <summary>One transaction for the change and its staged audit entry (§8.2.8, §8.2.9).</summary>
-    private async Task<SaveOutcome> SaveAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// One shared transaction for the change and its staged audit entry (§8.2.8, §8.2.9). <paramref name="prepare"/>
+    /// runs inside it and returns false to store nothing. Every path that does not commit discards what the
+    /// context tracks, including the staged audit entry.
+    /// </summary>
+    private async Task<SaveOutcome> InTransactionAsync(Func<CancellationToken, Task<bool>> prepare, CancellationToken cancellationToken)
     {
         try
         {
             await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
             await unitOfWork.EnlistAsync(db, cancellationToken);
+            if (!await prepare(cancellationToken))
+            {
+                return SaveOutcome.DuplicateRequest;
+            }
+
             await db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return SaveOutcome.Saved;
         }
-        catch (DbUpdateException exception) when (exception.InnerException is SqlException { Number: 2601 or 2627 } sql &&
-                                                  sql.Message.Contains("CreateRequestId", StringComparison.Ordinal))
-        {
-            return SaveOutcome.DuplicateRequest;
-        }
-        catch (Exception exception) when (exception is DbUpdateException or DbException)
+        catch (Exception exception) when (IsStoreFailure(exception))
         {
             LogNotRecorded(logger, exception.GetType().Name, null);
             return SaveOutcome.NotRecorded;
@@ -132,6 +151,15 @@ public sealed class EfShiftStore(AdmDbContext db, SqlUnitOfWork unitOfWork, ILog
             db.ChangeTracker.Clear();
         }
     }
+
+    /// <summary>
+    /// A failure of the store, as opposed to a bug. EF Core's SQL Server strategy wraps a transient error (deadlock,
+    /// dropped connection, timeout) in <see cref="InvalidOperationException"/>; RegistrationService checks the same.
+    /// </summary>
+    private static bool IsStoreFailure(Exception failure) =>
+        failure is DbUpdateException or DbException or TimeoutException ||
+        (failure is InvalidOperationException &&
+         failure.InnerException is DbUpdateException or DbException or TimeoutException);
 
     internal static StoredShift ToStored(Shift shift) => new(shift.Id, shift.EventId, shift.LocationId,
         shift.StartsAt.ToUniversalTime(), shift.EndsAt.ToUniversalTime(), shift.RequiredCount, shift.CreateRequestId);
