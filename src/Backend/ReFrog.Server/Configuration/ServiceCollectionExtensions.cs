@@ -2,10 +2,13 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using ReFrog.Server.Features.Administration;
+using ReFrog.Server.Features.Administration.Persistence;
 using ReFrog.Server.Features.Authentication;
 using ReFrog.Server.Features.Authentication.Persistence;
 using ReFrog.Server.Features.Info;
 using ReFrog.Server.Features.Info.Persistence;
+using ReFrog.Server.Persistence;
 
 namespace ReFrog.Server.Configuration;
 
@@ -62,6 +65,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<InfoService>();
         services.AddScoped<IEventConfigStore, EfEventConfigStore>();
         services.AddScoped<EventConfigService>();
+        services.AddScoped<SqlUnitOfWork>();
+        services.AddDbContext<AdmDbContext>((provider, options) =>
+            AdmDbContext.Configure(options, provider.GetRequiredService<SqlUnitOfWork>().Connection));
+        services.AddScoped<IAdminAuditLog, EfAdminAuditLog>();
         if (string.Equals(configuration["Email:Provider"], "MicrosoftGraph", StringComparison.OrdinalIgnoreCase))
         {
             services.AddHttpClient<IEmailSender, MicrosoftGraphEmailSender>();
