@@ -60,6 +60,8 @@ public static class ServiceCollectionExtensions
             InfoDbContext.Configure(options, configuration.GetConnectionString("ReFrog")));
         services.AddScoped<IEventInfoStore, EfEventInfoStore>();
         services.AddScoped<InfoService>();
+        services.AddScoped<IEventConfigStore, EfEventConfigStore>();
+        services.AddScoped<EventConfigService>();
         if (string.Equals(configuration["Email:Provider"], "MicrosoftGraph", StringComparison.OrdinalIgnoreCase))
         {
             services.AddHttpClient<IEmailSender, MicrosoftGraphEmailSender>();
