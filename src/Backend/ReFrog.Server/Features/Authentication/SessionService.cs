@@ -15,7 +15,7 @@ public sealed class SessionService(
     TimeProvider clock,
     ILogger<SessionService> logger)
 {
-    private const string AdministratorRole = "Administrator";
+    public const string AdministratorRole = "Administrator";
     private const int FailedAttemptLimit = 5;
     private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(5);
     private static readonly Action<ILogger, Exception?> LogSignInUnavailable =

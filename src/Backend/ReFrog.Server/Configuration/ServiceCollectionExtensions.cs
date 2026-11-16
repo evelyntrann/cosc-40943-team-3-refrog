@@ -69,6 +69,7 @@ public static class ServiceCollectionExtensions
         services.AddDbContext<AdmDbContext>((provider, options) =>
             AdmDbContext.Configure(options, provider.GetRequiredService<SqlUnitOfWork>().Connection));
         services.AddScoped<IAdminAuditLog, EfAdminAuditLog>();
+        services.AddScoped<AdminAuthorization>();
         if (string.Equals(configuration["Email:Provider"], "MicrosoftGraph", StringComparison.OrdinalIgnoreCase))
         {
             services.AddHttpClient<IEmailSender, MicrosoftGraphEmailSender>();
