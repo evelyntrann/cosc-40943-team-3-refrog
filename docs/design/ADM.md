@@ -7,7 +7,7 @@
 > **Realizes:** `UC-ADM-view-dashboard`, `UC-ADM-manage-shifts`, `UC-ADM-notify-volunteers`, `UC-ADM-review-volunteer`  
 > **Depends on:** `BR-location-staffing`, `BR-event-schedule`, `BR-volunteer-assignment`; `FR-AUTH-enforce-permissions`, `FR-VAL-server-validation`, `FR-VAL-field-feedback`, `FR-SAVE-confirmed-success`, `FR-NOTIFY-preserve-business-state`; `SEC-role-based-access`, `SEC-audit-log`, `ROB-duplicate-submission`, plus the applicable requirements in the [specification](../requirements/software-requirements-specification.md).  
 > **See:** [Use cases](../requirements/use-cases.md), [Software Requirements Specification](../requirements/software-requirements-specification.md), [Business Rules](../requirements/business-rules.md), [Architecture of record](architectural-design.md).  
-> **Designed against:** `d48e572` (`UC-ADM-manage-shifts` revision, issue #108). The other ADM sections were drafted before code existed and keep their earlier text apart from the `/api/v1` routes.
+> **Designed against:** `1bf931e`, which includes `UC-AUTH-sign-in` (#109) (`UC-ADM-manage-shifts` revision, issue #108). The other ADM sections were drafted before code existed and keep their earlier text apart from the `/api/v1` routes.
 
 ---
 
@@ -61,7 +61,7 @@ classDiagram
         +RequireAdministratorAsync() actorId
     }
     class AdminAuditLog {
-        <<new, shared admin audit>>
+        <<new, ADM-owned>>
         +RecordAsync(actorId, action, target)
     }
     class VolunteerReviewService {
@@ -153,8 +153,8 @@ classDiagram
 | `src/Backend/ReFrog.Server/Features/Administration/ShiftAdminService` | New | `UC-ADM-manage-shifts`: shift options, location default counts, create-shift validation against INF's event window and operating hours, idempotent create, and (PR 2) change preview and guarded edits |
 | `src/Backend/ReFrog.Server/Features/Administration/ShiftService` | New (ADM-owned) | `FindSignupCandidatesAsync(now)`, `FindByIdAsync(id)`, `LockForAssignmentAsync(id)`; supplies stable shift IDs and UTC instants. The lock method uses parameterized SQL Server `UPDLOCK, HOLDLOCK` behind the persistence abstraction and joins VOL's EF Core transaction. |
 | `src/Backend/ReFrog.Server/Features/Administration/Persistence/AdmDbContext` | New | ADM's store in the `adm` schema with its own migration history, the same pattern as `InfoDbContext` (`src/Backend/ReFrog.Server/Features/Info/Persistence/InfoDbContext.cs`) |
-| `src/Backend/ReFrog.Server/Features/Administration/AdminAuthorization` | New seam | `RequireAdministratorAsync` returns the acting account ID from current server-side role state, never a browser claim alone. It delegates to AUTH's `ICurrentUser` once `UC-AUTH-sign-in` provides it ([AUTH.md](AUTH.md), "Current user trust") |
-| Admin audit log (`IAdminAuditLog`) | New, shared | Records an administrator change in the same transaction as the change (§8.2.9). Its owner is agreed with AUTH, whose administrator sign-in audit is the other writer |
+| `src/Backend/ReFrog.Server/Features/Administration/AdminAuthorization` | New seam | `RequireAdministratorAsync` returns the acting account ID from the validated cookie plus a live role lookup (`UserManager.IsInRoleAsync`), the same check `SessionService.CurrentAsync` makes, never the cookie's role claim alone ([AUTH.md](AUTH.md), "Current user trust"). Signed out: `401 AUTHENTICATION_REQUIRED`; not an administrator: `403 ADMINISTRATOR_REQUIRED`; role state unreadable: `503 AUTHENTICATION_UNAVAILABLE`, never a guess (§8.2.1). If AUTH later provides a shared `ICurrentUser`, only this class changes |
+| `src/Backend/ReFrog.Server/Features/Administration/AdminAuditLog` (`IAdminAuditLog`) | New, ADM-owned | Records an administrator change to shifts and location defaults in the same transaction as the change (§8.2.9). Administrator sign-in attempts stay in AUTH's own `IAdministratorSignInAudit` (#109); the two record different events and are not merged |
 | `src/Backend/ReFrog.Server/Features/Info/EventConfigService` | Reused, INF-owned | The current event, its locations, and their weekly operating hours ([INF.md](INF.md)). ADM never reads `info` tables directly |
 | Admin shift page (Blazor, `src/Frontend/ReFrog.Client/Features/Administration/`) | New | Create-shift form showing field errors with valid input kept; confirms only after `201` (`FR-SAVE-confirmed-success`) |
 | `administration/VolunteerReviewService` | New (ADM-owned) | Reviews pending volunteers; approves the account and confirms all its pending claims in one transaction, or denies one claim; dispatches outcome message after commit |
@@ -402,7 +402,7 @@ sequenceDiagram
 
 ## API contract
 
-Every route is under `/api/v1/admin` and answers in the shared `ApiResponse<T>` envelope with the error categories and codes fixed by architecture §8.2.3 and [AUTH.md](AUTH.md): `401` when signed out, `403 ADMINISTRATOR_REQUIRED` for a signed-in non-administrator (2a), `422 VALIDATION_FAILED` with field messages, and `503 NOT_RECORDED` when a write is not confirmed. The `UC-ADM-manage-shifts` rows are fixed by this revision; the other rows keep their earlier content.
+Every route is under `/api/v1/admin` and answers in the shared `ApiResponse<T>` envelope with the error categories and codes fixed by architecture §8.2.3 and [AUTH.md](AUTH.md): `401 AUTHENTICATION_REQUIRED` when signed out, `403 ADMINISTRATOR_REQUIRED` for a signed-in non-administrator (2a), `503 AUTHENTICATION_UNAVAILABLE` when the role cannot be read, `400 ANTIFORGERY_INVALID` when a write (`POST`, `PUT`, `PATCH`, `DELETE`) lacks a valid `RequestVerificationToken` header from `GET /api/v1/auth/antiforgery` (the same rule as sign-out), `422 VALIDATION_FAILED` with field messages, and `503 NOT_RECORDED` when a write is not confirmed. The `UC-ADM-manage-shifts` rows are fixed by this revision; the other rows keep their earlier content.
 
 | Endpoint or job | Caller (who may) | Request | Success | Errors, by extension |
 |---|---|---|---|---|
@@ -434,7 +434,7 @@ Every route is under `/api/v1/admin` and answers in the shared `ApiResponse<T>` 
 
 **6. “Sent” means provider-accepted, not necessarily delivered.** Choose: show confirmation only for an acknowledged dispatch, and show failure/partial failure accurately. Reject: treating a request attempt as delivery success or blindly retrying after an ambiguous provider timeout. Reason: extension 4a and robustness requirements; provider and retry semantics still need agreement.
 
-**7. Authorization and auditing are shared.** Choose: every ADM endpoint calls `AdminAuthorization.RequireAdministratorAsync`, which reads current server-side role state and supplies the acting account ID; each shift or default change writes its admin audit entry in the same transaction as the change, so a rolled-back change leaves no audit row and a committed one always has it. Reject: hiding admin buttons as the only security check, trusting the cookie's role claim alone, logging instead of auditing, or a separate ADM authentication/audit store. Reason: `SEC-role-based-access`, `FR-AUTH-enforce-permissions`, `SEC-audit-log`, §8.2.9.
+**7. Authorization and auditing are shared.** Choose: every ADM endpoint calls `AdminAuthorization.RequireAdministratorAsync`, which reads current server-side role state and supplies the acting account ID; each shift or default change writes its admin audit entry in the same transaction as the change, so a rolled-back change leaves no audit row and a committed one always has it. Every admin write also requires an antiforgery token, as sign-out does, because the cookie alone would let another site submit the form. Reject: hiding admin buttons as the only security check, trusting the cookie's role claim alone, cookie-only writes, logging instead of auditing, or a separate ADM authentication/audit store. Reason: `SEC-role-based-access`, `FR-AUTH-enforce-permissions`, `SEC-audit-log`, §8.2.9.
 
 **8. Location default and shift override must not invalidate claims.** Choose: store the per-event per-location default slot count, copy it into each newly created shift, allow explicit per-shift override, and reject changes below `ACTIVE + PENDING` held assignments. VOL locks the shift row when signing up/cancelling, and ADM acquires the same row lock while editing its cap. Reject: editing capacity without reading pending claims, and bulk updating existing shift caps when a default changes. Reason: this is a consistent limit on staffing reservations.
 
@@ -450,7 +450,7 @@ Every route is under `/api/v1/admin` and answers in the shared `ApiResponse<T>` 
 
 ## Data model
 
-The `UC-ADM-manage-shifts` tables below are fixed against `d48e572`; column types and lengths are left to the build. The dashboard, notification, and review entities keep their earlier logical description.
+The `UC-ADM-manage-shifts` tables below are fixed against `1bf931e`; column types and lengths are left to the build. The dashboard, notification, and review entities keep their earlier logical description.
 
 ```mermaid
 erDiagram
@@ -532,7 +532,8 @@ Tests below are **specifications**, not code. They correspond to each main path 
 | `UC-ADM-view-dashboard` 3a | Integration | Location with no activity stays visible with zero/no-activity representation, not omitted or treated as unavailable |
 | Dashboard source outage | Integration | If mandatory source is unavailable, request clearly fails rather than claiming stale/partial data is complete |
 | `UC-ADM-manage-shifts` main | Integration (SQL Server) | An administrator creates a valid shift: `201`; stored start and end are the correct UTC instants for the Chicago input; the count is the location's default or the override; exactly one admin audit entry; VOL's `FindSignupCandidatesAsync` returns the shift |
-| `UC-ADM-manage-shifts` 2a | Integration | Signed out gets `401` and a signed-in non-administrator gets `403 ADMINISTRATOR_REQUIRED` on shift options, create, and staffing; nothing is stored |
+| `UC-ADM-manage-shifts` 2a | Integration | Signed out gets `401 AUTHENTICATION_REQUIRED` and a signed-in non-administrator gets `403 ADMINISTRATOR_REQUIRED` on shift options, create, and staffing; an administrator whose role was removed after sign-in is refused on the next request; an unreadable role store gives `503 AUTHENTICATION_UNAVAILABLE`; nothing is stored |
+| Admin write antiforgery | Integration | An administrator's create or staffing write without a valid `RequestVerificationToken` gets `400 ANTIFORGERY_INVALID` and stores nothing |
 | `UC-ADM-manage-shifts` 4a | Unit + integration | Each case names its field and stores nothing: zero or negative count, unknown or closed location, date outside the event window, a weekday with no operating hours, a time outside them, end not after start, a local time that does not exist on a daylight-saving change, and no count with no location default; valid fields are returned unchanged |
 | `UC-ADM-manage-shifts` 4b | Integration | A store failure returns `503 NOT_RECORDED` with no shift and no audit row (one rollback); a retry with the same `requestId` then creates exactly one shift |
 | `UC-ADM-manage-shifts` duplicate submission | Integration | The same `requestId` and input twice gives one shift and the same response; the same `requestId` with changed input gives `409 REQUEST_ID_REUSED` |
@@ -576,7 +577,6 @@ Tests below are **specifications**, not code. They correspond to each main path 
 | **Who creates events, locations, and operating hours (`OI-31`)** | Team, then client | INF owns them (key decision 11) but no use case writes them; until `OI-31` is answered they are loaded by a deployment script, and the use case's "operating days … editable only by administrators" cannot be met |
 | **May shifts overlap at one location (`OI-30`)** | Client | No overlap rule is enforced; if the client wants one, it is a new 4a check |
 | **Two EF Core contexts in one transaction** | ADM and VOL owners | `LockForAssignmentAsync` must join VOL's transaction from a different context; the concurrency test row proves it before VOL relies on it |
-| **Admin audit ownership** | ADM and AUTH owners | ADM hosts `AdminAuditEntries`; AUTH's administrator sign-in audit should write through the same `IAdminAuditLog`. Agree before the first ADM build |
 | **Concurrent staffing edits/assignment and duplicate submits** | `ADM`/`VOL` owners | Agree on shift/capacity invariant, shared IDs, transaction/locking and duplicate request strategy before independent implementations |
 | **Retention and hosting ownership (`OI-6`, `OI-12`, related hosting questions)** | Client, TCU governance and team | Do not invent retention periods or hosting; implement under approved operational policy |
 | **No unsupported analytics or auto-alert scope** | Area owner/reviewer | Keep MVP to the four documented ADM use cases; no automatic per-cancellation volunteer blast, marketing campaign features, real-time inventory, or abuse flagging inside ADM |
