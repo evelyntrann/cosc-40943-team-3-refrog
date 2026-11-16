@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using ReFrog.Server.Features.Administration.Persistence;
 using ReFrog.Server.Features.Authentication.Persistence;
 using ReFrog.Server.Features.Info.Persistence;
 
@@ -122,6 +123,7 @@ internal sealed class SqlTestHost : IAsyncDisposable
     {
         yield return services.GetRequiredService<AuthDbContext>();
         yield return services.GetRequiredService<InfoDbContext>();
+        yield return services.GetRequiredService<AdmDbContext>();
     }
 }
 
