@@ -1,0 +1,10 @@
+@if (!string.IsNullOrEmpty(Text))
+{
+    <p class="field-error" role="alert">@Text</p>
+}
+
+@code {
+    /// <summary>The server's message for one field (§8.2.5), or nothing.</summary>
+    [Parameter]
+    public string? Text { get; set; }
+}

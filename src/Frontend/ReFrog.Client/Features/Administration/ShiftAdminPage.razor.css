@@ -1,0 +1,99 @@
+section {
+  margin-top: 2rem;
+  max-width: 36rem;
+}
+
+.intro,
+.hint {
+  color: #62596b;
+  line-height: 1.5;
+}
+
+.hint {
+  font-size: 0.9rem;
+  margin: 0.25rem 0;
+}
+
+.locations {
+  display: grid;
+  gap: 1rem;
+  list-style: none;
+  padding: 0;
+}
+
+.locations li {
+  border: 1px solid #e2dde5;
+  border-radius: 0.75rem;
+  padding: 0.9rem 1rem;
+}
+
+h3 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+form,
+.field-group {
+  display: grid;
+}
+
+form {
+  gap: 1rem;
+}
+
+.field-group {
+  gap: 0.35rem;
+}
+
+.inline-field {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.inline-field input {
+  width: 5rem;
+}
+
+label {
+  font-weight: 700;
+}
+
+input,
+select {
+  border: 1px solid #aaa1b0;
+  border-radius: 0.5rem;
+  font: inherit;
+  padding: 0.5rem 0.6rem;
+}
+
+button {
+  background: #4d1979;
+  border: 0;
+  border-radius: 0.5rem;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 0.55rem 1rem;
+}
+
+button[disabled] {
+  opacity: 0.6;
+}
+
+::deep .field-error,
+.form-alert {
+  color: #a1122f;
+}
+
+.form-alert,
+.saved {
+  margin-top: 1rem;
+}
+
+.saved {
+  color: #1d6b38;
+}
