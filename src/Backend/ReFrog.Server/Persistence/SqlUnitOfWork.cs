@@ -8,12 +8,13 @@ namespace ReFrog.Server.Persistence;
 
 /// <summary>
 /// One SQL Server connection per request scope, shared by the area stores whose writes must commit together
-/// (architecture §8.2.8). A store opens the operation's transaction with <see cref="BeginAsync"/>, and every
-/// area <see cref="DbContext"/> that takes part calls <see cref="EnlistAsync"/> before it reads or writes, so
-/// a lock one area takes (ADM's <c>LockForAssignmentAsync</c>) lasts until another area (VOL) commits.
-/// Contexts on this connection are configured with <see cref="Connection"/>; it is not opened until first use.
+/// (architecture §8.2.8). A store opens the operation's transaction with <see cref="BeginAsync"/> (never
+/// <c>DbContext.Database.BeginTransactionAsync</c>), and every area <see cref="DbContext"/> that takes part is
+/// configured on <see cref="Connection"/> and calls <see cref="EnlistAsync"/> (or <see cref="JoinIfOpenAsync"/>
+/// for a read) before it touches the database, so a lock one area takes (ADM's <c>LockForAssignmentAsync</c>)
+/// lasts until another area (VOL) commits. The connection is not opened until first use.
 /// </summary>
-public sealed class SqlUnitOfWork(IConfiguration configuration) : IAsyncDisposable
+public sealed class SqlUnitOfWork(IConfiguration configuration) : IAsyncDisposable, IDisposable
 {
     private readonly List<DbContext> enlisted = [];
     private SqlConnection? connection;
@@ -45,7 +46,9 @@ public sealed class SqlUnitOfWork(IConfiguration configuration) : IAsyncDisposab
         ArgumentNullException.ThrowIfNull(context);
         if (Current is null)
         {
-            throw new InvalidOperationException("No transaction is open in this scope.");
+            throw new InvalidOperationException(
+                "No shared transaction is open in this scope. Open it with SqlUnitOfWork.BeginAsync, " +
+                "not DbContext.Database.BeginTransactionAsync.");
         }
 
         if (!ReferenceEquals(context.Database.GetDbConnection(), Connection))
@@ -60,6 +63,13 @@ public sealed class SqlUnitOfWork(IConfiguration configuration) : IAsyncDisposab
         }
     }
 
+    /// <summary>
+    /// For a read on the shared connection: joins the open transaction if there is one. SQL Server refuses a command
+    /// outside the transaction while one is pending on its connection.
+    /// </summary>
+    public Task JoinIfOpenAsync(DbContext context, CancellationToken cancellationToken) =>
+        Current is null ? Task.CompletedTask : EnlistAsync(context, cancellationToken);
+
     internal async Task EndAsync(DbTransaction transaction)
     {
         if (!ReferenceEquals(transaction, Current))
@@ -69,7 +79,14 @@ public sealed class SqlUnitOfWork(IConfiguration configuration) : IAsyncDisposab
 
         foreach (var context in enlisted)
         {
-            await context.Database.UseTransactionAsync(null);
+            try
+            {
+                await context.Database.UseTransactionAsync(null);
+            }
+            catch (ObjectDisposedException)
+            {
+                // The scope already disposed this context; it holds nothing to release.
+            }
         }
 
         enlisted.Clear();
@@ -77,17 +94,33 @@ public sealed class SqlUnitOfWork(IConfiguration configuration) : IAsyncDisposab
         await transaction.DisposeAsync();
     }
 
+    /// <summary>
+    /// Releases a transaction a caller left open (disposing it rolls it back) and the connection. Area contexts
+    /// may already be disposed by the scope, so they are not touched.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
-        if (Current is not null)
+        var open = Current;
+        Current = null;
+        enlisted.Clear();
+        if (open is not null)
         {
-            await EndAsync(Current);
+            await open.DisposeAsync();
         }
 
         if (connection is not null)
         {
             await connection.DisposeAsync();
         }
+    }
+
+    public void Dispose()
+    {
+        var open = Current;
+        Current = null;
+        enlisted.Clear();
+        open?.Dispose();
+        connection?.Dispose();
     }
 }
 

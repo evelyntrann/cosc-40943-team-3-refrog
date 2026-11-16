@@ -14,12 +14,14 @@ public sealed class EfShiftStore(AdmDbContext db, SqlUnitOfWork unitOfWork, ILog
 
     public async Task<StoredShift?> FindByIdAsync(Guid shiftId, CancellationToken cancellationToken)
     {
+        await unitOfWork.JoinIfOpenAsync(db, cancellationToken);
         var shift = await db.Shifts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == shiftId, cancellationToken);
         return shift is null ? null : ToStored(shift);
     }
 
     public async Task<StoredShift?> FindByRequestIdAsync(Guid requestId, CancellationToken cancellationToken)
     {
+        await unitOfWork.JoinIfOpenAsync(db, cancellationToken);
         var shift = await db.Shifts.AsNoTracking().SingleOrDefaultAsync(x => x.CreateRequestId == requestId, cancellationToken);
         return shift is null ? null : ToStored(shift);
     }
@@ -27,6 +29,7 @@ public sealed class EfShiftStore(AdmDbContext db, SqlUnitOfWork unitOfWork, ILog
     public async Task<IReadOnlyList<StoredShift>> ListStartingAfterAsync(
         Guid eventId, DateTimeOffset now, CancellationToken cancellationToken)
     {
+        await unitOfWork.JoinIfOpenAsync(db, cancellationToken);
         var shifts = await db.Shifts.AsNoTracking()
             .Where(x => x.EventId == eventId && x.StartsAt > now)
             .OrderBy(x => x.StartsAt).ThenBy(x => x.Id)
@@ -46,10 +49,13 @@ public sealed class EfShiftStore(AdmDbContext db, SqlUnitOfWork unitOfWork, ILog
         return shift is null ? null : ToStored(shift);
     }
 
-    public async Task<IReadOnlyDictionary<Guid, int>> GetLocationDefaultsAsync(Guid eventId, CancellationToken cancellationToken) =>
-        await db.LocationStaffing.AsNoTracking()
+    public async Task<IReadOnlyDictionary<Guid, int>> GetLocationDefaultsAsync(Guid eventId, CancellationToken cancellationToken)
+    {
+        await unitOfWork.JoinIfOpenAsync(db, cancellationToken);
+        return await db.LocationStaffing.AsNoTracking()
             .Where(x => x.EventId == eventId)
             .ToDictionaryAsync(x => x.LocationId, x => x.DefaultRequiredCount, cancellationToken);
+    }
 
     public Task<SaveOutcome> AddShiftAsync(
         StoredShift shift, Guid actorId, DateTimeOffset createdAt, CancellationToken cancellationToken)
