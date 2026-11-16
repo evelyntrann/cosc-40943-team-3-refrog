@@ -45,10 +45,10 @@ public static class AdminShiftEndpoints
                 return AntiforgeryInvalid<ShiftResponse>();
             }
 
-            var input = await ReadAsync<CreateShiftRequest>(context.Request, cancellationToken);
-            return input is null
-                ? InvalidRequest<ShiftResponse>()
-                : Reply(await service.CreateAsync(input, access.ActorId, cancellationToken));
+            var body = await ReadAsync<CreateShiftRequest>(context.Request, cancellationToken);
+            return body.Value is null
+                ? InvalidRequest<ShiftResponse>(body.BadField)
+                : Reply(await service.CreateAsync(body.Value, access.ActorId, cancellationToken));
         });
 
         admin.MapPut("/events/{eventId:guid}/locations/{locationId:guid}/staffing", async (
@@ -66,10 +66,10 @@ public static class AdminShiftEndpoints
                 return AntiforgeryInvalid<LocationStaffingResponse>();
             }
 
-            var input = await ReadAsync<SetLocationStaffingRequest>(context.Request, cancellationToken);
-            return input is null
-                ? InvalidRequest<LocationStaffingResponse>()
-                : Reply(await service.SetLocationDefaultAsync(eventId, locationId, input, access.ActorId, cancellationToken));
+            var body = await ReadAsync<SetLocationStaffingRequest>(context.Request, cancellationToken);
+            return body.Value is null
+                ? InvalidRequest<LocationStaffingResponse>(body.BadField)
+                : Reply(await service.SetLocationDefaultAsync(eventId, locationId, body.Value, access.ActorId, cancellationToken));
         });
 
         return endpoints;
@@ -88,22 +88,43 @@ public static class AdminShiftEndpoints
         }
     }
 
-    private static async Task<T?> ReadAsync<T>(HttpRequest request, CancellationToken cancellationToken)
+    /// <summary>
+    /// The request body, or the top-level field whose value has the wrong type (§8.2.5: name the bad field).
+    /// <see cref="Body{T}.BadField"/> is null when the body is not JSON at all.
+    /// </summary>
+    private static async Task<Body<T>> ReadAsync<T>(HttpRequest request, CancellationToken cancellationToken)
+        where T : class
     {
         if (!request.HasJsonContentType())
         {
-            return default;
+            return new(null, null);
         }
 
         try
         {
-            return await JsonSerializer.DeserializeAsync<T>(request.Body, WebJsonOptions, cancellationToken);
+            return new(await JsonSerializer.DeserializeAsync<T>(request.Body, WebJsonOptions, cancellationToken), null);
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
-            return default;
+            return new(null, FieldOf(exception.Path));
         }
     }
+
+    /// <summary><c>$.locationId</c> or <c>$.locationId[0]</c> → <c>locationId</c>; <c>$</c> or nothing → null.</summary>
+    private static string? FieldOf(string? path)
+    {
+        if (path is null || !path.StartsWith("$.", StringComparison.Ordinal) || path.Length == 2)
+        {
+            return null;
+        }
+
+        var name = path[2..];
+        var end = name.IndexOfAny(['.', '[']);
+        return end < 0 ? name : end == 0 ? null : name[..end];
+    }
+
+    private sealed record Body<T>(T? Value, string? BadField)
+        where T : class;
 
     private static IResult Reply<T>(AdminReply<T> reply) => Results.Json(reply.Response, statusCode: reply.StatusCode);
 
@@ -114,7 +135,9 @@ public static class AdminShiftEndpoints
         ApiResponse.Failure<T>(new ApiError(ApiErrorCategory.Validation, "ANTIFORGERY_INVALID", "Refresh the page and try again.")),
         statusCode: StatusCodes.Status400BadRequest);
 
-    private static IResult InvalidRequest<T>() => Results.Json(
-        ApiResponse.Failure<T>(new ApiError(ApiErrorCategory.Validation, "VALIDATION_FAILED", "Enter a valid request.")),
+    private static IResult InvalidRequest<T>(string? badField) => Results.Json(
+        ApiResponse.Failure<T>(new ApiError(ApiErrorCategory.Validation, "VALIDATION_FAILED",
+            badField is null ? "Enter a valid request." : "Check the highlighted fields.",
+            badField is null ? null : new Dictionary<string, string> { [badField] = "Enter a valid value." })),
         statusCode: StatusCodes.Status422UnprocessableEntity);
 }

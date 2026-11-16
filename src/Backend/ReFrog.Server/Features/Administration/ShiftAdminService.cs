@@ -75,9 +75,17 @@ public sealed class ShiftAdminService(
         ConfiguredEvent? current;
         IReadOnlyList<ConfiguredLocation> locations;
         IReadOnlyDictionary<Guid, int> defaults;
-        StoredShift? earlier;
         try
         {
+            // ROB-duplicate-submission: a retry of a form that already created its shift gets that shift back.
+            // It is answered before validation, so a configuration change since the first try (a location
+            // closed, hours or dates edited) cannot turn a true retry into a refusal.
+            var earlier = await store.FindByRequestIdAsync(request.RequestId, cancellationToken);
+            if (earlier is not null)
+            {
+                return SameInput(earlier, request) ? Created(earlier) : RequestIdReused();
+            }
+
             current = await events.GetCurrentEventAsync(cancellationToken);
             if (current is null)
             {
@@ -86,7 +94,6 @@ public sealed class ShiftAdminService(
 
             locations = await events.GetLocationsForEventAsync(current.Id, cancellationToken);
             defaults = await store.GetLocationDefaultsAsync(current.Id, cancellationToken);
-            earlier = await store.FindByRequestIdAsync(request.RequestId, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -96,12 +103,6 @@ public sealed class ShiftAdminService(
         }
 
         var check = Validate(request, current, locations, defaults);
-        if (earlier is not null)
-        {
-            // ROB-duplicate-submission: a retry of the same form returns the shift it already created.
-            return SameShift(earlier, check) ? Created(earlier) : RequestIdReused();
-        }
-
         if (check.Fields.Count > 0)
         {
             return Invalid<ShiftResponse>(check.Fields);
@@ -116,7 +117,7 @@ public sealed class ShiftAdminService(
             SaveOutcome.Saved => Created(shift),
             // A concurrent retry stored it first; the store returns that shift, read under its lock.
             SaveOutcome.DuplicateRequest when saved.Existing is { } stored =>
-                SameShift(stored, check) ? Created(stored) : RequestIdReused(),
+                SameInput(stored, request) ? Created(stored) : RequestIdReused(),
             _ => NotRecorded<ShiftResponse>(),
         };
     }
@@ -236,6 +237,10 @@ public sealed class ShiftAdminService(
         return new ShiftCheck(fields, request.LocationId ?? Guid.Empty, startsAt, endsAt, requiredCount);
     }
 
+    /// <summary>
+    /// Start and end are each checked against the weekday's opening periods, so every bad time is named in one
+    /// answer (§8.2.5); a shift must also start and end in the same period.
+    /// </summary>
     private static void CheckOperatingHours(
         ConfiguredLocation location, DateOnly date, TimeOnly? start, TimeOnly? end, Dictionary<string, string> fields)
     {
@@ -246,20 +251,22 @@ public sealed class ShiftAdminService(
             return;
         }
 
-        if (start is not { } startTime || end is not { } endTime || endTime <= startTime)
+        var describe = string.Join(", ", hours.Select(x => $"{EventTime.FormatTime(x.Opens)} to {EventTime.FormatTime(x.Closes)}"));
+        var opensFor = $"{location.Name} is open {describe} on {date.DayOfWeek}s.";
+        var startPeriod = start is { } s ? hours.FirstOrDefault(x => x.Opens <= s && s < x.Closes) : null;
+        var endPeriod = end is { } e ? hours.FirstOrDefault(x => x.Opens < e && e <= x.Closes) : null;
+        if (start is not null && startPeriod is null)
         {
-            return;
+            fields.TryAdd("startTime", opensFor);
         }
 
-        var describe = string.Join(", ", hours.Select(x => $"{EventTime.FormatTime(x.Opens)} to {EventTime.FormatTime(x.Closes)}"));
-        var window = hours.FirstOrDefault(x => x.Opens <= startTime && startTime < x.Closes);
-        if (window is null)
+        if (end is not null && endPeriod is null)
         {
-            fields.TryAdd("startTime", $"{location.Name} is open {describe} on {date.DayOfWeek}s.");
+            fields.TryAdd("endTime", opensFor);
         }
-        else if (endTime > window.Closes)
+        else if (startPeriod is not null && endPeriod is not null && startPeriod != endPeriod)
         {
-            fields.TryAdd("endTime", $"{location.Name} closes at {EventTime.FormatTime(window.Closes)} on {date.DayOfWeek}s.");
+            fields.TryAdd("endTime", $"A shift must end in the same opening period it starts in. {opensFor}");
         }
     }
 
@@ -271,7 +278,7 @@ public sealed class ShiftAdminService(
             return null;
         }
 
-        if (DateOnly.TryParseExact(value.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        if (TryParseDate(value, out var date))
         {
             return date;
         }
@@ -279,6 +286,12 @@ public sealed class ShiftAdminService(
         fields["date"] = "Enter a date as year-month-day.";
         return null;
     }
+
+    private static bool TryParseDate(string? value, out DateOnly date) =>
+        DateOnly.TryParseExact(value?.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
+
+    private static bool TryParseTime(string? value, out TimeOnly time) =>
+        TimeOnly.TryParseExact(value?.Trim(), ["HH:mm", "HH:mm:ss"], CultureInfo.InvariantCulture, DateTimeStyles.None, out time);
 
     private static TimeOnly? ParseTime(string? value, string field, string missing, Dictionary<string, string> fields)
     {
@@ -288,8 +301,7 @@ public sealed class ShiftAdminService(
             return null;
         }
 
-        if (TimeOnly.TryParseExact(value.Trim(), ["HH:mm", "HH:mm:ss"], CultureInfo.InvariantCulture,
-                DateTimeStyles.None, out var time))
+        if (TryParseTime(value, out var time))
         {
             return time;
         }
@@ -298,18 +310,26 @@ public sealed class ShiftAdminService(
         return null;
     }
 
-    private static bool SameShift(StoredShift stored, ShiftCheck check) =>
-        check.Fields.Count == 0 &&
-        stored.LocationId == check.LocationId &&
-        stored.StartsAt == check.StartsAt &&
-        stored.EndsAt == check.EndsAt &&
-        stored.RequiredCount == check.RequiredCount;
+    /// <summary>
+    /// Whether a retry carries the input that created <paramref name="stored"/>: same location, the same Chicago date
+    /// and times, and, if it sends a count, the same count. A retry that omits the count matches whatever count the
+    /// shift was given, since the location default may have changed since.
+    /// </summary>
+    private static bool SameInput(StoredShift stored, CreateShiftRequest request) =>
+        request.LocationId == stored.LocationId &&
+        TryParseDate(request.Date, out var date) &&
+        TryParseTime(request.StartTime, out var start) &&
+        TryParseTime(request.EndTime, out var end) &&
+        EventTime.TryToUtc(date, start, out var startsAt) && startsAt == stored.StartsAt &&
+        EventTime.TryToUtc(date, end, out var endsAt) && endsAt == stored.EndsAt &&
+        (request.RequiredCount is null || request.RequiredCount == stored.RequiredCount);
 
     private static AdminReply<ShiftResponse> Created(StoredShift shift) => new(201, ApiResponse.Success(
         new ShiftResponse(shift.Id, shift.LocationId, shift.StartsAt, shift.EndsAt, shift.RequiredCount)));
 
     private static AdminReply<ShiftResponse> RequestIdReused() => Failure<ShiftResponse>(409, ApiErrorCategory.Validation,
-        "REQUEST_ID_REUSED", "This form was already used for a different shift. Refresh the page and try again.");
+        "REQUEST_ID_REUSED",
+        "A shift was already created from this form with other details. Refresh the page before creating another shift.");
 
     private static AdminReply<T> NoCurrentEvent<T>() => Failure<T>(409, ApiErrorCategory.Validation, "NO_CURRENT_EVENT",
         "There is no planned or active event to add shifts to.");

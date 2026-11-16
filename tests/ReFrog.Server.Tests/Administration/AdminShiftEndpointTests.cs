@@ -212,6 +212,7 @@ public sealed class AdminShiftEndpointTests
             ("ends after closing", valid with { EndTime = "21:00" }, ["endTime"]),
             ("end not after start", valid with { StartTime = "18:00", EndTime = "14:00" }, ["endTime"]),
             ("malformed time", valid with { StartTime = "25:00" }, ["startTime"]),
+            ("start before opening and no end", valid with { StartTime = "09:00", EndTime = null }, ["endTime", "startTime"]),
             ("malformed date", valid with { Date = "05/03/2027" }, ["date"]),
             ("no count and no default", valid with { LocationId = fixture.Village, EndTime = "17:00" }, ["requiredCount"]),
             // 2:30 a.m. on Sunday March 14, 2027 is skipped by the spring-forward change. The date is also
@@ -287,6 +288,75 @@ public sealed class AdminShiftEndpointTests
         Assert.AreEqual("REQUEST_ID_REUSED", (await changed.Content.ReadFromJsonAsync<ApiResponse<ShiftResponse>>())?.Error?.Code);
         Assert.HasCount(1, await fixture.ShiftsAsync());
         Assert.HasCount(1, await fixture.AuditAsync());
+    }
+
+    [TestMethod]
+    public async Task ARetryReturnsItsShiftEvenAfterTheSetupChanged()
+    {
+        await using var fixture = await AdminShiftFixture.CreateAsync();
+        await fixture.CreateAccountAsync(Admin, isAdministrator: true);
+        await fixture.SetDefaultDirectlyAsync(fixture.Commons, 3);
+        using var client = await fixture.SignedInClientAsync(Admin);
+        var token = await AdminShiftFixture.TokenAsync(client);
+        var request = fixture.ValidRequest();
+        using var first = await AdminShiftFixture.PostShiftAsync(client, request, token);
+        var created = (await first.Content.ReadFromJsonAsync<ApiResponse<ShiftResponse>>())!.Data!;
+
+        // Between the lost response and the retry: the location closes, its default changes, the event closes.
+        await fixture.Host.WithAsync<InfoDbContext>(async db =>
+        {
+            (await db.Locations.SingleAsync(x => x.Id == fixture.Commons)).Status = DonationLocationStatus.Closed;
+            (await db.Events.SingleAsync(x => x.Id == fixture.EventId)).Status = ReFrogEventStatus.Closed;
+            await db.SaveChangesAsync();
+        });
+        await fixture.Host.WithAsync<AdmDbContext>(async db =>
+        {
+            (await db.LocationStaffing.SingleAsync()).DefaultRequiredCount = 5;
+            await db.SaveChangesAsync();
+        });
+        using var retried = await AdminShiftFixture.PostShiftAsync(client, request, token);
+
+        Assert.AreEqual(HttpStatusCode.Created, retried.StatusCode);
+        Assert.AreEqual(created, (await retried.Content.ReadFromJsonAsync<ApiResponse<ShiftResponse>>())!.Data);
+        Assert.HasCount(1, await fixture.ShiftsAsync());
+    }
+
+    [TestMethod]
+    public async Task AValueOfTheWrongTypeIsNamedAsItsField()
+    {
+        await using var fixture = await AdminShiftFixture.CreateAsync();
+        await fixture.CreateAccountAsync(Admin, isAdministrator: true);
+        using var client = await fixture.SignedInClientAsync(Admin);
+        var token = await AdminShiftFixture.TokenAsync(client);
+        var requestId = Guid.NewGuid();
+
+        var cases = new (string Route, HttpMethod Method, string Body, string? Field)[]
+        {
+            ("/api/v1/admin/shifts", HttpMethod.Post,
+                $$"""{"requestId":"{{requestId}}","locationId":"abc","date":"2027-05-03","startTime":"14:00","endTime":"18:00"}""", "locationId"),
+            ("/api/v1/admin/shifts", HttpMethod.Post,
+                $$"""{"requestId":"{{requestId}}","locationId":"{{fixture.Commons}}","date":"2027-05-03","startTime":"14:00","endTime":"18:00","requiredCount":2.5}""",
+                "requiredCount"),
+            ($"/api/v1/admin/events/{fixture.EventId}/locations/{fixture.Commons}/staffing", HttpMethod.Put,
+                """{"defaultRequiredCount":"three"}""", "defaultRequiredCount"),
+            ("/api/v1/admin/shifts", HttpMethod.Post, "not json", null),
+        };
+
+        foreach (var (route, method, body, field) in cases)
+        {
+            using var message = new HttpRequestMessage(method, route)
+            {
+                Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json"),
+            };
+            message.Headers.Add("RequestVerificationToken", token);
+            using var response = await client.SendAsync(message);
+
+            Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, body);
+            var fields = (await response.Content.ReadFromJsonAsync<ApiResponse<object>>())?.Error?.Fields;
+            Assert.AreEqual(field, fields?.Keys.Single(), body);
+        }
+
+        Assert.IsEmpty(await fixture.ShiftsAsync());
     }
 
     [TestMethod]
