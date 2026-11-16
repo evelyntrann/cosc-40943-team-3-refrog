@@ -10,10 +10,20 @@ public sealed record StoredShift(
     int RequiredCount,
     Guid CreateRequestId);
 
-/// <summary>ADM's persistence abstraction for shifts (architecture §8.2.8; ADM.md data model).</summary>
+/// <summary>What a write did. <see cref="NotRecorded"/> means nothing was stored (§8.2.1).</summary>
+public enum SaveOutcome
+{
+    Saved,
+    DuplicateRequest,
+    NotRecorded,
+}
+
+/// <summary>ADM's persistence abstraction for shifts and location defaults (architecture §8.2.8; ADM.md data model).</summary>
 public interface IShiftStore
 {
     Task<StoredShift?> FindByIdAsync(Guid shiftId, CancellationToken cancellationToken);
+
+    Task<StoredShift?> FindByRequestIdAsync(Guid requestId, CancellationToken cancellationToken);
 
     /// <summary>The event's shifts that start after <paramref name="now"/>, earliest first.</summary>
     Task<IReadOnlyList<StoredShift>> ListStartingAfterAsync(Guid eventId, DateTimeOffset now, CancellationToken cancellationToken);
@@ -23,4 +33,16 @@ public interface IShiftStore
     /// (<c>SqlUnitOfWork</c>). Throws <see cref="InvalidOperationException"/> when no transaction is open.
     /// </summary>
     Task<StoredShift?> LockAsync(Guid shiftId, CancellationToken cancellationToken);
+
+    /// <summary>Each location's default required count for the event, by location id.</summary>
+    Task<IReadOnlyDictionary<Guid, int>> GetLocationDefaultsAsync(Guid eventId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Inserts the shift together with any audit entry already staged by <see cref="IAdminAuditLog"/>, in one
+    /// transaction. <see cref="SaveOutcome.DuplicateRequest"/> when its request id is already stored.
+    /// </summary>
+    Task<SaveOutcome> AddShiftAsync(StoredShift shift, Guid actorId, DateTimeOffset createdAt, CancellationToken cancellationToken);
+
+    /// <summary>Inserts or replaces a location's default, with any staged audit entry, in one transaction.</summary>
+    Task<SaveOutcome> SetLocationDefaultAsync(Guid eventId, Guid locationId, int count, CancellationToken cancellationToken);
 }

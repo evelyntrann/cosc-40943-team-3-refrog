@@ -1,4 +1,5 @@
 using ReFrog.Server.Configuration;
+using ReFrog.Server.Features.Administration;
 using ReFrog.Server.Features.Administration.Persistence;
 using Microsoft.EntityFrameworkCore;
 using ReFrog.Server.Features.Authentication;
@@ -67,6 +68,7 @@ app.UseAuthorization();
 app.MapRegistrationEndpoints();
 app.MapSessionEndpoints();
 app.MapInfoEndpoints();
+app.MapAdminShiftEndpoints();
 app.Map("/api/{**path}", () => Results.Json(ApiResponse.Failure<object>(
     new ApiError(ApiErrorCategory.Validation, "NOT_FOUND", "The requested resource was not found.")),
     statusCode: StatusCodes.Status404NotFound));

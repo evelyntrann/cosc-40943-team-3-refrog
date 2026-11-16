@@ -72,6 +72,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<AdminAuthorization>();
         services.AddScoped<IShiftStore, EfShiftStore>();
         services.AddScoped<ShiftService>();
+        services.AddScoped<ShiftAdminService>();
         if (string.Equals(configuration["Email:Provider"], "MicrosoftGraph", StringComparison.OrdinalIgnoreCase))
         {
             services.AddHttpClient<IEmailSender, MicrosoftGraphEmailSender>();
