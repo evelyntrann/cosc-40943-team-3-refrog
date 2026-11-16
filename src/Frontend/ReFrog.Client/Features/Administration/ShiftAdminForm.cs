@@ -10,7 +10,8 @@ namespace ReFrog.Client.Features.Administration;
 /// The admin shift page's state for <c>UC-ADM-manage-shifts</c>. It sends what the administrator entered and
 /// shows what the server decides; the server's check is the one that counts (architecture §8.2.4, §8.2.5).
 /// Entered values are kept on every refusal, and a retry after a failure reuses the same request id
-/// (ADM.md key decision 13), so a lost response cannot create the shift twice.
+/// (ADM.md key decision 13), so a lost response cannot create the shift twice. "Not created" is said only when the
+/// server said nothing was stored (<c>NOT_RECORDED</c>) or the request was never sent.
 /// </summary>
 public sealed class ShiftAdminForm(HttpClient http)
 {
@@ -107,8 +108,10 @@ public sealed class ShiftAdminForm(HttpClient http)
         }
         catch (Exception failure) when (failure is HttpRequestException or JsonException or TaskCanceledException)
         {
-            // 4b: the outcome is unknown to the page, so it says the shift was not created and keeps the request id.
-            Error = NotRecorded();
+            // 4b: the request may have reached the server, so the page cannot say the shift was not created
+            // (§8.2.1). Resubmitting unchanged reuses the request id and cannot create it twice.
+            Error = Unavailable("OUTCOME_UNKNOWN",
+                "We could not confirm whether the shift was created. Select Create shift again without changing anything; it will not be created twice.");
             return false;
         }
         finally
@@ -157,7 +160,9 @@ public sealed class ShiftAdminForm(HttpClient http)
         }
         catch (Exception failure) when (failure is HttpRequestException or JsonException or TaskCanceledException)
         {
-            DefaultErrors[locationId] = NotRecorded();
+            // Saving the same number again is safe, so the page asks for exactly that.
+            DefaultErrors[locationId] = Unavailable("OUTCOME_UNKNOWN",
+                "We could not confirm whether this was saved. Select Save again.");
             return false;
         }
     }

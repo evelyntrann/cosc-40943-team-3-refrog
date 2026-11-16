@@ -87,14 +87,15 @@ public sealed class ShiftAdminFormTests
     }
 
     [TestMethod]
-    public async Task ADroppedResponseIsReportedAsNotCreatedAndTheRetryReusesTheRequestId()
+    public async Task ADroppedResponseIsReportedAsUnconfirmedAndTheRetryReusesTheRequestId()
     {
         var server = new ScriptedServer { DropNextCreate = true };
         var form = await FilledFormAsync(server);
         var requestId = form.RequestId;
 
         Assert.IsFalse(await form.SubmitAsync());
-        Assert.AreEqual("NOT_RECORDED", form.Error?.Code);
+        Assert.AreEqual("OUTCOME_UNKNOWN", form.Error?.Code, "The page cannot know the shift was not created.");
+        StringAssert.Contains(form.Error!.Message, "without changing anything", StringComparison.Ordinal);
         Assert.AreEqual("14:00", form.StartTime);
 
         Assert.IsTrue(await form.SubmitAsync());
