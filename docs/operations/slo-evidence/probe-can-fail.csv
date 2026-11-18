@@ -1,0 +1,22 @@
+phase,epoch,utc,result,reason,http_status,content_type,elapsed_ms
+healthy,1795014700,2026-11-18T15:11:40Z,good,ok,200,application/json; charset=utf-8,9
+healthy,1795014702,2026-11-18T15:11:42Z,good,ok,200,application/json; charset=utf-8,3
+healthy,1795014704,2026-11-18T15:11:44Z,good,ok,200,application/json; charset=utf-8,4
+database-stopped,1795014710,2026-11-18T15:11:50Z,bad,deadline-exceeded,000,,3005
+database-stopped,1795014713,2026-11-18T15:11:53Z,bad,deadline-exceeded,000,,3008
+database-stopped,1795014716,2026-11-18T15:11:56Z,bad,deadline-exceeded,000,,3006
+database-restored,1795014723,2026-11-18T15:12:03Z,good,ok,200,application/json; charset=utf-8,3
+database-restored,1795014725,2026-11-18T15:12:05Z,good,ok,200,application/json; charset=utf-8,4
+database-restored,1795014727,2026-11-18T15:12:07Z,good,ok,200,application/json; charset=utf-8,5
+application-stopped,1795014728,2026-11-18T15:12:08Z,bad,no-response,000,,0
+application-stopped,1795014730,2026-11-18T15:12:10Z,bad,no-response,000,,0
+application-stopped,1795014732,2026-11-18T15:12:12Z,bad,no-response,000,,0
+application-restored,1795014734,2026-11-18T15:12:14Z,good,ok,200,application/json; charset=utf-8,23
+application-restored,1795014736,2026-11-18T15:12:16Z,good,ok,200,application/json; charset=utf-8,10
+application-restored,1795014738,2026-11-18T15:12:18Z,good,ok,200,application/json; charset=utf-8,6
+wrong-page-200-html,1795014738,2026-11-18T15:12:18Z,bad,not-json,200,text/html,2
+wrong-page-200-html,1795014740,2026-11-18T15:12:20Z,bad,not-json,200,text/html,0
+wrong-page-200-html,1795014742,2026-11-18T15:12:22Z,bad,not-json,200,text/html,1
+unknown-api-path,1795014742,2026-11-18T15:12:22Z,bad,status-404,404,application/json; charset=utf-8,3
+unknown-api-path,1795014744,2026-11-18T15:12:24Z,bad,status-404,404,application/json; charset=utf-8,1
+unknown-api-path,1795014746,2026-11-18T15:12:26Z,bad,status-404,404,application/json; charset=utf-8,1
