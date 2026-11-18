@@ -112,6 +112,8 @@ classDiagram
 
 ## Shared API envelope
 
+**Recovery implementation (issue #126).** `RecoveryTokenProvider` adapts Identity's `DataProtectorTokenProvider<AuthAccount>` payload to injected `TimeProvider`, retaining the framework's protected timestamp/account/purpose/security-stamp format. Validation rejects the exact expiry instant (`FR-AUTH-password-recovery`). Identity's default provider directly reads the system clock and accepts the expiry instant, so the recovery-specific provider replaces it only for password resets. `RecoveryTokenProviderTests` checks format compatibility in both directions as well as expiry and ownership.
+
 AUTH establishes the architecture §8.2.3 envelope used by every area:
 
 ```text

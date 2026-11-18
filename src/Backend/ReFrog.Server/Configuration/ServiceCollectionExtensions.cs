@@ -29,6 +29,7 @@ public static class ServiceCollectionExtensions
             options.Password.RequireDigit = true;
             options.Password.RequireNonAlphanumeric = true;
             options.User.RequireUniqueEmail = true;
+            options.Tokens.PasswordResetTokenProvider = RecoveryTokenProvider.ProviderName;
             // The user name is the verified email, which registration already validates
             // (FR-AUTH-account-signup: any domain), so Identity's narrower character list must not apply.
             options.User.AllowedUserNameCharacters = string.Empty;
@@ -39,7 +40,8 @@ public static class ServiceCollectionExtensions
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<AuthDbContext>()
             .AddSignInManager()
-            .AddDefaultTokenProviders();
+            .AddDefaultTokenProviders()
+            .AddTokenProvider<RecoveryTokenProvider>(RecoveryTokenProvider.ProviderName);
 
         services.AddAuthentication(IdentityConstants.ApplicationScheme)
             .AddCookie(IdentityConstants.ApplicationScheme, options =>
