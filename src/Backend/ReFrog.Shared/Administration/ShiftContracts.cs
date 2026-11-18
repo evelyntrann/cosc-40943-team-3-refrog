@@ -38,3 +38,20 @@ public sealed record ShiftResponse(Guid ShiftId, Guid LocationId, DateTimeOffset
 public sealed record SetLocationStaffingRequest(int? DefaultRequiredCount);
 
 public sealed record LocationStaffingResponse(Guid EventId, Guid LocationId, int DefaultRequiredCount);
+
+/// <summary>
+/// A shift an administrator can choose to change (<c>UC-ADM-manage-shifts</c> 6a). <see cref="HeldCount"/> counts
+/// approved and pending sign-ups. <see cref="Version"/> is sent back with a change, so a stale one can be refused.
+/// </summary>
+public sealed record ManagedShift(
+    Guid ShiftId,
+    Guid LocationId,
+    string LocationName,
+    DateTimeOffset StartsAt,
+    DateTimeOffset EndsAt,
+    int RequiredCount,
+    int HeldCount,
+    string Version);
+
+/// <summary><c>GET /api/v1/admin/shifts</c>: the current event's shifts, earliest first.</summary>
+public sealed record ShiftListResponse(IReadOnlyList<ManagedShift> Shifts);

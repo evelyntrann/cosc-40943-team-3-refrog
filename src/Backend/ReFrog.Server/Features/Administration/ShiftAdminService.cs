@@ -4,6 +4,7 @@ using ReFrog.Contracts.Api;
 using ReFrog.Contracts.Time;
 using ReFrog.Server.Features.Info;
 using ReFrog.Server.Features.Info.Persistence;
+using ReFrog.Server.Features.Volunteer;
 
 namespace ReFrog.Server.Features.Administration;
 
@@ -11,21 +12,26 @@ namespace ReFrog.Server.Features.Administration;
 public sealed record AdminReply<T>(int StatusCode, ApiResponse<T> Response);
 
 /// <summary>
-/// <c>UC-ADM-manage-shifts</c>, first build: shift options (step 2), create a shift (steps 3–5, 4a, 4b), and each
-/// location's default required count (Associated Information). Rules: <c>BR-location-staffing</c>,
-/// <c>BR-event-schedule</c>; ADM.md key decisions 3, 11–13. The caller has already passed
+/// <c>UC-ADM-manage-shifts</c>: shift options (step 2), create a shift (steps 3–5, 4a, 4b), each location's default
+/// required count (Associated Information), and changing an existing shift (6a). Rules: <c>BR-location-staffing</c>,
+/// <c>BR-event-schedule</c>; ADM.md key decisions 3, 4, 8, 11–13. The caller has already passed
 /// <see cref="AdminAuthorization"/> (2a); the actor id comes from the session.
 /// </summary>
 public sealed class ShiftAdminService(
     EventConfigService events,
     IShiftStore store,
     IAdminAuditLog audit,
+    IAssignmentQueryService assignments,
     TimeProvider clock,
     ILogger<ShiftAdminService> logger)
 {
     private static readonly Action<ILogger, string, Exception?> LogEventConfigUnavailable =
         LoggerMessage.Define<string>(LogLevel.Error, new EventId(7203, "EventConfigUnavailable"),
             "Event configuration could not be read ({FailureType})");
+
+    private static readonly Action<ILogger, string, Exception?> LogShiftReadUnavailable =
+        LoggerMessage.Define<string>(LogLevel.Error, new EventId(7204, "ShiftReadUnavailable"),
+            "Shift information could not be read ({FailureType})");
 
     public async Task<AdminReply<ShiftOptionsResponse>> GetOptionsAsync(CancellationToken cancellationToken)
     {
@@ -157,6 +163,43 @@ public sealed class ShiftAdminService(
             ? new(200, ApiResponse.Success(new LocationStaffingResponse(eventId, locationId, count)))
             : NotRecorded<LocationStaffingResponse>();
     }
+
+    /// <summary>6a: the current event's shifts with their held counts, for choosing one to change.</summary>
+    public async Task<AdminReply<ShiftListResponse>> ListShiftsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var current = await events.GetCurrentEventAsync(cancellationToken);
+            if (current is null)
+            {
+                return NoCurrentEvent<ShiftListResponse>();
+            }
+
+            var locations = await events.GetLocationsForEventAsync(current.Id, cancellationToken);
+            var shifts = await store.ListForEventAsync(current.Id, cancellationToken);
+            var held = await assignments.CountsHeldByShiftsAsync(shifts.Select(x => x.Id).ToList(), cancellationToken);
+            return new(200, ApiResponse.Success(new ShiftListResponse(
+                shifts.Select(shift => ToManaged(shift, locations, held.GetValueOrDefault(shift.Id))).ToList())));
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            LogShiftReadUnavailable(logger, exception.GetType().Name, null);
+            return ShiftsUnavailable<ShiftListResponse>();
+        }
+    }
+
+    private static ManagedShift ToManaged(StoredShift shift, IReadOnlyList<ConfiguredLocation> locations, int heldCount) => new(
+        shift.Id,
+        shift.LocationId,
+        locations.FirstOrDefault(x => x.Id == shift.LocationId)?.Name ?? "Unknown location",
+        shift.StartsAt,
+        shift.EndsAt,
+        shift.RequiredCount,
+        heldCount,
+        shift.Version);
+
+    private static AdminReply<T> ShiftsUnavailable<T>() => Failure<T>(503, ApiErrorCategory.Unavailable, "UNAVAILABLE",
+        "Shift information is temporarily unavailable. Try again.");
 
     /// <summary>The server's check of the entered details (4a, §8.2.5). The first problem per field is reported.</summary>
     private static ShiftCheck Validate(

@@ -30,6 +30,18 @@ public static class AdminShiftEndpoints
             return Reply(await service.GetOptionsAsync(cancellationToken));
         });
 
+        admin.MapGet("/shifts", async (
+            HttpContext context, AdminAuthorization authorization, ShiftAdminService service, CancellationToken cancellationToken) =>
+        {
+            var access = await authorization.RequireAdministratorAsync(context.User);
+            if (!access.Granted)
+            {
+                return Refused<ShiftListResponse>(access);
+            }
+
+            return Reply(await service.ListShiftsAsync(cancellationToken));
+        });
+
         admin.MapPost("/shifts", async (
             HttpContext context, AdminAuthorization authorization, IAntiforgery antiforgery, ShiftAdminService service,
             CancellationToken cancellationToken) =>
