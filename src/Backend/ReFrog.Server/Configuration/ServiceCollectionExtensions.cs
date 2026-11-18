@@ -8,6 +8,8 @@ using ReFrog.Server.Features.Authentication;
 using ReFrog.Server.Features.Authentication.Persistence;
 using ReFrog.Server.Features.Info;
 using ReFrog.Server.Features.Info.Persistence;
+using ReFrog.Server.Features.Volunteer;
+using ReFrog.Server.Features.Volunteer.Persistence;
 using ReFrog.Server.Persistence;
 
 namespace ReFrog.Server.Configuration;
@@ -73,6 +75,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IShiftStore, EfShiftStore>();
         services.AddScoped<ShiftService>();
         services.AddScoped<ShiftAdminService>();
+        services.AddDbContext<VolDbContext>((provider, options) =>
+            VolDbContext.Configure(options, provider.GetRequiredService<SqlUnitOfWork>().Connection));
+        services.AddScoped<IVolStore, EfVolStore>();
+        services.AddScoped<IAssignmentQueryService, AssignmentQueryService>();
         if (string.Equals(configuration["Email:Provider"], "MicrosoftGraph", StringComparison.OrdinalIgnoreCase))
         {
             services.AddHttpClient<IEmailSender, MicrosoftGraphEmailSender>();

@@ -6,6 +6,7 @@ using ReFrog.Server.Features.Authentication;
 using ReFrog.Server.Features.Authentication.Persistence;
 using ReFrog.Server.Features.Info;
 using ReFrog.Server.Features.Info.Persistence;
+using ReFrog.Server.Features.Volunteer.Persistence;
 using ReFrog.Contracts.Api;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -28,6 +29,7 @@ if (args.Contains("--apply-migrations", StringComparer.Ordinal))
     await scope.ServiceProvider.GetRequiredService<AuthDbContext>().Database.MigrateAsync();
     await scope.ServiceProvider.GetRequiredService<InfoDbContext>().Database.MigrateAsync();
     await scope.ServiceProvider.GetRequiredService<AdmDbContext>().Database.MigrateAsync();
+    await scope.ServiceProvider.GetRequiredService<VolDbContext>().Database.MigrateAsync();
     return;
 }
 
