@@ -105,6 +105,7 @@ classDiagram
 - `ICurrentUser` / `CurrentUser` (new): derives the stable account ID and administrator role only from the validated server principal and current database state. It asks `IVolunteerAccessStateProvider` for `ROLE_ACTIVE`, `NONE`, `RESTRICTED`, or unavailable; it never trusts browser claims for current authorization.
 - `IVolunteerAccessStateProvider` (new seam): the initial implementation returns `NONE` for an ordinary account. The future volunteer/administration implementation supplies current event-scoped state. Failures propagate as unavailable rather than `NONE`.
 - `IAuthRepository` and EF Core implementation (new): own AUTH persistence and hide SQL Server/Identity storage details from services.
+- `IAccountEmailDirectory` / `EfAccountEmailDirectory` (new, read-only, #134): returns the emails of the given account IDs, so ADM's administrator-only 6a1 preview (`UC-ADM-manage-shifts`) can name affected volunteers without reading AUTH's tables. An unknown ID is left out of the answer. It grants nothing and is not an authorization check.
 - `IEmailSender` (shared interface, new if no earlier area creates it): provider-neutral; the production adapter remains unresolved under `OI-25`. Verification codes and reset links are email-only and are never placed in the in-app inbox.
 - .NET `TimeProvider` (injected): the only source of current time for codes, rolling limits, reset expiry, cookie/session boundaries, and tests.
 
