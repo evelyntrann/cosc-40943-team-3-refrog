@@ -1146,7 +1146,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 **Associated Information:** Role removal places the account in general-information-only access, even if it retains previously verified TCU email; administrator renewal is required to restore volunteer privileges. Shift cancellation alone never removes the role. Role removal clears active assignments and their occupied capacity; historical records follow retention policy. Shift approval remains with the scheduling owner.
 **Related Use Cases:** `UC-ADM-review-volunteer-request`, `UC-ADM-grant-volunteer-access`, `UC-IDV-verify-affiliation`
 **Assumptions:** Any later role grant requires a new explicit administrator decision.
-**Open Issues:** `OI-18`.
+**Open Issues:** `OI-18`, `OI-22`.
 
 ---
 ## Area: Shopping-Abuse Monitoring (`ABU`)
