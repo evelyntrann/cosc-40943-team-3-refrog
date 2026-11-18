@@ -115,22 +115,160 @@ else if (form.Options is { } options)
             </div>
         }
     </section>
+
+    <section aria-labelledby="shifts-heading">
+        <h2 id="shifts-heading">Shifts</h2>
+        <p class="hint">Review a change to see which volunteers it affects before you confirm it.</p>
+
+        @if (changes.Confirmation is { } confirmation)
+        {
+            <p class="saved" role="status">@confirmation</p>
+        }
+
+        @if (changes.Selected is null && changes.Error is { } notice)
+        {
+            <p class="form-alert" role="alert">@notice.Message</p>
+        }
+
+        @if (changes.LoadError is { } shiftsError)
+        {
+            <p class="form-alert" role="alert">@shiftsError.Message</p>
+        }
+        else if (changes.Shifts.Count == 0)
+        {
+            <p>No shifts have been created yet.</p>
+        }
+
+        <ul class="locations">
+            @foreach (var listed in changes.Shifts)
+            {
+                <li>
+                    <h3>@listed.LocationName</h3>
+                    <p class="hint">@When(listed)</p>
+                    <p class="hint">@listed.HeldCount of @listed.RequiredCount volunteers signed up</p>
+                    <div class="inline-field">
+                        <button type="button" disabled="@changes.Busy" @onclick="() => changes.BeginEdit(listed)">Edit</button>
+                        <button type="button" class="secondary" disabled="@changes.Busy" @onclick="() => changes.BeginRemovalAsync(listed)">Remove</button>
+                    </div>
+
+                    @if (changes.Selected?.ShiftId == listed.ShiftId)
+                    {
+                        <div class="change-panel">
+                            @if (!changes.Removing)
+                            {
+                                <div class="field-group">
+                                    <label for="change-location">Location</label>
+                                    <select id="change-location" @bind="changes.LocationChoice">
+                                        @foreach (var location in options.Locations)
+                                        {
+                                            <option value="@location.LocationId">@location.Name @(location.Status == "CLOSED" ? "(closed)" : "")</option>
+                                        }
+                                    </select>
+                                    <FieldMessage Text="@changes.FieldError("locationId")" />
+                                </div>
+
+                                <div class="field-group">
+                                    <label for="change-date">Date</label>
+                                    <input id="change-date" type="date" value="@changes.Date" @onchange="e => changes.Date = e.Value?.ToString() ?? string.Empty" />
+                                    <FieldMessage Text="@changes.FieldError("date")" />
+                                </div>
+
+                                <div class="field-group">
+                                    <label for="change-start">Start time</label>
+                                    <input id="change-start" type="time" value="@changes.StartTime" @onchange="e => changes.StartTime = e.Value?.ToString() ?? string.Empty" />
+                                    <FieldMessage Text="@changes.FieldError("startTime")" />
+                                </div>
+
+                                <div class="field-group">
+                                    <label for="change-end">End time</label>
+                                    <input id="change-end" type="time" value="@changes.EndTime" @onchange="e => changes.EndTime = e.Value?.ToString() ?? string.Empty" />
+                                    <FieldMessage Text="@changes.FieldError("endTime")" />
+                                </div>
+
+                                <div class="field-group">
+                                    <label for="change-count">Volunteers needed</label>
+                                    <input id="change-count" type="number" min="1" @bind="changes.RequiredCount" />
+                                    <FieldMessage Text="@changes.FieldError("requiredCount")" />
+                                </div>
+
+                                <button type="button" disabled="@changes.Busy" @onclick="changes.ReviewAsync">@(changes.Busy ? "Checking…" : "Review change")</button>
+                            }
+
+                            @if (changes.Error is { } changeError)
+                            {
+                                <p class="form-alert" role="alert">@changeError.Message</p>
+                            }
+
+                            @if (changes.Impact is { } impact)
+                            {
+                                <div role="status">
+                                    @if (impact.AffectedVolunteers.Count == 0)
+                                    {
+                                        <p>No volunteers are signed up for this shift.</p>
+                                    }
+                                    else
+                                    {
+                                        <p><strong>Affected volunteers</strong></p>
+                                        <ul class="affected">
+                                            @foreach (var volunteer in impact.AffectedVolunteers)
+                                            {
+                                                <li>@(volunteer.Email ?? "Account no longer available"): @ShiftChangeForm.StatusLabel(volunteer.Status)</li>
+                                            }
+                                        </ul>
+                                    }
+                                </div>
+
+                                @if (changes.RefusalMessage is { } refusal)
+                                {
+                                    <p class="form-alert" role="alert">@refusal</p>
+                                }
+                            }
+
+                            <div class="inline-field">
+                                @if (changes.CanConfirm)
+                                {
+                                    <button type="button" @onclick="changes.ConfirmAsync">@(changes.Removing ? "Confirm removal" : "Confirm change")</button>
+                                }
+                                <button type="button" class="secondary" disabled="@changes.Busy" @onclick="changes.Cancel">Cancel</button>
+                            </div>
+                        </div>
+                    }
+                </li>
+            }
+        </ul>
+    </section>
 }
 
 @code {
     private ShiftAdminForm form = null!;
+    private ShiftChangeForm changes = null!;
     private bool loading = true;
 
     protected override async Task OnInitializedAsync()
     {
         form = new ShiftAdminForm(Http);
+        changes = new ShiftChangeForm(Http);
         await form.LoadAsync();
+        if (form.Options is not null)
+        {
+            await changes.LoadAsync();
+        }
+
         loading = false;
     }
 
-    private Task SubmitAsync() => form.SubmitAsync();
+    private async Task SubmitAsync()
+    {
+        if (await form.SubmitAsync())
+        {
+            await changes.LoadAsync();
+        }
+    }
 
     private Task SaveDefaultAsync(Guid locationId) => form.SaveDefaultAsync(locationId);
+
+    private static string When(ManagedShift shift) =>
+        $"{EventTime.FormatInstant(shift.StartsAt)} to {EventTime.FormatTime(TimeOnly.FromDateTime(EventTime.ToEventLocal(shift.EndsAt).DateTime))}";
 
     private static string Hours(ShiftOptionsLocation location) =>
         location.OperatingHours.Count == 0
