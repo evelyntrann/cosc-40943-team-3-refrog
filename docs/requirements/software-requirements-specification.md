@@ -855,6 +855,13 @@ _Example: `AVL-uptime`: The system shall be available 99% of the time during the
 
 - `AVL-event-hours`: The system shall be available during the recruitment period and all published ReFrog event operating hours, subject to the approved availability target.
 - `AVL-uptime`: The system shall maintain at least 99 percent availability during the volunteer-recruitment period and finals-week event period, excluding approved maintenance windows.
+  - **SLI:** good probes ÷ all attempted probes of `GET /api/v1/info/event`, sent once per minute by a process outside the application. A good probe receives `200`, `application/json`, a known event status, and no error within three seconds.
+  - **Window:** the volunteer-recruitment period and finals-week event period, excluding approved maintenance windows. The exact dates are open under `OI-33`.
+  - **Target:** at least 99 percent of probes are good over the window.
+  - **Error budget:** 1 percent of probes, which is about 14 minutes per day of the window at one probe per minute.
+  - **Current measured value:** 100 percent (20 of 20 probes) from 9:12 a.m. to 9:31 a.m. on November 18, 2026. This is a limited local measurement, not production availability: ReFrog is not deployed, so the probe measured `v0.2.0` running on one development machine, outside the requirement's window.
+  - **Source:** [availability-probes.csv](../operations/slo-evidence/availability-probes.csv), recorded by [availability-slo.sh](../../scripts/availability-slo.sh). The method and the proof that the probe can fail are in [availability-slo.md](../operations/availability-slo.md).
+  - **What it misses:** network, DNS, TLS, and hosting failures; outages shorter than one minute; every workflow other than reading event information; real users and peak load; and any time outside the 20-minute sample.
 - `AVL-maintenance-window`: The system shall not schedule routine maintenance during published event operating hours.
 - `AVL-fallback-information`: Before each event, the system shall allow administrators to obtain an accessible backup of schedules, location information, and attendance procedures for use during an outage.
 - `AVL-outage-recovery`: The system shall restore essential scheduling and event-information functions within 30 minutes of a service interruption.
