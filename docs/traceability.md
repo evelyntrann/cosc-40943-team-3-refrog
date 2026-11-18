@@ -77,11 +77,11 @@ Release values follow the course's release plan: `v0.1.0` is the proving slice (
 |---|---|---|---|---|---|---|
 | `UC-AUTH-register-account` | [design/AUTH.md](design/AUTH.md#uc-auth-register-account) | v0.1.0 | 🟡 In progress | `src/Backend/ReFrog.Server/Features/Authentication/`, `src/Frontend/ReFrog.Client/Features/Authentication/` | `tests/ReFrog.Server.Tests/Authentication/`, `tests/ReFrog.Client.Tests/Authentication/` | 🟡 Partial: 53 tests pass against SQL Server 2022 (2026-11-06). The HTTP sign-in refusal waits for `UC-AUTH-sign-in`, cross-purpose codes through the API wait for `UC-IDV-verify-affiliation`, and a rendered Blazor component test needs a component-testing package approved |
 | `UC-AUTH-sign-in` | [design/AUTH.md](design/AUTH.md#uc-auth-sign-in-and-sign-out) | v0.1.0 | 📐 Designed | | | |
-| `UC-AUTH-recover-account` | [design/AUTH.md](design/AUTH.md#uc-auth-recover-account) | v0.1.0 | 📐 Designed | | | |
+| `UC-AUTH-recover-account` | [design/AUTH.md](design/AUTH.md#uc-auth-recover-account) | v0.1.0 | 🟡 In progress | `AuthDbContext.RecoveryRequests`, `20261118120000_RecoveryRequests` | `RecoverySchemaTests`: ownership, destination/time index, token-free columns, migration SQL/model consistency, SQL Server persistence and rejected orphan | 🟡 Partial: schema tests pass; main flow, extensions 4a/4b/5a/6a/6b, limits, sessions, password storage, and log redaction await API/client implementation |
 | `FR-AUTH-account-signup` | [design/AUTH.md](design/AUTH.md) | v0.1.0 | 📐 Designed | | | |
 | `FR-AUTH-password-policy` | [design/AUTH.md](design/AUTH.md) | v0.1.0 | 📐 Designed | | | |
 | `FR-AUTH-session-policy` | [design/AUTH.md](design/AUTH.md) | v0.1.0 | 📐 Designed | | | |
-| `FR-AUTH-password-recovery` | [design/AUTH.md](design/AUTH.md) | v0.1.0 | 📐 Designed | | | |
+| `FR-AUTH-password-recovery` | [design/AUTH.md](design/AUTH.md) | v0.1.0 | 🟡 In progress | `AuthDbContext.RecoveryRequests`, `20261118120000_RecoveryRequests` | `RecoverySchemaTests` | 🟡 Partial: schema verified against SQL Server; recovery behavior pending |
 | `UC-IDV-verify-affiliation` | [design/IDV.md](design/IDV.md#uc-idv-verify-affiliation-verifying-shopping-eligibility) | v0.1.0 | 📐 Designed | | | |
 | `FR-AUTH-affiliation-from-signin` | [design/IDV.md](design/IDV.md) | v0.1.0 | 📐 Designed | | | |
 | `FR-AUTH-verification-code` | [design/AUTH.md](design/AUTH.md) | v0.1.0 | 📐 Designed | | | |
