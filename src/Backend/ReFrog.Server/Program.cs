@@ -36,7 +36,8 @@ var logUnexpected = LoggerMessage.Define(LogLevel.Error, new EventId(7902, "Unex
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api/v1/auth") ||
-        context.Request.Path.Equals("/api/v1/me/session"))
+        context.Request.Path.Equals("/api/v1/me/session") ||
+        context.Request.Path.Equals("/reset-password"))
     {
         context.Response.Headers.CacheControl = "no-store";
         context.Response.Headers.Pragma = "no-cache";
@@ -76,6 +77,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapRegistrationEndpoints();
 app.MapSessionEndpoints();
+app.MapRecoveryEndpoints();
 app.MapInfoEndpoints();
 app.MapAdminShiftEndpoints();
 app.Map("/api/{**path}", () => Results.Json(ApiResponse.Failure<object>(

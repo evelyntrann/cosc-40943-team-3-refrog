@@ -116,6 +116,10 @@ classDiagram
 
 `AuthCookieValidation` validates the security stamp and rebuilds current roles on every request, including when the injected clock has not advanced. It preserves the existing cookie expiry and lets the cookie handler apply its configured renewal policy. Failed state reads produce `503 AUTHENTICATION_UNAVAILABLE` without clearing the cookie (§8.2.1). `SessionFlowTests` covers immediate stamp invalidation, current roles, ordinary absolute expiry, and unavailable-state retry.
 
+`IRecoveryRepository` is implemented by `EfRecoveryRepository`. Recovery requests hold a serializable transaction and obtain the matching account's write lock through a no-op EF conditional update before checking accepted-delivery history and invoking the delivery callback. Refused and unconfirmed sends roll back; accepted sends add a `RecoveryRequest`. Password resets use Identity's password validators and optimistic account concurrency inside one transaction, including its security-stamp rotation. Concurrent resets have one winner.
+
+Deployment configuration supplies `Authentication:PublicBaseUrl`, the trusted HTTPS application base URL used for recovery links. Request host headers never supply that origin. An absent or invalid value prevents dispatch and logs a safe operational failure while preserving the public acknowledgement. The `/reset-password` link carries email and token in its fragment, which is read into client memory and removed from browser history before submission. Tokens do not cross the HTTP URL/logging boundary. The public response is `RecoveryAcknowledgement(message)`; reset completion is `PasswordResetResponse(passwordChanged)` in the shared envelope. Signed-in callers receive `403 ALREADY_SIGNED_IN` on both recovery operations.
+
 AUTH establishes the architecture §8.2.3 envelope used by every area:
 
 ```text

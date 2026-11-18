@@ -61,6 +61,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAdministratorSignInAudit, EfAdministratorSignInAudit>();
         services.AddScoped<RegistrationService>();
         services.AddScoped<SessionService>();
+        services.AddScoped<IRecoveryRepository, EfRecoveryRepository>();
+        services.AddScoped<RecoveryService>();
         services.AddDbContext<InfoDbContext>(options =>
             InfoDbContext.Configure(options, configuration.GetConnectionString("ReFrog")));
         services.AddScoped<IEventInfoStore, EfEventInfoStore>();
