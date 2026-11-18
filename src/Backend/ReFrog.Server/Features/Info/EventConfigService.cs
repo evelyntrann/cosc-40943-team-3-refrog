@@ -15,6 +15,12 @@ public interface IEventConfigStore
     /// <summary>The one event whose status is PLANNED or ACTIVE, or null.</summary>
     Task<ConfiguredEvent?> FindCurrentEventAsync(CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The current event under a selector lock held until the caller's shared transaction ends. The empty selector
+    /// is locked too, so a concurrent event cannot become current while the caller completes its operation.
+    /// </summary>
+    Task<ConfiguredEvent?> LockCurrentEventAsync(CancellationToken cancellationToken);
+
     Task<ConfiguredEvent?> FindEventAsync(Guid eventId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<ConfiguredLocation>> ListLocationsAsync(Guid eventId, CancellationToken cancellationToken);
@@ -29,6 +35,13 @@ public sealed class EventConfigService(IEventConfigStore store)
     /// <summary>The current event: the one event whose status is PLANNED or ACTIVE, or null when there is none.</summary>
     public Task<ConfiguredEvent?> GetCurrentEventAsync(CancellationToken cancellationToken) =>
         store.FindCurrentEventAsync(cancellationToken);
+
+    /// <summary>
+    /// The current event under a lock held until the caller's <c>SqlUnitOfWork</c> transaction ends. Throws when
+    /// the caller has not opened that transaction.
+    /// </summary>
+    public Task<ConfiguredEvent?> GetCurrentEventForUpdateAsync(CancellationToken cancellationToken) =>
+        store.LockCurrentEventAsync(cancellationToken);
 
     /// <summary>Any event by id, or null when it does not exist.</summary>
     public Task<ConfiguredEvent?> FindEventAsync(Guid eventId, CancellationToken cancellationToken) =>
