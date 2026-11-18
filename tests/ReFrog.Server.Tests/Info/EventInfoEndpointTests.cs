@@ -191,6 +191,16 @@ public sealed class EventInfoEndpointTests
             var fixture = new InfoFixture(factory, client);
             try
             {
+                // The app-scoped InfoDbContext now uses SqlUnitOfWork's existing DbConnection. Bootstrap this
+                // isolated fixture's database through the design-time connection-string path first; production
+                // migration applies AUTH first, which creates the shared database before INF joins it.
+                var options = new DbContextOptionsBuilder<InfoDbContext>();
+                InfoDbContext.Configure(options, builder.ConnectionString);
+                await using (var bootstrap = new InfoDbContext(options.Options))
+                {
+                    await bootstrap.Database.MigrateAsync();
+                }
+
                 await using var scope = factory.Services.CreateAsyncScope();
                 await scope.ServiceProvider.GetRequiredService<InfoDbContext>().Database.MigrateAsync();
                 return fixture;
