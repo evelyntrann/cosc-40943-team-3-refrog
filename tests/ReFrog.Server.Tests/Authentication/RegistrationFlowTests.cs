@@ -376,6 +376,43 @@ public sealed partial class RegistrationFlowTests
     }
 
     [TestMethod]
+    public async Task ThrowingEmailProviderReportsUnavailableWithoutLeakingOrSendingTwice()
+    {
+        await using var fixture = await RegistrationFixture.CreateAsync();
+        fixture.Email.ThrowOnSend = true;
+        var request = new StartRegistrationRequest("person@example.org", "Password1!", Guid.NewGuid());
+
+        var failed = await fixture.Client.PostAsJsonAsync("/api/v1/auth/registrations", request);
+        var replayed = await fixture.Client.PostAsJsonAsync("/api/v1/auth/registrations", request);
+
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, failed.StatusCode);
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, replayed.StatusCode);
+        Assert.IsFalse(failed.Headers.Contains("Set-Cookie"));
+        var body = await failed.Content.ReadFromJsonAsync<ApiResponse<RegistrationChallengeResponse>>();
+        var replayBody = await replayed.Content.ReadFromJsonAsync<ApiResponse<RegistrationChallengeResponse>>();
+        var error = body?.Error;
+        Assert.IsNotNull(error);
+        Assert.AreEqual("EMAIL_NOT_SENT", error.Code);
+        Assert.AreEqual(error.Code, replayBody?.Error?.Code);
+        Assert.AreEqual("The verification message could not be confirmed. Try again when allowed.",
+            error.Message);
+        Assert.IsNull(body?.Data);
+        Assert.AreEqual(1, fixture.Email.Count);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+        Assert.AreEqual(1, await db.PendingRegistrations.CountAsync());
+        Assert.AreEqual("PENDING", await db.PendingRegistrations.Select(item => item.State).SingleAsync());
+        Assert.AreEqual(0, await db.Users.CountAsync());
+        Assert.AreEqual("UNKNOWN", await db.VerificationChallenges
+            .Select(challenge => challenge.SendOutcome).SingleAsync());
+        var logs = string.Join(' ', fixture.Logs.Messages);
+        foreach (var secret in new[] { request.Email, request.Password, fixture.Email.LastCode, "provider-sensitive-detail" })
+        {
+            Assert.IsFalse(logs.Contains(secret, StringComparison.Ordinal), "Failure log exposed test data.");
+        }
+    }
+
+    [TestMethod]
     public async Task CompletedCodeCannotBeReused()
     {
         await using var fixture = await RegistrationFixture.CreateAsync();
@@ -639,6 +676,7 @@ public sealed partial class RegistrationFlowTests
     private sealed class CaptureEmailSender : IEmailSender
     {
         public EmailDeliveryOutcome Outcome { get; set; } = EmailDeliveryOutcome.Accepted;
+        public bool ThrowOnSend { get; set; }
         public int Count { get; private set; }
         public string LastCode { get; private set; } = string.Empty;
 
@@ -649,6 +687,11 @@ public sealed partial class RegistrationFlowTests
             Count++;
             LastCode = CodePattern().Match(message.PlainTextBody).Value;
             LastDestination = message.Destination;
+            if (ThrowOnSend)
+            {
+                throw new InvalidOperationException($"provider-sensitive-detail {message.Destination} {LastCode}");
+            }
+
             return Task.FromResult(Outcome);
         }
     }
