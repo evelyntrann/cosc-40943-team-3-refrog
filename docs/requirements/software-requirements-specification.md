@@ -246,11 +246,13 @@ Five consecutive failed password attempts for a registered account shall produce
 
 Account recovery shall return the same public acknowledgement for registered and unregistered emails. For a registered account, the system shall send a one-time password-reset link that expires 30 minutes after server-side issuance. A successful reset shall atomically replace the password, consume the reset token, and invalidate all earlier sessions. An invalid, expired, or reused token shall change neither password nor session state.
 
+Password reset shall display `FR-AUTH-password-policy` before submission and require two matching entries of the new password. A confirmation mismatch shall identify the confirmation field and leave the reset token available for correction.
+
 Accepted recovery messages to one normalized destination email shall be at least 60 seconds apart, with at most five accepted messages in any rolling hour. Refused, unknown-account, and failed-delivery requests shall return the same public acknowledgement and shall not disclose account existence, throttling, or delivery outcome. These recovery limits are separate from `FR-AUTH-verification-limits`, which governs six-digit registration and affiliation codes.
 
-**Verification:** Compare public responses for known, unknown, throttled, and failed-delivery recovery requests; confirm only registered accounts receive links. With a fixed clock, accept a recovery send at 60 seconds but not 59, accept five sends in a rolling hour but not a sixth, accept a reset token immediately before 30 minutes and reject it at 30 minutes, confirm a token works once, confirm a successful reset invalidates old credentials and sessions, and simulate a failed password write to confirm the old password and sessions remain valid.
+**Verification:** Compare public responses for known, unknown, throttled, and failed-delivery recovery requests; confirm only registered accounts receive links. With a fixed clock, accept a recovery send at 60 seconds but not 59, accept five sends in a rolling hour but not a sixth, accept a reset token immediately before 30 minutes and reject it at 30 minutes, confirm a token works once, confirm a successful reset invalidates old credentials and sessions, and simulate a failed password write to confirm the old password and sessions remain valid. Confirm the page displays the password policy before submission and the server rejects missing or mismatched confirmation, including case differences, without consuming the token.
 
-**Source:** Team decision, November 4, 2026; not a client business rule.
+**Source:** Team decision, November 4, 2026; not a client business rule. Password confirmation and visible policy guidance added by developer request on November 18, 2026.
 
 **`FR-AUTH-affiliation-from-signin`**
 

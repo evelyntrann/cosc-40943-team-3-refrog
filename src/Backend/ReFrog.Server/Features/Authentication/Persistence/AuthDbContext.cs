@@ -65,6 +65,15 @@ public sealed class AdministratorSignInAudit
     public bool Succeeded { get; set; }
 }
 
+public sealed class RecoveryRequest
+{
+    public Guid Id { get; set; }
+    public Guid AccountId { get; set; }
+    public AuthAccount Account { get; set; } = null!;
+    public required string NormalizedEmail { get; set; }
+    public DateTimeOffset AcceptedAt { get; set; }
+}
+
 public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options)
     : IdentityDbContext<AuthAccount, IdentityRole<Guid>, Guid>(options)
 {
@@ -73,6 +82,7 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options)
     public DbSet<VerificationFailure> VerificationFailures => Set<VerificationFailure>();
     public DbSet<TcuEmailVerification> TcuEmailVerifications => Set<TcuEmailVerification>();
     public DbSet<AdministratorSignInAudit> AdministratorSignInAudits => Set<AdministratorSignInAudit>();
+    public DbSet<RecoveryRequest> RecoveryRequests => Set<RecoveryRequest>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -131,6 +141,16 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options)
             entity.HasKey(item => item.Id);
             entity.HasIndex(item => new { item.AccountId, item.OccurredAt });
             entity.Property(item => item.OccurredAt).HasColumnType("datetimeoffset");
+        });
+
+        builder.Entity<RecoveryRequest>(entity =>
+        {
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.NormalizedEmail).HasMaxLength(256);
+            entity.Property(item => item.AcceptedAt).HasColumnType("datetimeoffset");
+            entity.HasIndex(item => new { item.NormalizedEmail, item.AcceptedAt });
+            entity.HasOne(item => item.Account).WithMany().HasForeignKey(item => item.AccountId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

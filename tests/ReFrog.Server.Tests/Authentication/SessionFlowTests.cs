@@ -130,6 +130,79 @@ public sealed class SessionFlowTests
         Assert.DoesNotContain("Password1!", raw, StringComparison.Ordinal);
     }
 
+    [TestMethod]
+    public async Task ChangedSecurityStampRejectsCookieEvenWhenClockHasNotAdvanced()
+    {
+        await using var fixture = await SessionFixture.CreateAsync();
+        await fixture.CreateAccountAsync("person@example.org", "Password1!");
+        using var signedIn = await fixture.SignInAsync("person@example.org", "Password1!");
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var accounts = scope.ServiceProvider.GetRequiredService<UserManager<AuthAccount>>();
+            var account = await accounts.FindByEmailAsync("person@example.org");
+            Assert.IsNotNull(account);
+            Assert.IsTrue((await accounts.UpdateSecurityStampAsync(account)).Succeeded);
+        }
+
+        using var current = await fixture.Client.GetAsync("/api/v1/me/session");
+        Assert.AreEqual(HttpStatusCode.Unauthorized, current.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task CookieValidationPreservesOrdinaryAbsoluteExpiryAndReadsCurrentRoles()
+    {
+        await using var fixture = await SessionFixture.CreateAsync();
+        await fixture.CreateAccountAsync("admin@tcu.edu", "Password1!", isAdministrator: true);
+        using var signedIn = await fixture.SignInAsync("admin@tcu.edu", "Password1!");
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var accounts = scope.ServiceProvider.GetRequiredService<UserManager<AuthAccount>>();
+            var account = await accounts.FindByEmailAsync("admin@tcu.edu");
+            Assert.IsNotNull(account);
+            Assert.IsTrue((await accounts.RemoveFromRoleAsync(account, "Administrator")).Succeeded);
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/me/session");
+        request.Headers.Add("Cookie", SessionCookie(signedIn).Split(';')[0]);
+        using var response = await fixture.Client.SendAsync(request);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var current = await response.Content.ReadFromJsonAsync<ApiResponse<CurrentSessionResponse>>();
+        Assert.IsFalse(current?.Data?.IsAdministrator);
+
+        using var ordinary = fixture.Factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost/"),
+        });
+        await fixture.CreateAccountAsync("person@example.org", "Password1!");
+        using var ordinarySignIn = await ordinary.PostAsJsonAsync("/api/v1/auth/session", new SignInRequest("person@example.org", "Password1!"));
+        fixture.Clock.Advance(TimeSpan.FromDays(29));
+        using var beforeExpiry = await ordinary.GetAsync("/api/v1/me/session");
+        Assert.AreEqual(HttpStatusCode.OK, beforeExpiry.StatusCode);
+        Assert.IsFalse(beforeExpiry.Headers.Contains("Set-Cookie"));
+        fixture.Clock.Advance(TimeSpan.FromDays(1) + TimeSpan.FromSeconds(1));
+        using var expired = await ordinary.GetAsync("/api/v1/me/session");
+        Assert.AreEqual(HttpStatusCode.Unauthorized, expired.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task UnavailableCookieStateReturnsRetryableFailureAndPreservesTheCookie()
+    {
+        await using var fixture = await SessionFixture.CreateAsync();
+        await fixture.CreateAccountAsync("person@example.org", "Password1!");
+        using var signedIn = await fixture.SignInAsync("person@example.org", "Password1!");
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+        await db.Database.ExecuteSqlRawAsync("EXEC sp_rename 'AspNetUsers.SecurityStamp', 'UnavailableStamp', 'COLUMN'");
+        using var unavailable = await fixture.Client.GetAsync("/api/v1/me/session");
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, unavailable.StatusCode);
+        Assert.IsFalse(unavailable.Headers.Contains("Set-Cookie"));
+        var answer = await unavailable.Content.ReadFromJsonAsync<ApiResponse<CurrentSessionResponse>>();
+        Assert.AreEqual("AUTHENTICATION_UNAVAILABLE", answer?.Error?.Code);
+        await db.Database.ExecuteSqlRawAsync("EXEC sp_rename 'AspNetUsers.UnavailableStamp', 'SecurityStamp', 'COLUMN'");
+        using var retry = await fixture.Client.GetAsync("/api/v1/me/session");
+        Assert.AreEqual(HttpStatusCode.OK, retry.StatusCode);
+    }
+
     private static async Task<string> ErrorBody(HttpResponseMessage response)
     {
         var body = await response.Content.ReadFromJsonAsync<ApiResponse<SignInResponse>>();

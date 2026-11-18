@@ -31,6 +31,7 @@ public static class ServiceCollectionExtensions
             options.Password.RequireDigit = true;
             options.Password.RequireNonAlphanumeric = true;
             options.User.RequireUniqueEmail = true;
+            options.Tokens.PasswordResetTokenProvider = RecoveryTokenProvider.ProviderName;
             // The user name is the verified email, which registration already validates
             // (FR-AUTH-account-signup: any domain), so Identity's narrower character list must not apply.
             options.User.AllowedUserNameCharacters = string.Empty;
@@ -41,7 +42,8 @@ public static class ServiceCollectionExtensions
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<AuthDbContext>()
             .AddSignInManager()
-            .AddDefaultTokenProviders();
+            .AddDefaultTokenProviders()
+            .AddTokenProvider<RecoveryTokenProvider>(RecoveryTokenProvider.ProviderName);
 
         services.AddAuthentication(IdentityConstants.ApplicationScheme)
             .AddCookie(IdentityConstants.ApplicationScheme, options =>
@@ -51,7 +53,7 @@ public static class ServiceCollectionExtensions
                 options.Cookie.SameSite = SameSiteMode.Lax;
                 options.ExpireTimeSpan = TimeSpan.FromDays(30);
                 options.SlidingExpiration = true;
-                options.Events.OnValidatePrincipal = SecurityStampValidator.ValidatePrincipalAsync;
+                options.Events.OnValidatePrincipal = AuthCookieValidation.ValidateAsync;
             });
         services.Configure<SecurityStampValidatorOptions>(options => options.ValidationInterval = TimeSpan.Zero);
         services.AddSingleton<IPostConfigureOptions<CookieAuthenticationOptions>, CookieTimeProviderConfiguration>();
@@ -61,6 +63,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAdministratorSignInAudit, EfAdministratorSignInAudit>();
         services.AddScoped<RegistrationService>();
         services.AddScoped<SessionService>();
+        services.AddScoped<IRecoveryRepository, EfRecoveryRepository>();
+        services.AddScoped<RecoveryService>();
         services.AddDbContext<InfoDbContext>(options =>
             InfoDbContext.Configure(options, configuration.GetConnectionString("ReFrog")));
         services.AddScoped<IEventInfoStore, EfEventInfoStore>();

@@ -39,7 +39,8 @@ var logUnexpected = LoggerMessage.Define(LogLevel.Error, new EventId(7902, "Unex
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api/v1/auth") ||
-        context.Request.Path.Equals("/api/v1/me/session"))
+        context.Request.Path.Equals("/api/v1/me/session") ||
+        context.Request.Path.Equals("/reset-password"))
     {
         context.Response.Headers.CacheControl = "no-store";
         context.Response.Headers.Pragma = "no-cache";
@@ -48,6 +49,15 @@ app.Use(async (context, next) =>
     try
     {
         await next();
+    }
+    catch (AuthenticationStateUnavailableException)
+    {
+        context.Response.Clear();
+        context.Response.Headers.CacheControl = "no-store";
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await context.Response.WriteAsJsonAsync(ApiResponse.Failure<object>(
+            new ApiError(ApiErrorCategory.Unavailable, "AUTHENTICATION_UNAVAILABLE",
+                "Authentication is temporarily unavailable. Try again.")));
     }
     catch (Exception)
     {
@@ -73,6 +83,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapRegistrationEndpoints();
 app.MapSessionEndpoints();
+app.MapRecoveryEndpoints();
 app.MapInfoEndpoints();
 app.MapAdminShiftEndpoints();
 app.MapVolunteerEndpoints();
