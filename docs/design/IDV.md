@@ -285,7 +285,7 @@ _[Which existing services, components, and conventions this area uses rather tha
 
 _[One row per flow: the main success scenario and **every** extension of every use case this document realizes, appended per use case. Name the level (unit or integration) and what the test asserts. No code. This list is the definition of done that the reviewer approves; the agent writes these tests when it builds, and a reviewer can see at a glance whether an extension has no test.]_
 
-"Unit (front end)" rows are Blazor component tests. "Integration" rows call the endpoints in-process against a real SQL Server (see Reuse & cross-cutting). The tools for both are a build prerequisite (Open questions).
+"Unit (front end)" rows are Blazor component tests. "Integration" rows call the endpoints in-process against a real SQL Server (see Reuse & cross-cutting). Front-end rows use bUnit (architecture §8.2.4); integration rows use the existing real SQL Server test setup.
 
 | Use case, flow | Level | Asserts |
 |---|---|---|
