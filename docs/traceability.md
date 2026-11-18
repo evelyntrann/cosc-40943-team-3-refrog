@@ -109,6 +109,7 @@ Release values follow the course's release plan: `v0.1.0` is the proving slice (
 | `UC-ADM-review-volunteer-request` | | v1.0.0 | ❌ Not started | | | |
 | `UC-ADM-grant-volunteer-access` | | v1.0.0 | ❌ Not started | | | |
 | `UC-ADM-remove-volunteer-access` | | v1.0.0 | ❌ Not started | | | |
+| `UC-ADM-lift-account-restriction` | | v1.0.0 | ❌ Not started | | | |
 | `UC-ADM-view-dashboard` | [design/ADM.md](design/ADM.md) | v1.0.0 | 📐 Designed | | | |
 | `UC-ADM-notify-volunteers` | [design/ADM.md](design/ADM.md) | v1.0.0 | 📐 Designed | | | |
 | `UC-INF-view-event-info` | [design/INF.md](design/INF.md#uc-inf-view-event-info-view-overall-event-dates-and-general-information) | v1.0.0 | ✅ Built | `src/Backend/ReFrog.Server/Features/Info/`, `src/Backend/ReFrog.Shared/Info/`, `src/Frontend/ReFrog.Client/Features/Info/` | `tests/ReFrog.Server.Tests/Info/` (main, 2a, unauthenticated access, invariants, failure), `tests/ReFrog.Client.Tests/Info/` (main, 2a, unavailable and retry) | ✅ Verified: main and 2a pass against SQL Server 2022 (2026-11-13). No rendered-component test; a component-testing package is not approved |
@@ -145,7 +146,7 @@ Team decision with Alexa Mercado, October 16, 2026. This table supplements the t
 | Feature | Areas | Use cases |
 |---|---|---|
 | `FEAT-volunteer-scheduling` | `VOL`, `ADM` | `UC-VOL-request-access`, `UC-ADM-review-volunteer-request` |
-| `FEAT-adminstration` | `ADM` | `UC-ADM-review-volunteer-request`, `UC-ADM-grant-volunteer-access`, `UC-ADM-remove-volunteer-access` |
+| `FEAT-adminstration` | `ADM` | `UC-ADM-review-volunteer-request`, `UC-ADM-grant-volunteer-access`, `UC-ADM-remove-volunteer-access`, `UC-ADM-lift-account-restriction` |
 | `FEAT-identity-verification` | `IDV`, `SHP` | `UC-IDV-verify-affiliation` extension 2b, `UC-SHP-log-item-taken` PRE-1 |
 
 | Business rule | Source | Enforced by |
