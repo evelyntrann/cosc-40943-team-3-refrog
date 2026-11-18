@@ -302,6 +302,16 @@ _Due: Checkpoint 3. [Filled in once your pipeline exists, after week 11. Three t
 
 _Section 4.4 of [vision and scope](../requirements/vision-and-scope.md) says who can operate the system and where its users are. Cite it; this section says how the deployment meets it.]_
 
+### 7.1 Recorded deployment state
+
+| Environment | Application and Web Front End | Database | Delivery and durable state |
+|---|---|---|---|
+| Development | ASP.NET Core serves the Blazor WebAssembly files; see [local setup](../../README.md#running-locally) | Disposable local SQL Server | Developers apply the checked-in EF Core migrations. Database records survive an application restart; in-memory state does not. Mailpit captures development email only |
+| Pull-request CI | GitHub Actions builds the application and runs the checks in [pull-request.yml](../../.github/workflows/pull-request.yml) | Disposable SQL Server service | Checks validate a pull request; this workflow does not deploy it |
+| Production | Not deployed, confirmed by the team on 2026-11-18. EAS is the approved host (`OI-15`, `KD-tcu-it-stack`); an EAS-approved demo environment, deployment procedure, and log-stream location remain to be supplied | EAS-managed SQL Server is the approved destination; no deployed database has been evidenced | Release-to-host steps, restart behavior of platform storage, and operational access remain to be recorded with EAS (`DE-operational-ownership`) |
+
+This records the distinction between the approved hosting responsibility and a demonstrated deployment. A tagged release alone does not establish a deployment. See [vision and scope §4.4](../requirements/vision-and-scope.md#44-deployment-considerations) and the [observability evidence runbook](../operations/observability.md).
+
 ## 8. Crosscutting Concepts
 
 _[arc42 leaves this section an open list of concepts. This template fixes its first entry, 8.1 Security, because Checkpoint 1 asks for the trust boundary; 8.2 holds every other concept.]_
@@ -367,6 +377,26 @@ Due: Checkpoint 1. These conventions apply across all components and remain prov
 **8.2.9 Auditing.** The system shall record successful and unsuccessful administrator authentication attempts and administrator changes to event, schedule, and participant records, consistent with `SEC-audit-log`. The initial release shall not add a separate general-purpose audit subsystem beyond that minimum requirement unless the client or TCU approves the additional scope. Audit records shall not contain secrets or unnecessary sensitive data, and their retention and disposal remain subject to SRS section 7.4 and `OI-6`. Shown in: the administrator audit events and their integration tests.
 
 **8.2.10 Testing.** Automated tests shall cover authentication and authorization, volunteer scheduling, shared validation, data-calculation rules, duplicate-submission behavior, time-zone behavior, persistence failure handling, log redaction, and error notification. Tests shall use representative but non-production data and shall verify both successful and rejected requests. The test framework and exact test-layer split remain provisional until the team records them for `KD-tcu-it-stack`. This supports `MNT-automated-tests`, `MNT-diagnostics`, `MNT-error-notification`, `FR-AUTH-enforce-permissions`, `FR-VAL-server-validation`, `ROB-duplicate-submission`, and `ROB-backup-recovery`. Shown in: the repository test suite and its test-data guidance.
+
+**8.2.11 Operational health, metrics, and availability measurement.** Proposed design for issue [#117](https://github.com/evelyntrann/cosc-40943-team-3-refrog/issues/117); implementation and deployed evidence are pending. This supports `AVL-uptime`, `MNT-diagnostics`, `UC-INF-view-event-info`, `UC-AUTH-register-account`, and `UC-ADM-manage-shifts` without adding a deployable, database, or dependency.
+
+| Proposed endpoint | Access and response | Measurement boundary |
+|---|---|---|
+| `GET /api/v1/health` | Public, minimal readiness result. `200` with shared `ApiResponse` data `{ "status": "healthy" }` only after SQL connectivity succeeds; `503` with category `UNAVAILABLE` and code `HEALTH_UNAVAILABLE` when it fails. Do not expose database names, hosts, credentials, exception text, or participant data. Set `Cache-Control: no-store` | Use the existing EF Core database connection check, without writes. Failure, cancellation, and timeout must not produce healthy. This checks the Application and its database connection; it does not prove schema correctness, the browser workflow, email delivery, or every use case |
+| `GET /api/v1/admin/operations/metrics` | Require current administrator access through the existing `AdminAuthorization` contract before returning the shared success envelope. Reuse its `401`, `403`, and `503` refusals; set `Cache-Control: no-store` | Return UTC `startedAt` and `observedAt`, completed business-API request count, business-API `5xx` count, total business-API elapsed milliseconds, health-check count, and failed-health-check count. Exclude health/metrics requests from business-API totals. Counters are aggregate process memory, reset on restart, and have no account, email, URL, or per-user labels |
+
+Use ASP.NET Core and EF Core already present in the repository, a process-scoped counter service, and injected `TimeProvider`; no monitoring package or provider is selected. Map both routes before the API/SPA fallbacks. These endpoint names and contracts are technical proposals for design review, not evidence that they exist. A separate external observer is needed for `AVL-uptime`: process counters cannot see an unreachable or stopped process, and must not be presented as whole-window availability.
+
+Extend §8.2.7 with structured console events for platform collection: UTC instant, server-generated correlation ID, constant operation name or matched route template, HTTP method, status, elapsed time, stable failure code, and safe exception type when applicable. Return the same correlation ID in `X-Correlation-ID`. Use a fixed fallback operation name for an unmatched route; do not log raw URLs/query strings, bodies, headers, cookies, account identifiers, provider responses, or raw exception messages. Redact at each failure source as well as the request boundary; do not pass raw SMTP/database exceptions to a logger. Keep EF sensitive-data logging disabled. Existing ordinary refusals remain distinct from dependency/unexpected failures. This is operational diagnosis, not an expansion of §8.2.9 auditing. Platform log destination, retention, and automated notification policy remain with `OI-6` and `OI-23`; no recipient or alert threshold is chosen here.
+
+`AVL-uptime` is measured by external readiness observations as described under the requirement and in the [runbook](../operations/observability.md#availability-measurement). The existing target determines the error budget; no new availability target or rolling window is introduced. Exact covered dates, approved maintenance exclusions, observer location, probe cadence, and request deadline require confirmation under `OI-33`. Until configured observations exist, report **not measured**, not an inferred percentage.
+
+| Verification to implement after this design is merged | Evidence required |
+|---|---|
+| Healthy/unavailable readiness | Real test SQL connection gives `200`; a controlled connection failure gives `503 HEALTH_UNAVAILABLE`; neither response is a SPA page or exposes diagnostics; both are uncached |
+| Metrics access and counts | Signed-out and ordinary-user requests are refused, current administrator succeeds, unavailable authorization gives `503`; known successful/failed requests change exact aggregate counts, elapsed time uses a fixed test clock, and a new process starts a new observation period |
+| Useful and private failure logs | Force a dependency exception containing synthetic email/code/token/password text; the correlation ID links the response to a structured event with stable operation/status/code, while those values and raw exception messages appear in neither logs nor responses |
+| Deployed probe can fail | In a non-production deployment, make database readiness unavailable and separately stop the Application; the external observer records each as bad, then records recovery. Find the database-readiness failure by correlation ID in the platform stream and retain redacted evidence |
 
 ## 9. Architecture Decisions
 
@@ -462,6 +492,9 @@ _A risk written as a category ("security", "performance") is not a risk. Write t
 | ID | Type | What could go wrong, and what it breaks | Mitigation or fix | Cites |
 |---|---|---|---|---|
 | _`RISK-payroll-api-unavailable`_ | _Risk_ | _Nobody has seen the Payroll System's interface. If it only accepts a nightly batch file, ordering cannot confirm payment at order time._ | _Ask for the interface document at the next client meeting; build Payment against a stub until then._ | _`DE-payroll-integration`, `OI-4`_ |
+| `DEBT-rendered-component-tests` | Debt | Client form/view-model tests do not verify rendered Blazor controls; a component-testing dependency has not been approved | Obtain the required human dependency confirmation, then add rendered-component coverage for the affected use cases; keep their verification gaps explicit meanwhile | [traceability §4](../traceability.md#4-use-case-to-design-code-and-tests), `UC-AUTH-register-account`, `UC-ADM-manage-shifts`, `UC-INF-view-event-info` |
+| `DEBT-mailpit-ci-test` | Debt | `SendsMessageToMailpitWhenConfigured` is skipped when `MAILPIT_SMTP_HOST` is absent; the PR workflow supplies SQL Server but no Mailpit service, so a green gate does not verify that integration | Record the skipped result; run the existing local Mailpit check or add its CI service after team review. The in-process SMTP test remains separate evidence | [SmtpEmailSenderTests.cs](../../tests/ReFrog.Server.Tests/Authentication/SmtpEmailSenderTests.cs), [PR workflow](../../.github/workflows/pull-request.yml), `UC-AUTH-register-account` |
+| `DEBT-operational-evidence` | Debt | Health/metrics, a platform log failure demonstration, and an observed `AVL-uptime` value are not yet evidenced; documentation and a green CI run cannot establish deployed availability | Merge the §8.2.11 design, implement its tests, resolve `OI-33` settings, and complete the [evidence runbook](../operations/observability.md). Keep measured value unreported until observations exist | `AVL-uptime`, `MNT-diagnostics`, `OI-33`, issue [#117](https://github.com/evelyntrann/cosc-40943-team-3-refrog/issues/117) |
 
 ## 12. Glossary
 
