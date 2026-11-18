@@ -32,6 +32,32 @@ public sealed class AdmSchemaTests
     }
 
     [TestMethod]
+    public async Task ShiftVersionIsSetOnInsertAndChangesOnEveryUpdate()
+    {
+        await using var host = await SqlTestHost.CreateAsync(Now);
+        var shift = Shift(Guid.NewGuid(), 2, 1);
+        await host.WithAsync<AdmDbContext>(db =>
+        {
+            db.Shifts.Add(shift);
+            return db.SaveChangesAsync();
+        });
+        var inserted = await host.WithAsync<AdmDbContext, byte[]>(db =>
+            db.Shifts.AsNoTracking().Where(x => x.Id == shift.Id).Select(x => x.Version).SingleAsync());
+
+        await host.WithAsync<AdmDbContext>(async db =>
+        {
+            var stored = await db.Shifts.SingleAsync(x => x.Id == shift.Id);
+            stored.RequiredCount = 3;
+            await db.SaveChangesAsync();
+        });
+        var updated = await host.WithAsync<AdmDbContext, byte[]>(db =>
+            db.Shifts.AsNoTracking().Where(x => x.Id == shift.Id).Select(x => x.Version).SingleAsync());
+
+        Assert.HasCount(8, inserted);
+        CollectionAssert.AreNotEqual(inserted, updated);
+    }
+
+    [TestMethod]
     public async Task LocationDefaultMustBePositiveAndIsOnePerEventAndLocation()
     {
         await using var host = await SqlTestHost.CreateAsync(Now);

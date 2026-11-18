@@ -18,6 +18,9 @@ public sealed class Shift
     public Guid CreateRequestId { get; set; }
     public Guid CreatedByAccountId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>SQL Server <c>rowversion</c>: changes on every write, so a stale edit can be refused (ADM.md data model).</summary>
+    public byte[] Version { get; set; } = [];
 }
 
 /// <summary>A location's default required volunteer count for one event (<c>UC-ADM-manage-shifts</c> Associated Information).</summary>
@@ -64,6 +67,7 @@ public sealed class AdmDbContext(DbContextOptions<AdmDbContext> options) : DbCon
                 table.HasCheckConstraint("CK_Shift_RequiredCount", "[RequiredCount] > 0");
             });
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.Version).IsRowVersion();
             entity.HasIndex(x => x.CreateRequestId).IsUnique();
             entity.HasIndex(x => new { x.EventId, x.StartsAt });
         });
