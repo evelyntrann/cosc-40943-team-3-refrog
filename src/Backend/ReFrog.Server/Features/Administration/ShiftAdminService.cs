@@ -1,7 +1,9 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using ReFrog.Contracts.Administration;
 using ReFrog.Contracts.Api;
 using ReFrog.Contracts.Time;
+using ReFrog.Server.Features.Authentication;
 using ReFrog.Server.Features.Info;
 using ReFrog.Server.Features.Info.Persistence;
 using ReFrog.Server.Features.Volunteer;
@@ -22,9 +24,16 @@ public sealed class ShiftAdminService(
     IShiftStore store,
     IAdminAuditLog audit,
     IAssignmentQueryService assignments,
+    IAccountEmailDirectory accounts,
     TimeProvider clock,
     ILogger<ShiftAdminService> logger)
 {
+    private const string ChangeUnresolved = "ASSIGNED_SHIFT_CHANGE_UNRESOLVED";
+    private const string CapacityBelowHeld = "CAPACITY_BELOW_HELD";
+
+    private static readonly IReadOnlyDictionary<Guid, int> NoDefaults = new Dictionary<Guid, int>();
+    private static readonly IReadOnlyDictionary<string, string> NoFields = new Dictionary<string, string>();
+
     private static readonly Action<ILogger, string, Exception?> LogEventConfigUnavailable =
         LoggerMessage.Define<string>(LogLevel.Error, new EventId(7203, "EventConfigUnavailable"),
             "Event configuration could not be read ({FailureType})");
@@ -187,6 +196,147 @@ public sealed class ShiftAdminService(
             return ShiftsUnavailable<ShiftListResponse>();
         }
     }
+
+    /// <summary>
+    /// 6a1: who an intended edit or removal would affect and whether it is allowed. Stores nothing; the rules are
+    /// applied again under the shift lock when the change is confirmed.
+    /// </summary>
+    public async Task<AdminReply<ShiftImpactResponse>> AssessChangeAsync(
+        Guid shiftId, string? action, ChangeShiftRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var removal = string.Equals(action, "remove", StringComparison.Ordinal);
+        if (!removal && !string.Equals(action, "edit", StringComparison.Ordinal))
+        {
+            return Invalid<ShiftImpactResponse>(new Dictionary<string, string> { ["action"] = "Choose edit or remove." });
+        }
+
+        if (!IsVersion(request.ExpectedVersion))
+        {
+            return InvalidVersion<ShiftImpactResponse>();
+        }
+
+        try
+        {
+            var (target, refusal) = await FindTargetAsync<ShiftImpactResponse>(shiftId, request.ExpectedVersion, cancellationToken);
+            if (target is null)
+            {
+                return refusal!;
+            }
+
+            var held = await assignments.ListHeldAsync(shiftId, cancellationToken);
+            string? refusalCode;
+            if (removal)
+            {
+                refusalCode = await RemovalRefusalAsync(shiftId, cancellationToken);
+            }
+            else
+            {
+                var edit = CheckEdit(target, request);
+                if (edit.Fields.Count > 0)
+                {
+                    return Invalid<ShiftImpactResponse>(edit.Fields);
+                }
+
+                refusalCode = EditRefusal(edit, held.Count);
+            }
+
+            var emails = await accounts.GetEmailsAsync(held.Select(x => x.VolunteerId).ToList(), cancellationToken);
+            return new(200, ApiResponse.Success(new ShiftImpactResponse(
+                shiftId,
+                target.Shift.Version,
+                held.Count,
+                held.Select(x => new AffectedVolunteer(emails.GetValueOrDefault(x.VolunteerId), x.Status)).ToList(),
+                refusalCode is null,
+                refusalCode)));
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            LogShiftReadUnavailable(logger, exception.GetType().Name, null);
+            return ShiftsUnavailable<ShiftImpactResponse>();
+        }
+    }
+
+    /// <summary>The shift to change: in the current event and still at the version the administrator was shown.</summary>
+    private async Task<(ShiftTarget? Target, AdminReply<T>? Refusal)> FindTargetAsync<T>(
+        Guid shiftId, string expectedVersion, CancellationToken cancellationToken)
+    {
+        var current = await events.GetCurrentEventAsync(cancellationToken);
+        if (current is null)
+        {
+            return (null, NoCurrentEvent<T>());
+        }
+
+        var shift = await store.FindByIdAsync(shiftId, cancellationToken);
+        if (shift is null || shift.EventId != current.Id)
+        {
+            return (null, ShiftNotFound<T>());
+        }
+
+        if (!string.Equals(shift.Version, expectedVersion, StringComparison.OrdinalIgnoreCase))
+        {
+            return (null, VersionStale<T>());
+        }
+
+        var locations = await events.GetLocationsForEventAsync(current.Id, cancellationToken);
+        return (new ShiftTarget(current, shift, locations), null);
+    }
+
+    /// <summary>
+    /// A change that keeps the location, date, and times checks only the count, so a location that has since closed
+    /// or changed its hours does not block it. Any other edit passes the same checks as create (4a).
+    /// </summary>
+    private static ShiftEdit CheckEdit(ShiftTarget target, ChangeShiftRequest request)
+    {
+        var stored = target.Shift;
+        var count = request.RequiredCount ?? stored.RequiredCount;
+        var details = new CreateShiftRequest(
+            stored.CreateRequestId, request.LocationId, request.Date, request.StartTime, request.EndTime, null);
+        if (SameInput(stored, details))
+        {
+            var fields = count > 0
+                ? NoFields
+                : new Dictionary<string, string> { ["requiredCount"] = "Enter a number of volunteers greater than zero." };
+            return new ShiftEdit(fields, true, stored.LocationId, stored.StartsAt, stored.EndsAt, count);
+        }
+
+        var check = Validate(details with { RequiredCount = count }, target.Current, target.Locations, NoDefaults);
+        return new ShiftEdit(check.Fields, false, check.LocationId, check.StartsAt, check.EndsAt, check.RequiredCount);
+    }
+
+    /// <summary>ADM.md "What a change may do": with volunteers held, only the count may change, and never below held.</summary>
+    private static string? EditRefusal(ShiftEdit edit, int heldCount)
+    {
+        if (heldCount == 0)
+        {
+            return null;
+        }
+
+        if (!edit.SameDetails)
+        {
+            return ChangeUnresolved;
+        }
+
+        return edit.RequiredCount < heldCount ? CapacityBelowHeld : null;
+    }
+
+    /// <summary>Any assignment on record blocks removal, including CANCELLED and DENIED history (ADM.md key decision 4).</summary>
+    private async Task<string?> RemovalRefusalAsync(Guid shiftId, CancellationToken cancellationToken) =>
+        await assignments.HasAnyAssignmentAsync(shiftId, cancellationToken) ? ChangeUnresolved : null;
+
+    private static bool IsVersion([NotNullWhen(true)] string? value) =>
+        value is { Length: 16 } && value.All(char.IsAsciiHexDigit);
+
+    private static AdminReply<T> InvalidVersion<T>() => Invalid<T>(new Dictionary<string, string>
+    {
+        ["expectedVersion"] = "Reload the shifts and try again.",
+    });
+
+    private static AdminReply<T> ShiftNotFound<T>() => Failure<T>(404, ApiErrorCategory.Validation, "NOT_FOUND",
+        "That shift was not found. Reload the shifts and try again.");
+
+    private static AdminReply<T> VersionStale<T>() => Failure<T>(409, ApiErrorCategory.Validation, "SHIFT_VERSION_STALE",
+        "This shift changed since you opened it. Review it again before saving.");
 
     private static ManagedShift ToManaged(StoredShift shift, IReadOnlyList<ConfiguredLocation> locations, int heldCount) => new(
         shift.Id,
@@ -389,6 +539,16 @@ public sealed class ShiftAdminService(
 
     private sealed record ShiftCheck(
         IReadOnlyDictionary<string, string> Fields,
+        Guid LocationId,
+        DateTimeOffset StartsAt,
+        DateTimeOffset EndsAt,
+        int RequiredCount);
+
+    private sealed record ShiftTarget(ConfiguredEvent Current, StoredShift Shift, IReadOnlyList<ConfiguredLocation> Locations);
+
+    private sealed record ShiftEdit(
+        IReadOnlyDictionary<string, string> Fields,
+        bool SameDetails,
         Guid LocationId,
         DateTimeOffset StartsAt,
         DateTimeOffset EndsAt,

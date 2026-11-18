@@ -55,3 +55,31 @@ public sealed record ManagedShift(
 
 /// <summary><c>GET /api/v1/admin/shifts</c>: the current event's shifts, earliest first.</summary>
 public sealed record ShiftListResponse(IReadOnlyList<ManagedShift> Shifts);
+
+/// <summary>
+/// An intended edit of a shift (6a). <see cref="ExpectedVersion"/> is the <see cref="ManagedShift.Version"/> the
+/// administrator was shown. The date and times follow <see cref="CreateShiftRequest"/>. Omit
+/// <see cref="RequiredCount"/> to keep the shift's count.
+/// </summary>
+public sealed record ChangeShiftRequest(
+    string? ExpectedVersion,
+    Guid? LocationId,
+    string? Date,
+    string? StartTime,
+    string? EndTime,
+    int? RequiredCount);
+
+/// <summary>A volunteer a change would affect (6a1). <see cref="Email"/> is null if the account no longer exists.</summary>
+public sealed record AffectedVolunteer(string? Email, string Status);
+
+/// <summary>
+/// <c>GET /api/v1/admin/shifts/{shiftId}/impact</c>: who a change would affect and whether it is allowed. When
+/// <see cref="Permitted"/> is false, <see cref="RefusalCode"/> is the error applying the change would return.
+/// </summary>
+public sealed record ShiftImpactResponse(
+    Guid ShiftId,
+    string Version,
+    int HeldCount,
+    IReadOnlyList<AffectedVolunteer> AffectedVolunteers,
+    bool Permitted,
+    string? RefusalCode);

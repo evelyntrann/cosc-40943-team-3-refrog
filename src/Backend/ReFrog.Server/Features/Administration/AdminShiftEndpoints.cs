@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.AspNetCore.Antiforgery;
 using ReFrog.Contracts.Administration;
@@ -40,6 +41,30 @@ public static class AdminShiftEndpoints
             }
 
             return Reply(await service.ListShiftsAsync(cancellationToken));
+        });
+
+        admin.MapGet("/shifts/{shiftId:guid}/impact", async (
+            Guid shiftId, HttpContext context, AdminAuthorization authorization, ShiftAdminService service,
+            CancellationToken cancellationToken) =>
+        {
+            var access = await authorization.RequireAdministratorAsync(context.User);
+            if (!access.Granted)
+            {
+                return Refused<ShiftImpactResponse>(access);
+            }
+
+            var query = context.Request.Query;
+            var badFields = new Dictionary<string, string>();
+            var locationId = ReadLocationId(query, badFields);
+            var requiredCount = ReadRequiredCount(query, badFields);
+            if (badFields.Count > 0)
+            {
+                return InvalidFields<ShiftImpactResponse>(badFields);
+            }
+
+            var request = new ChangeShiftRequest(
+                query["expectedVersion"], locationId, query["date"], query["startTime"], query["endTime"], requiredCount);
+            return Reply(await service.AssessChangeAsync(shiftId, query["action"], request, cancellationToken));
         });
 
         admin.MapPost("/shifts", async (
@@ -85,6 +110,40 @@ public static class AdminShiftEndpoints
         });
 
         return endpoints;
+    }
+
+    private static Guid? ReadLocationId(IQueryCollection query, Dictionary<string, string> badFields)
+    {
+        string? value = query["locationId"];
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        if (Guid.TryParse(value, out var locationId))
+        {
+            return locationId;
+        }
+
+        badFields["locationId"] = "Choose a location.";
+        return null;
+    }
+
+    private static int? ReadRequiredCount(IQueryCollection query, Dictionary<string, string> badFields)
+    {
+        string? value = query["requiredCount"];
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count))
+        {
+            return count;
+        }
+
+        badFields["requiredCount"] = "Enter a whole number of volunteers.";
+        return null;
     }
 
     private static async Task<bool> ValidAntiforgeryAsync(HttpContext context, IAntiforgery antiforgery)
@@ -146,6 +205,10 @@ public static class AdminShiftEndpoints
     private static IResult AntiforgeryInvalid<T>() => Results.Json(
         ApiResponse.Failure<T>(new ApiError(ApiErrorCategory.Validation, "ANTIFORGERY_INVALID", "Refresh the page and try again.")),
         statusCode: StatusCodes.Status400BadRequest);
+
+    private static IResult InvalidFields<T>(IReadOnlyDictionary<string, string> fields) => Results.Json(
+        ApiResponse.Failure<T>(new ApiError(ApiErrorCategory.Validation, "VALIDATION_FAILED", "Check the highlighted fields.", fields)),
+        statusCode: StatusCodes.Status422UnprocessableEntity);
 
     private static IResult InvalidRequest<T>(string? badField) => Results.Json(
         ApiResponse.Failure<T>(new ApiError(ApiErrorCategory.Validation, "VALIDATION_FAILED",
