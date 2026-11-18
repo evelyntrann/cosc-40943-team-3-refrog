@@ -1,0 +1,29 @@
+@page "/recover-account"
+@inject RecoveryForm Form
+
+<PageTitle>Recover account | ReFrog</PageTitle>
+
+<RecoveryPanel Heading="Recover your account">
+    @if (Form.Acknowledgement is not null)
+    {
+        <p role="status">@Form.Acknowledgement.Message</p>
+    }
+
+    <form @onsubmit="Form.RequestAsync" @onsubmit:preventDefault>
+        <label for="recovery-email">Email address</label>
+        <input id="recovery-email" type="email" autocomplete="email" @bind="Form.Email"
+               aria-describedby="recovery-email-error" required />
+        @if (Form.FieldError("email") is { } emailError)
+        {
+            <p id="recovery-email-error" class="field-error" role="alert">@emailError</p>
+        }
+        <button type="submit" disabled="@Form.Busy">@(Form.Busy ? "Requesting link…" : "Request reset link")</button>
+    </form>
+
+    @if (Form.Error is not null)
+    {
+        <p role="alert">@Form.Error.Message</p>
+    }
+
+    <p><a href="sign-in">Return to sign-in</a></p>
+</RecoveryPanel>

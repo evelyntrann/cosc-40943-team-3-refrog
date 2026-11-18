@@ -1,0 +1,73 @@
+.recovery-panel {
+  background: #fff;
+  border: 1px solid #e2dde5;
+  border-radius: 1.1rem;
+  box-sizing: border-box;
+  color: #302638;
+  margin: 2rem auto;
+  max-width: 28rem;
+  padding: clamp(1.25rem, 6vw, 2.25rem);
+  width: 100%;
+}
+
+h1 {
+  color: #241b2f;
+  font-size: 1.8rem;
+  margin: 0 0 1.5rem;
+}
+
+.recovery-panel ::deep form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.recovery-panel ::deep label {
+  font-weight: 700;
+}
+
+.recovery-panel ::deep input {
+  border: 1px solid #aaa1b0;
+  border-radius: 0.65rem;
+  box-sizing: border-box;
+  font: inherit;
+  min-height: 3rem;
+  padding: 0.7rem;
+  width: 100%;
+}
+
+.recovery-panel ::deep input:focus {
+  border-color: #4d1979;
+  outline: 2px solid #4d1979;
+  outline-offset: 2px;
+}
+
+.recovery-panel ::deep button {
+  background: #4d1979;
+  border: 1px solid #4d1979;
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  min-height: 3rem;
+  padding: 0.7rem;
+}
+
+.recovery-panel ::deep button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.recovery-panel ::deep p {
+  line-height: 1.5;
+}
+
+.recovery-panel ::deep .field-error,
+.recovery-panel ::deep [role="alert"] {
+  color: #a12622;
+}
+
+.recovery-panel ::deep a {
+  color: #4d1979;
+  font-weight: 700;
+}
