@@ -79,6 +79,8 @@ public static class ServiceCollectionExtensions
             VolDbContext.Configure(options, provider.GetRequiredService<SqlUnitOfWork>().Connection));
         services.AddScoped<IVolStore, EfVolStore>();
         services.AddScoped<IAssignmentQueryService, AssignmentQueryService>();
+        services.AddScoped<VolunteerAuthorization>();
+        services.AddScoped<AssignmentService>();
         if (string.Equals(configuration["Email:Provider"], "MicrosoftGraph", StringComparison.OrdinalIgnoreCase))
         {
             services.AddHttpClient<IEmailSender, MicrosoftGraphEmailSender>();

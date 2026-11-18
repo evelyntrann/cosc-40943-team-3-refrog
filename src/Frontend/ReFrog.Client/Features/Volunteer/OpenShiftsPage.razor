@@ -1,0 +1,103 @@
+@page "/volunteer/shifts"
+@using ReFrog.Contracts.Time
+@using ReFrog.Contracts.Volunteer
+@inject HttpClient Http
+
+<PageTitle>Open shifts | ReFrog</PageTitle>
+
+<h1>Volunteer shift sign-up</h1>
+
+<p class="intro">
+    Select an open shift to sign up. All times are displayed in Central time.
+</p>
+
+@if (form.FeedbackMessage is not null)
+{
+    <div class="alert alert-success" role="status">
+        @form.FeedbackMessage
+    </div>
+}
+
+@if (form.SignUpError is not null)
+{
+    <div class="alert alert-danger" role="alert">
+        @form.SignUpError.Message
+    </div>
+}
+
+@if (form.Loading)
+{
+    <p role="status">Loading open shifts…</p>
+}
+else if (form.LoadError is not null)
+{
+    <div class="alert alert-danger" role="alert">
+        <p>@form.LoadError.Message</p>
+        @if (form.LoadError.Code == "AUTHENTICATION_REQUIRED")
+        {
+            <a href="/sign-in?returnPath=%2Fvolunteer%2Fshifts" class="btn btn-secondary">Sign in</a>
+        }
+        else
+        {
+            <button type="button" class="btn btn-outline" @onclick="form.LoadAsync">Retry</button>
+        }
+    </div>
+}
+else if (form.Shifts.Count == 0)
+{
+    <div class="empty-notice">
+        <p>No shifts are currently open.</p>
+    </div>
+}
+else
+{
+    <div class="shift-grid">
+        @foreach (var shift in form.Shifts)
+        {
+            var startLocal = EventTime.ToEventLocal(shift.StartsAt);
+            var endLocal = EventTime.ToEventLocal(shift.EndsAt);
+            var dateStr = EventTime.FormatDate(DateOnly.FromDateTime(startLocal.DateTime));
+            var timeRangeStr = $"{EventTime.FormatTime(TimeOnly.FromDateTime(startLocal.DateTime))} – {EventTime.FormatTime(TimeOnly.FromDateTime(endLocal.DateTime))}";
+
+            <div class="shift-card @(shift.AssignedToMe ? "assigned" : "")">
+                <div class="shift-header">
+                    <h2>@shift.LocationName</h2>
+                    @if (shift.AssignedToMe)
+                    {
+                        <span class="badge badge-assigned">You are assigned</span>
+                    }
+                </div>
+                <div class="shift-details">
+                    <p class="shift-date"><strong>Date:</strong> @dateStr</p>
+                    <p class="shift-time"><strong>Time:</strong> @timeRangeStr</p>
+                    <p class="shift-slots"><strong>Open slots:</strong> @shift.OpenSlots of @shift.RequiredCount</p>
+                </div>
+                <div class="shift-actions">
+                    @if (shift.AssignedToMe)
+                    {
+                        <button type="button" class="btn btn-disabled" disabled>Already Claimed</button>
+                    }
+                    else
+                    {
+                        <button type="button"
+                                class="btn btn-primary"
+                                disabled="@form.Busy"
+                                @onclick="() => form.SignUpAsync(shift.ShiftId)">
+                            @(form.Busy ? "Saving…" : "Claim Shift")
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private OpenShiftsForm form = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        form = new OpenShiftsForm(Http);
+        await form.LoadAsync();
+    }
+}

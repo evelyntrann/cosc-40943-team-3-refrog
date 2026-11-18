@@ -6,6 +6,7 @@ using ReFrog.Server.Features.Authentication;
 using ReFrog.Server.Features.Authentication.Persistence;
 using ReFrog.Server.Features.Info;
 using ReFrog.Server.Features.Info.Persistence;
+using ReFrog.Server.Features.Volunteer;
 using ReFrog.Server.Features.Volunteer.Persistence;
 using ReFrog.Contracts.Api;
 
@@ -71,6 +72,7 @@ app.MapRegistrationEndpoints();
 app.MapSessionEndpoints();
 app.MapInfoEndpoints();
 app.MapAdminShiftEndpoints();
+app.MapVolunteerEndpoints();
 app.Map("/api/{**path}", () => Results.Json(ApiResponse.Failure<object>(
     new ApiError(ApiErrorCategory.Validation, "NOT_FOUND", "The requested resource was not found.")),
     statusCode: StatusCodes.Status404NotFound));
