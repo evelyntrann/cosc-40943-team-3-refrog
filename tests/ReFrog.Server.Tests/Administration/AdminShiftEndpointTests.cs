@@ -517,6 +517,9 @@ public sealed class AdminShiftEndpointTests
         public Task<ConfiguredEvent?> FindCurrentEventAsync(CancellationToken cancellationToken) =>
             throw new InvalidOperationException("Simulated INF outage.");
 
+        public Task<ConfiguredEvent?> LockCurrentEventAsync(CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Simulated INF outage.");
+
         public Task<ConfiguredEvent?> FindEventAsync(Guid eventId, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("Simulated INF outage.");
 
