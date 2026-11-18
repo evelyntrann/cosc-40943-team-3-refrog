@@ -95,13 +95,13 @@ public sealed class AssignmentService(
             var initialShift = await shiftService.FindByIdAsync(shiftId, cancellationToken);
             if (initialShift is null)
             {
-                return Refuse(404, ApiErrorCategory.ResourceNotFound, "SHIFT_NOT_FOUND", "The requested shift was not found.");
+                return Refuse(404, ApiErrorCategory.Validation, "SHIFT_NOT_FOUND", "The requested shift was not found.");
             }
 
             if (initialShift.StartsAt <= now || (!string.Equals(initialShift.EventStatus, "PLANNED", StringComparison.OrdinalIgnoreCase) &&
                                                  !string.Equals(initialShift.EventStatus, "ACTIVE", StringComparison.OrdinalIgnoreCase)))
             {
-                return Refuse(409, ApiErrorCategory.Conflict, "SHIFT_NOT_OPEN", "This shift is no longer open for sign-up.");
+                return Refuse(409, ApiErrorCategory.Validation, "SHIFT_NOT_OPEN", "This shift is no longer open for sign-up.");
             }
 
             // Begin shared transaction via SqlUnitOfWork
@@ -112,7 +112,7 @@ public sealed class AssignmentService(
             var lockedShift = await shiftService.LockForAssignmentAsync(shiftId, cancellationToken);
             if (lockedShift is null)
             {
-                return Refuse(404, ApiErrorCategory.ResourceNotFound, "SHIFT_NOT_FOUND", "The requested shift was not found.");
+                return Refuse(404, ApiErrorCategory.Validation, "SHIFT_NOT_FOUND", "The requested shift was not found.");
             }
 
             // Check own-assignment first under lock (4b, 5b)
@@ -129,7 +129,7 @@ public sealed class AssignmentService(
 
                 if (existing.Status == AssignmentStatus.Denied)
                 {
-                    return Refuse(409, ApiErrorCategory.Conflict, "SIGNUP_DENIED",
+                    return Refuse(409, ApiErrorCategory.Validation, "SIGNUP_DENIED",
                         "An administrator previously denied sign-up for this shift.");
                 }
             }
@@ -137,14 +137,14 @@ public sealed class AssignmentService(
             // Re-check shift start time under lock
             if (lockedShift.StartsAt <= now)
             {
-                return Refuse(409, ApiErrorCategory.Conflict, "SHIFT_NOT_OPEN", "This shift has already started.");
+                return Refuse(409, ApiErrorCategory.Validation, "SHIFT_NOT_OPEN", "This shift has already started.");
             }
 
             // Check capacity under lock (4a)
             var heldCount = await volStore.CountHeldAsync(shiftId, cancellationToken);
             if (heldCount >= lockedShift.RequiredCount)
             {
-                return Refuse(409, ApiErrorCategory.Conflict, "SHIFT_FULL", "This shift is already full.");
+                return Refuse(409, ApiErrorCategory.Validation, "SHIFT_FULL", "This shift is already full.");
             }
 
             // Determine status: ACTIVE if approved, PENDING if NONE (5c1)

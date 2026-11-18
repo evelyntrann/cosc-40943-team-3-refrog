@@ -25,7 +25,7 @@ public sealed class OpenShiftsFormTests
         await form.LoadAsync();
 
         Assert.IsNull(form.LoadError);
-        Assert.AreEqual(1, form.Shifts.Count);
+        Assert.HasCount(1, form.Shifts);
         Assert.AreEqual("Commons", form.Shifts[0].LocationName);
         Assert.AreEqual(2, form.Shifts[0].OpenSlots);
         Assert.IsFalse(form.Shifts[0].AssignedToMe);
@@ -43,7 +43,7 @@ public sealed class OpenShiftsFormTests
 
         await form.LoadAsync();
 
-        Assert.AreEqual(0, form.Shifts.Count);
+        Assert.IsEmpty(form.Shifts);
         Assert.IsNotNull(form.LoadError);
         Assert.AreEqual("VOLUNTEER_ACCESS_INACTIVE", form.LoadError.Code);
     }
@@ -102,7 +102,7 @@ public sealed class OpenShiftsFormTests
         var server = new ScriptedServer
         {
             SignUpResponse = (HttpStatusCode.Conflict, ApiResponse.Failure<SignUpResultDto>(new ApiError(
-                ApiErrorCategory.Conflict, "SHIFT_FULL", "This shift is already full.")))
+                ApiErrorCategory.Validation, "SHIFT_FULL", "This shift is already full.")))
         };
         var form = server.Form();
 
@@ -139,7 +139,7 @@ public sealed class OpenShiftsFormTests
                 return Task.FromResult(Json(ListResponse.Item1, ListResponse.Item2));
             }
 
-            if (path.StartsWith("/api/v1/shifts/") && path.EndsWith("/assignments"))
+            if (path.StartsWith("/api/v1/shifts/", StringComparison.Ordinal) && path.EndsWith("/assignments", StringComparison.Ordinal))
             {
                 return Task.FromResult(Json(SignUpResponse.Item1, SignUpResponse.Item2));
             }
