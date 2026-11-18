@@ -45,6 +45,21 @@ public sealed class EfVolStore(VolDbContext db, SqlUnitOfWork unitOfWork, ILogge
             .SingleOrDefaultAsync(x => x.ShiftId == shiftId && x.VolunteerId == volunteerId, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<ShiftAssignment>> ListHeldByShiftAsync(Guid shiftId, CancellationToken cancellationToken)
+    {
+        await unitOfWork.JoinIfOpenAsync(db, cancellationToken);
+        return await db.ShiftAssignments.AsNoTracking()
+            .Where(x => x.ShiftId == shiftId && (x.Status == AssignmentStatus.Active || x.Status == AssignmentStatus.Pending))
+            .OrderBy(x => x.AssignedAt).ThenBy(x => x.Id)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<bool> HasAnyAssignmentAsync(Guid shiftId, CancellationToken cancellationToken)
+    {
+        await unitOfWork.JoinIfOpenAsync(db, cancellationToken);
+        return await db.ShiftAssignments.AnyAsync(x => x.ShiftId == shiftId, cancellationToken);
+    }
+
     public async Task<IReadOnlySet<Guid>> ListHeldShiftIdsForVolunteerAsync(
         Guid volunteerId, CancellationToken cancellationToken)
     {

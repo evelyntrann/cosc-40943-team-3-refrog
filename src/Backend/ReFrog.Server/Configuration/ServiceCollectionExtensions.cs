@@ -60,6 +60,7 @@ public static class ServiceCollectionExtensions
         services.AddAuthorization();
         services.AddAntiforgery();
         services.AddScoped<IAuthRepository, EfAuthRepository>();
+        services.AddScoped<IAccountEmailDirectory, EfAccountEmailDirectory>();
         services.AddScoped<IAdministratorSignInAudit, EfAdministratorSignInAudit>();
         services.AddScoped<RegistrationService>();
         services.AddScoped<SessionService>();
