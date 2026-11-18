@@ -51,7 +51,7 @@ public static class ServiceCollectionExtensions
                 options.Cookie.SameSite = SameSiteMode.Lax;
                 options.ExpireTimeSpan = TimeSpan.FromDays(30);
                 options.SlidingExpiration = true;
-                options.Events.OnValidatePrincipal = SecurityStampValidator.ValidatePrincipalAsync;
+                options.Events.OnValidatePrincipal = AuthCookieValidation.ValidateAsync;
             });
         services.Configure<SecurityStampValidatorOptions>(options => options.ValidationInterval = TimeSpan.Zero);
         services.AddSingleton<IPostConfigureOptions<CookieAuthenticationOptions>, CookieTimeProviderConfiguration>();

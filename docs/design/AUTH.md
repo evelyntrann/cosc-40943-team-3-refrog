@@ -114,6 +114,8 @@ classDiagram
 
 **Recovery implementation (issue #126).** `RecoveryTokenProvider` adapts Identity's `DataProtectorTokenProvider<AuthAccount>` payload to injected `TimeProvider`, retaining the framework's protected timestamp/account/purpose/security-stamp format. Validation rejects the exact expiry instant (`FR-AUTH-password-recovery`). Identity's default provider directly reads the system clock and accepts the expiry instant, so the recovery-specific provider replaces it only for password resets. `RecoveryTokenProviderTests` checks format compatibility in both directions as well as expiry and ownership.
 
+`AuthCookieValidation` validates the security stamp and rebuilds current roles on every request, including when the injected clock has not advanced. It preserves the existing cookie expiry and lets the cookie handler apply its configured renewal policy. Failed state reads produce `503 AUTHENTICATION_UNAVAILABLE` without clearing the cookie (§8.2.1). `SessionFlowTests` covers immediate stamp invalidation, current roles, ordinary absolute expiry, and unavailable-state retry.
+
 AUTH establishes the architecture §8.2.3 envelope used by every area:
 
 ```text

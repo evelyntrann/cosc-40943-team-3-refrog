@@ -46,6 +46,15 @@ app.Use(async (context, next) =>
     {
         await next();
     }
+    catch (AuthenticationStateUnavailableException)
+    {
+        context.Response.Clear();
+        context.Response.Headers.CacheControl = "no-store";
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await context.Response.WriteAsJsonAsync(ApiResponse.Failure<object>(
+            new ApiError(ApiErrorCategory.Unavailable, "AUTHENTICATION_UNAVAILABLE",
+                "Authentication is temporarily unavailable. Try again.")));
+    }
     catch (Exception)
     {
         logUnexpected(app.Logger, null);
