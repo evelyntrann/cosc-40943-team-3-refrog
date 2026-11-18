@@ -54,6 +54,15 @@ public sealed class RecoveryService(
             return InvalidToken();
         }
 
+        if (request.NewPassword != request.ConfirmPassword)
+        {
+            return Failure<PasswordResetResponse>(422, ApiErrorCategory.Validation, "VALIDATION_FAILED",
+                "Correct the invalid fields.", new Dictionary<string, string>
+                {
+                    ["confirmPassword"] = "Passwords must match.",
+                });
+        }
+
         try
         {
             var outcome = await repository.ResetAsync(normalizer.NormalizeEmail(request.Email.Trim()),

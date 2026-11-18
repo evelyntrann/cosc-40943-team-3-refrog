@@ -51,6 +51,18 @@ public sealed class RecoveryFormTests
     }
 
     [TestMethod]
+    public async Task ResetPageExplainsPasswordRequirementsBeforeSubmission()
+    {
+        var server = new ScriptedServer();
+        var html = await RenderAsync<ResetPasswordPage>(server.Form(), new TestNavigation(ResetUri));
+
+        StringAssert.Contains(html, "Use 6+ characters with uppercase, lowercase, a number, and a symbol.");
+        StringAssert.Contains(html, "aria-describedby=\"reset-password-guidance reset-password-error\"");
+        StringAssert.Contains(html, "Confirm new password");
+        Assert.AreEqual(0, server.RequestCount);
+    }
+
+    [TestMethod]
     public async Task ResetValidationPreservesInputAndRendersServerPasswordFeedback()
     {
         var server = new ScriptedServer();
@@ -60,6 +72,7 @@ public sealed class RecoveryFormTests
         var form = server.Form();
         form.LoadResetLink(new Uri(ResetUri));
         form.NewPassword = "typed-password";
+        form.ConfirmPassword = "typed-password";
         await form.ResetAsync();
 
         Assert.AreEqual("Person@example.org", form.Email);
@@ -83,10 +96,12 @@ public sealed class RecoveryFormTests
         var form = server.Form();
         form.LoadResetLink(new Uri(ResetUri));
         form.NewPassword = "NewPassword2!";
+        form.ConfirmPassword = "NewPassword2!";
         await form.ResetAsync();
 
         Assert.IsTrue(form.PasswordChanged);
         Assert.AreEqual(string.Empty, form.NewPassword);
+        Assert.AreEqual(string.Empty, form.ConfirmPassword);
         Assert.IsFalse(form.HasResetLink);
         var html = await RenderAsync<ResetPasswordPage>(form);
         StringAssert.Contains(html, "Your password has been changed.");
@@ -109,6 +124,7 @@ public sealed class RecoveryFormTests
             ApiErrorCategory.Validation, "RESET_TOKEN_INVALID", "Request a new recovery link.")));
         form.LoadResetLink(new Uri(ResetUri));
         form.NewPassword = "NewPassword2!";
+        form.ConfirmPassword = "NewPassword2!";
         await form.ResetAsync();
         var invalid = await RenderAsync<ResetPasswordPage>(form, new TestNavigation(ResetUri));
         StringAssert.Contains(invalid, "href=\"recover-account\"");
@@ -125,10 +141,12 @@ public sealed class RecoveryFormTests
         var form = server.Form();
         form.LoadResetLink(new Uri(ResetUri));
         form.NewPassword = "NewPassword2!";
+        form.ConfirmPassword = "NewPassword2!";
         await form.ResetAsync();
         var html = await RenderAsync<ResetPasswordPage>(form, new TestNavigation(ResetUri));
         StringAssert.Contains(html, "The password change was not recorded. Try again.");
         Assert.AreEqual("NewPassword2!", form.NewPassword);
+        Assert.AreEqual("NewPassword2!", form.ConfirmPassword);
         Assert.IsTrue(form.HasResetLink);
         await form.ResetAsync();
         Assert.IsTrue(form.PasswordChanged);
@@ -151,11 +169,46 @@ public sealed class RecoveryFormTests
         server.DropConnection = true;
         form.LoadResetLink(new Uri(ResetUri));
         form.NewPassword = "NewPassword2!";
+        form.ConfirmPassword = "NewPassword2!";
         await form.ResetAsync();
         Assert.IsFalse(form.PasswordChanged);
         Assert.AreEqual("NewPassword2!", form.NewPassword);
         Assert.IsTrue(form.HasResetLink);
         Assert.IsFalse(form.Busy);
+    }
+
+    [TestMethod]
+    [DataRow("")]
+    [DataRow("DifferentPassword3!")]
+    [DataRow("newPassword2!")]
+    public async Task ConfirmationMismatchNamesFieldPreservesInputAndSendsNothing(string confirmation)
+    {
+        var server = new ScriptedServer();
+        var form = server.Form();
+        form.LoadResetLink(new Uri(ResetUri));
+        form.NewPassword = "NewPassword2!";
+        form.ConfirmPassword = confirmation;
+
+        await form.ResetAsync();
+
+        Assert.AreEqual(0, server.RequestCount);
+        Assert.AreEqual("Passwords must match.", form.FieldError("confirmPassword"));
+        Assert.AreEqual("NewPassword2!", form.NewPassword);
+        Assert.AreEqual(confirmation, form.ConfirmPassword);
+        Assert.IsTrue(form.HasResetLink);
+        Assert.IsFalse(form.PasswordChanged);
+        var html = await RenderAsync<ResetPasswordPage>(form, new TestNavigation(ResetUri));
+        StringAssert.Contains(html, "Confirm new password");
+        StringAssert.Contains(html, "Passwords must match.");
+        StringAssert.Contains(html, "reset-confirm-password-error");
+
+        server.Reply(HttpStatusCode.OK, ApiResponse.Success(new PasswordResetResponse(true)));
+        form.ConfirmPassword = form.NewPassword;
+        await form.ResetAsync();
+        Assert.IsTrue(form.PasswordChanged);
+        Assert.AreEqual("NewPassword2!", server.LastReset?.ConfirmPassword);
+        Assert.AreEqual(string.Empty, form.NewPassword);
+        Assert.AreEqual(string.Empty, form.ConfirmPassword);
     }
 
     [TestMethod]

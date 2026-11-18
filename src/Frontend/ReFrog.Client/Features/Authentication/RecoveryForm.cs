@@ -12,6 +12,7 @@ public sealed class RecoveryForm(HttpClient http)
 
     public string Email { get; set; } = string.Empty;
     public string NewPassword { get; set; } = string.Empty;
+    public string ConfirmPassword { get; set; } = string.Empty;
     public RecoveryAcknowledgement? Acknowledgement { get; private set; }
     public ApiError? Error { get; private set; }
     public bool Busy { get; private set; }
@@ -46,12 +47,20 @@ public sealed class RecoveryForm(HttpClient http)
             return;
         }
 
+        if (NewPassword != ConfirmPassword)
+        {
+            Error = new ApiError(ApiErrorCategory.Validation, "VALIDATION_FAILED", "Correct the invalid fields.",
+                new Dictionary<string, string> { ["confirmPassword"] = "Passwords must match." });
+            return;
+        }
+
         var answer = await SendAsync<PasswordResetResponse>("api/v1/auth/password-resets",
-            new ResetPasswordRequest(Email, token, NewPassword));
+            new ResetPasswordRequest(Email, token, NewPassword, ConfirmPassword));
         PasswordChanged = answer?.PasswordChanged == true;
         if (PasswordChanged)
         {
             NewPassword = string.Empty;
+            ConfirmPassword = string.Empty;
             token = string.Empty;
         }
     }

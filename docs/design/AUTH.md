@@ -110,15 +110,19 @@ classDiagram
 
 **Registration build note (issue #79).** The repository layout is `src/Frontend` and `src/Backend`. In the first registration increment, `RegistrationCode` owns code generation and versioned HMAC checks, while `EfAuthRepository` enforces challenge limits and completion inside SQL Server transactions. The separate shared `VerificationChallengeService` shown above is not yet present; IDV must reuse one AUTH-owned implementation when its flow is built. Local development uses the shared SMTP adapter with Mailpit, which captures messages for inspection and never delivers real email. The repository also contains `MicrosoftGraphEmailSender` as a candidate adapter; it is not approved or selected for production while `OI-25` is open. An unconfigured non-development deployment reports delivery unavailable. Registration issues the administrator session when bootstrap assigns that role, as clarified for `UC-AUTH-register-account` step 8. The registration client keeps one request ID per form fill and reuses it only when no server answer arrived.
 
-## Shared API envelope
+### Recovery implementation
 
-**Recovery implementation (issue #126).** `RecoveryTokenProvider` adapts Identity's `DataProtectorTokenProvider<AuthAccount>` payload to injected `TimeProvider`, retaining the framework's protected timestamp/account/purpose/security-stamp format. Validation rejects the exact expiry instant (`FR-AUTH-password-recovery`). Identity's default provider directly reads the system clock and accepts the expiry instant, so the recovery-specific provider replaces it only for password resets. `RecoveryTokenProviderTests` checks format compatibility in both directions as well as expiry and ownership.
+For issue #126, `RecoveryTokenProvider` adapts Identity's `DataProtectorTokenProvider<AuthAccount>` payload to injected `TimeProvider`, retaining the framework's protected timestamp/account/purpose/security-stamp format. Validation rejects the exact expiry instant (`FR-AUTH-password-recovery`). Identity's default provider directly reads the system clock and accepts the expiry instant, so the recovery-specific provider replaces it only for password resets. `RecoveryTokenProviderTests` checks format compatibility in both directions as well as expiry and ownership.
 
 `AuthCookieValidation` validates the security stamp and rebuilds current roles on every request, including when the injected clock has not advanced. It preserves the existing cookie expiry and lets the cookie handler apply its configured renewal policy. Failed state reads produce `503 AUTHENTICATION_UNAVAILABLE` without clearing the cookie (§8.2.1). `SessionFlowTests` covers immediate stamp invalidation, current roles, ordinary absolute expiry, and unavailable-state retry.
 
 `IRecoveryRepository` is implemented by `EfRecoveryRepository`. Recovery requests hold a serializable transaction and obtain the matching account's write lock through a no-op EF conditional update before checking accepted-delivery history and invoking the delivery callback. Refused and unconfirmed sends roll back; accepted sends add a `RecoveryRequest`. Password resets use Identity's password validators and optimistic account concurrency inside one transaction, including its security-stamp rotation. Concurrent resets have one winner.
 
+The developer's November 18, 2026 verification feedback adds confirmation to `UC-AUTH-recover-account` extension 5a and `FR-AUTH-password-recovery`. `ResetPasswordPage` displays `FR-AUTH-password-policy` beside the password input and collects `confirmPassword`. `RecoveryForm` provides immediate mismatch feedback; `RecoveryService` authoritatively checks confirmation before calling the repository and returns `422 VALIDATION_FAILED` with a `confirmPassword` field message. Identity remains responsible for password complexity. Both entered values survive validation/save failure and are cleared on completion.
+
 Deployment configuration supplies `Authentication:PublicBaseUrl`, the trusted HTTPS application base URL used for recovery links. Request host headers never supply that origin. An absent or invalid value prevents dispatch and logs a safe operational failure while preserving the public acknowledgement. The `/reset-password` link carries email and token in its fragment, which is read into client memory and removed from browser history before submission. Tokens do not cross the HTTP URL/logging boundary. The public response is `RecoveryAcknowledgement(message)`; reset completion is `PasswordResetResponse(passwordChanged)` in the shared envelope. Signed-in callers receive `403 ALREADY_SIGNED_IN` on both recovery operations.
+
+## Shared API envelope
 
 AUTH establishes the architecture §8.2.3 envelope used by every area:
 
@@ -148,7 +152,7 @@ Exactly one of `data` or `error` is non-null. Timestamps are ISO-8601 instants; 
 | `DELETE /api/v1/auth/session` | Signed-in account; antiforgery required | none | `200`: `{ signedOut: true }` in the shared envelope; current cookie invalidated | `401`; `400 ANTIFORGERY_INVALID`; `503 SIGN_OUT_UNAVAILABLE` |
 | `GET /api/v1/me/session` | Signed-in account | none | `200`: account ID, display-safe email, `isAdministrator`; no password, role source, or secrets | `401`; `503 AUTHENTICATION_UNAVAILABLE` |
 | `POST /api/v1/auth/recoveries` | Signed-out browser | `email` | Always `202` with the same acknowledgement. Existing accounts receive at most one accepted message per 60 seconds and five per rolling hour per destination email | Malformed request shape: `422`; unexpected server failure: safe `5xx`. Account existence and delivery outcome are never disclosed |
-| `POST /api/v1/auth/password-resets` | Signed-out browser | `email`, opaque `token`, `newPassword` | `200`: password changed and prior sessions invalidated | `422 VALIDATION_FAILED` or `RESET_TOKEN_INVALID`; `503 NOT_RECORDED` |
+| `POST /api/v1/auth/password-resets` | Signed-out browser | `email`, opaque `token`, `newPassword`, `confirmPassword` | `200`: password changed and prior sessions invalidated | `422 VALIDATION_FAILED` or `RESET_TOKEN_INVALID`; `503 NOT_RECORDED` |
 
 The `returnPath` is accepted only when it is a local application path; otherwise the client returns to the account view. Public credential and recovery failures do not distinguish registered from unregistered emails except registration extension 3a, which explicitly directs an already-registered person to sign in or recover.
 
@@ -398,7 +402,7 @@ erDiagram
 | Recovery 4a enumeration | integration | Unknown and known emails have the same status and response body; unknown sends nothing |
 | Recovery limits | integration | Accepted messages are at least 60 seconds apart and no more than five/hour/email; refused requests still return identical `202` |
 | Recovery 4b delivery failure | integration | Provider failure changes no password/session and returns the same public acknowledgement without logging email/token |
-| Recovery 5a password | unit + Blazor component | Every configured password boundary is enforced; invalid password does not consume a valid reset token |
+| Recovery 5a password | unit + Blazor component + integration | Every configured password boundary is enforced; the page shows policy guidance before submission; missing or mismatched confirmation names the field; correction reuses the valid reset token |
 | Recovery 6a token | integration with fixed time | Token succeeds before 30 minutes; fails at 30 minutes; succeeds once only; invalid token changes nothing |
 | Recovery 6b save failure | integration | Failed reset keeps old password and sessions valid and returns not recorded |
 | Password storage | integration | Persistence contains ASP.NET Identity hash only; password never appears in response or logs |

@@ -166,6 +166,54 @@ public sealed class RecoveryFlowTests
     }
 
     [TestMethod]
+    [DataRow(null)]
+    [DataRow("")]
+    [DataRow("DifferentPassword3!")]
+    [DataRow("newPassword2!")]
+    public async Task ServerRejectsMismatchedConfirmationWithoutChangingCredentialsOrConsumingToken(string? confirmation)
+    {
+        await using var fixture = await RecoveryFixture.CreateAsync();
+        using var session = await fixture.SignInAsync();
+        using var requested = await fixture.RequestAsync();
+        using var rejected = await fixture.Client.PostAsJsonAsync("/api/v1/auth/password-resets", new
+        {
+            Email = "Person@example.org",
+            Token = fixture.Token,
+            NewPassword = "NewPassword2!",
+            ConfirmPassword = confirmation,
+        });
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, rejected.StatusCode);
+        var answer = await rejected.Content.ReadFromJsonAsync<ApiResponse<PasswordResetResponse>>();
+        Assert.AreEqual("Passwords must match.", answer?.Error?.Fields?["confirmPassword"]);
+        Assert.DoesNotContain("NewPassword2!", await rejected.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        await fixture.AssertPasswordAsync("Password1!", "NewPassword2!");
+        Assert.AreEqual(HttpStatusCode.OK, (await session.GetAsync("/api/v1/me/session")).StatusCode);
+
+        using var corrected = await fixture.ResetAsync();
+        Assert.AreEqual(HttpStatusCode.OK, corrected.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task ServerRequiresConfirmationWhenTheClientOmitsTheField()
+    {
+        await using var fixture = await RecoveryFixture.CreateAsync();
+        using var requested = await fixture.RequestAsync();
+        using var rejected = await fixture.Client.PostAsJsonAsync("/api/v1/auth/password-resets", new
+        {
+            Email = "Person@example.org",
+            Token = fixture.Token,
+            NewPassword = "NewPassword2!",
+        });
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, rejected.StatusCode);
+        var answer = await rejected.Content.ReadFromJsonAsync<ApiResponse<PasswordResetResponse>>();
+        Assert.AreEqual("Passwords must match.", answer?.Error?.Fields?["confirmPassword"]);
+        using var corrected = await fixture.ResetAsync();
+        Assert.AreEqual(HttpStatusCode.OK, corrected.StatusCode);
+    }
+
+    [TestMethod]
     public async Task TokenWorksImmediatelyBeforeExpiryAndCannotBeReused()
     {
         await using var fixture = await RecoveryFixture.CreateAsync();
@@ -276,7 +324,7 @@ public sealed class RecoveryFlowTests
         using var session = await fixture.SignInAsync();
         using var refusedRecovery = await session.PostAsJsonAsync("/api/v1/auth/recoveries", new RequestRecoveryRequest("Person@example.org"));
         using var refusedReset = await session.PostAsJsonAsync("/api/v1/auth/password-resets",
-            new ResetPasswordRequest("Person@example.org", "unused", "NewPassword2!"));
+            new ResetPasswordRequest("Person@example.org", "unused", "NewPassword2!", "NewPassword2!"));
         Assert.AreEqual(HttpStatusCode.Forbidden, refusedRecovery.StatusCode);
         Assert.AreEqual(HttpStatusCode.Forbidden, refusedReset.StatusCode);
         Assert.IsEmpty(fixture.Email.Messages);
@@ -330,7 +378,7 @@ public sealed class RecoveryFlowTests
             Client.PostAsJsonAsync("/api/v1/auth/recoveries", new RequestRecoveryRequest(email));
 
         public Task<HttpResponseMessage> ResetAsync(string? token = null, string password = "NewPassword2!", string email = "Person@example.org") =>
-            Client.PostAsJsonAsync("/api/v1/auth/password-resets", new ResetPasswordRequest(email, token ?? Token, password));
+            Client.PostAsJsonAsync("/api/v1/auth/password-resets", new ResetPasswordRequest(email, token ?? Token, password, password));
 
         public async Task<HttpClient> SignInAsync()
         {

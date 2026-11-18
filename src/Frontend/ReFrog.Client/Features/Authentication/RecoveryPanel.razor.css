@@ -67,6 +67,12 @@ h1 {
   color: #a12622;
 }
 
+.recovery-panel ::deep .field-help {
+  color: #62596b;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
 .recovery-panel ::deep a {
   color: #4d1979;
   font-weight: 700;
