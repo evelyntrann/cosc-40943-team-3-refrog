@@ -192,4 +192,4 @@ An administrator's manual approval for an email address that has no matching ver
 
 ### Volunteer Role Lifecycle
 
-Volunteer privileges expire after the annual event and require administrator renewal each year. An email change on the same account preserves an active role. After revocation or expiry, the account has general-information access only, even if TCU email verification is retained. A declined role request grants no volunteer permissions. This lifecycle definition does not specify shift approval or assignment behavior.
+Volunteer privileges expire after the annual event and require administrator renewal each year. An email change on the same account preserves an active role. Expiry removes only the role. An administrator who removes the role may also restrict the account; a restricted account has general-information access only, even if TCU email verification is retained, until an administrator lifts the restriction. A declined role request grants no volunteer permissions. This lifecycle definition does not specify shift approval or assignment behavior.
