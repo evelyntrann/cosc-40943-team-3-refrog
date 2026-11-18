@@ -44,7 +44,7 @@ internal sealed class AdminShiftFixture : IAsyncDisposable
         return fixture;
     }
 
-    public async Task<Guid> CreateAccountAsync(string email, bool isAdministrator)
+    public async Task<Guid> CreateAccountAsync(string email, bool isAdministrator, string? role = null)
     {
         await using var scope = Host.Factory.Services.CreateAsyncScope();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<AuthAccount>>();
@@ -59,6 +59,16 @@ internal sealed class AdminShiftFixture : IAsyncDisposable
             }
 
             Assert.IsTrue((await users.AddToRoleAsync(account, SessionService.AdministratorRole)).Succeeded);
+        }
+
+        if (role is not null)
+        {
+            if (!await roles.RoleExistsAsync(role))
+            {
+                Assert.IsTrue((await roles.CreateAsync(new IdentityRole<Guid>(role))).Succeeded);
+            }
+
+            Assert.IsTrue((await users.AddToRoleAsync(account, role)).Succeeded);
         }
 
         return account.Id;

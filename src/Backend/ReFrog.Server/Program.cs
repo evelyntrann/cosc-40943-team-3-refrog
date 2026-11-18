@@ -6,6 +6,8 @@ using ReFrog.Server.Features.Authentication;
 using ReFrog.Server.Features.Authentication.Persistence;
 using ReFrog.Server.Features.Info;
 using ReFrog.Server.Features.Info.Persistence;
+using ReFrog.Server.Features.Volunteer;
+using ReFrog.Server.Features.Volunteer.Persistence;
 using ReFrog.Contracts.Api;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -28,6 +30,7 @@ if (args.Contains("--apply-migrations", StringComparer.Ordinal))
     await scope.ServiceProvider.GetRequiredService<AuthDbContext>().Database.MigrateAsync();
     await scope.ServiceProvider.GetRequiredService<InfoDbContext>().Database.MigrateAsync();
     await scope.ServiceProvider.GetRequiredService<AdmDbContext>().Database.MigrateAsync();
+    await scope.ServiceProvider.GetRequiredService<VolDbContext>().Database.MigrateAsync();
     return;
 }
 
@@ -60,7 +63,10 @@ app.Use(async (context, next) =>
             new ApiError(ApiErrorCategory.Unexpected, "UNEXPECTED_ERROR", "The request could not be completed.")));
     }
 });
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
@@ -69,6 +75,7 @@ app.MapRegistrationEndpoints();
 app.MapSessionEndpoints();
 app.MapInfoEndpoints();
 app.MapAdminShiftEndpoints();
+app.MapVolunteerEndpoints();
 app.Map("/api/{**path}", () => Results.Json(ApiResponse.Failure<object>(
     new ApiError(ApiErrorCategory.Validation, "NOT_FOUND", "The requested resource was not found.")),
     statusCode: StatusCodes.Status404NotFound));
