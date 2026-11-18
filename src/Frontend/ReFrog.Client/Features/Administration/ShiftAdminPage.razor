@@ -1,0 +1,140 @@
+@page "/admin/shifts"
+@using ReFrog.Contracts.Administration
+@using ReFrog.Contracts.Time
+@inject HttpClient Http
+
+<PageTitle>Volunteer shifts | ReFrog</PageTitle>
+
+<h1>Volunteer shifts</h1>
+
+@if (loading)
+{
+    <p role="status">Loading shift setup…</p>
+}
+else if (form.LoadError is { } loadError)
+{
+    <p class="form-alert" role="alert">@loadError.Message</p>
+    @if (loadError.Code == "AUTHENTICATION_REQUIRED")
+    {
+        <a href="/sign-in?returnPath=%2Fadmin%2Fshifts">Sign in</a>
+    }
+}
+else if (form.Options is { } options)
+{
+    <p class="intro">
+        @options.Event.EventYear event: @EventTime.FormatDate(options.Event.StartDate)
+        to @EventTime.FormatDate(options.Event.EndDate). All times are Central time.
+    </p>
+
+    <section aria-labelledby="defaults-heading">
+        <h2 id="defaults-heading">Volunteers needed per location</h2>
+        <p class="hint">Each new shift at a location starts with this number. Changing it does not change shifts already created.</p>
+        @if (options.Locations.Count == 0)
+        {
+            <p>This event has no locations yet.</p>
+        }
+        <ul class="locations">
+            @foreach (var location in options.Locations)
+            {
+                var id = location.LocationId;
+                <li>
+                    <h3>@location.Name @(location.Status == "CLOSED" ? "(closed)" : "")</h3>
+                    <p class="hint">@Hours(location)</p>
+                    <div class="inline-field">
+                        <label for="default-@id">Volunteers needed</label>
+                        <input id="default-@id" type="number" min="1" @bind="form.DefaultInputs[id]" />
+                        <button type="button" @onclick="() => SaveDefaultAsync(id)">Save</button>
+                    </div>
+                    @if (form.DefaultError(id) is { } defaultError)
+                    {
+                        <p class="field-error" role="alert">@defaultError</p>
+                    }
+                    else if (form.DefaultSaved == id)
+                    {
+                        <p class="saved" role="status">Saved.</p>
+                    }
+                </li>
+            }
+        </ul>
+    </section>
+
+    <section aria-labelledby="create-heading">
+        <h2 id="create-heading">Create a shift</h2>
+        <form @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+            <div class="field-group">
+                <label for="shift-location">Location</label>
+                <select id="shift-location" @bind="form.LocationChoice">
+                    <option value="">Choose a location</option>
+                    @foreach (var location in options.Locations)
+                    {
+                        <option value="@location.LocationId">@location.Name @(location.Status == "CLOSED" ? "(closed)" : "")</option>
+                    }
+                </select>
+                <FieldMessage Text="@form.FieldError("locationId")" />
+            </div>
+
+            <div class="field-group">
+                <label for="shift-date">Date</label>
+                <input id="shift-date" type="date" value="@form.Date" @onchange="e => form.Date = e.Value?.ToString() ?? string.Empty" />
+                <FieldMessage Text="@form.FieldError("date")" />
+            </div>
+
+            <div class="field-group">
+                <label for="shift-start">Start time</label>
+                <input id="shift-start" type="time" value="@form.StartTime" @onchange="e => form.StartTime = e.Value?.ToString() ?? string.Empty" />
+                <FieldMessage Text="@form.FieldError("startTime")" />
+            </div>
+
+            <div class="field-group">
+                <label for="shift-end">End time</label>
+                <input id="shift-end" type="time" value="@form.EndTime" @onchange="e => form.EndTime = e.Value?.ToString() ?? string.Empty" />
+                <FieldMessage Text="@form.FieldError("endTime")" />
+            </div>
+
+            <div class="field-group">
+                <label for="shift-count">Volunteers needed</label>
+                <input id="shift-count" type="number" min="1" placeholder="Location's number" @bind="form.RequiredCount" />
+                <p class="hint">Leave blank to use the location's number.</p>
+                <FieldMessage Text="@form.FieldError("requiredCount")" />
+            </div>
+
+            <button type="submit" disabled="@form.Busy">@(form.Busy ? "Creating…" : "Create shift")</button>
+        </form>
+
+        @if (form.Error is { } error)
+        {
+            <div class="form-alert" role="alert">@(error.Code == "NOT_RECORDED" ? "The shift was not created. Try again." : error.Message)</div>
+        }
+
+        @if (form.Created is { } shift)
+        {
+            <div class="saved" role="status">
+                Shift created and open for sign-up: @form.LocationName(shift.LocationId),
+                @EventTime.FormatInstant(shift.StartsAt) to @EventTime.FormatTime(TimeOnly.FromDateTime(EventTime.ToEventLocal(shift.EndsAt).DateTime)),
+                @shift.RequiredCount @(shift.RequiredCount == 1 ? "volunteer" : "volunteers").
+            </div>
+        }
+    </section>
+}
+
+@code {
+    private ShiftAdminForm form = null!;
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        form = new ShiftAdminForm(Http);
+        await form.LoadAsync();
+        loading = false;
+    }
+
+    private Task SubmitAsync() => form.SubmitAsync();
+
+    private Task SaveDefaultAsync(Guid locationId) => form.SaveDefaultAsync(locationId);
+
+    private static string Hours(ShiftOptionsLocation location) =>
+        location.OperatingHours.Count == 0
+            ? "No operating hours set."
+            : string.Join("; ", location.OperatingHours.Select(h =>
+                $"{h.Day} {EventTime.FormatTime(h.Opens)} to {EventTime.FormatTime(h.Closes)}"));
+}
