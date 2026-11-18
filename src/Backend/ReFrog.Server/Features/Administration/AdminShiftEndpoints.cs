@@ -88,6 +88,46 @@ public static class AdminShiftEndpoints
                 : Reply(await service.CreateAsync(body.Value, access.ActorId, cancellationToken));
         });
 
+        admin.MapPatch("/shifts/{shiftId:guid}", async (
+            Guid shiftId, HttpContext context, AdminAuthorization authorization, IAntiforgery antiforgery,
+            ShiftAdminService service, CancellationToken cancellationToken) =>
+        {
+            var access = await authorization.RequireAdministratorAsync(context.User);
+            if (!access.Granted)
+            {
+                return Refused<ManagedShift>(access);
+            }
+
+            if (!await ValidAntiforgeryAsync(context, antiforgery))
+            {
+                return AntiforgeryInvalid<ManagedShift>();
+            }
+
+            var body = await ReadAsync<ChangeShiftRequest>(context.Request, cancellationToken);
+            return body.Value is null
+                ? InvalidRequest<ManagedShift>(body.BadField)
+                : Reply(await service.ApplyConfirmedChangeAsync(shiftId, body.Value, access.ActorId, cancellationToken));
+        });
+
+        admin.MapDelete("/shifts/{shiftId:guid}", async (
+            Guid shiftId, HttpContext context, AdminAuthorization authorization, IAntiforgery antiforgery,
+            ShiftAdminService service, CancellationToken cancellationToken) =>
+        {
+            var access = await authorization.RequireAdministratorAsync(context.User);
+            if (!access.Granted)
+            {
+                return Refused<ShiftRemovedResponse>(access);
+            }
+
+            if (!await ValidAntiforgeryAsync(context, antiforgery))
+            {
+                return AntiforgeryInvalid<ShiftRemovedResponse>();
+            }
+
+            return Reply(await service.RemoveAsync(
+                shiftId, context.Request.Query["expectedVersion"], access.ActorId, cancellationToken));
+        });
+
         admin.MapPut("/events/{eventId:guid}/locations/{locationId:guid}/staffing", async (
             Guid eventId, Guid locationId, HttpContext context, AdminAuthorization authorization,
             IAntiforgery antiforgery, ShiftAdminService service, CancellationToken cancellationToken) =>

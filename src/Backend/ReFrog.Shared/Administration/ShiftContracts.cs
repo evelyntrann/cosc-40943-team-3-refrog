@@ -69,6 +69,9 @@ public sealed record ChangeShiftRequest(
     string? EndTime,
     int? RequiredCount);
 
+/// <summary><c>DELETE /api/v1/admin/shifts/{shiftId}</c>: the shift that was removed.</summary>
+public sealed record ShiftRemovedResponse(Guid ShiftId);
+
 /// <summary>A volunteer a change would affect (6a1). <see cref="Email"/> is null if the account no longer exists.</summary>
 public sealed record AffectedVolunteer(string? Email, string Status);
 

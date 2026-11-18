@@ -257,6 +257,108 @@ public sealed class ShiftAdminService(
         }
     }
 
+    /// <summary>6a: saves a confirmed edit. The held count is read under the shift lock, so a sign-up cannot slip past it.</summary>
+    public async Task<AdminReply<ManagedShift>> ApplyConfirmedChangeAsync(
+        Guid shiftId, ChangeShiftRequest request, Guid actorId, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!IsVersion(request.ExpectedVersion))
+        {
+            return InvalidVersion<ManagedShift>();
+        }
+
+        ShiftTarget? target;
+        try
+        {
+            (target, var refusal) = await FindTargetAsync<ManagedShift>(shiftId, request.ExpectedVersion, cancellationToken);
+            if (target is null)
+            {
+                return refusal!;
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            LogShiftReadUnavailable(logger, exception.GetType().Name, null);
+            return NotRecorded<ManagedShift>();
+        }
+
+        var edit = CheckEdit(target, request);
+        if (edit.Fields.Count > 0)
+        {
+            return Invalid<ManagedShift>(edit.Fields);
+        }
+
+        var held = 0;
+        var result = await store.ChangeUnderLockAsync(shiftId, request.ExpectedVersion, async (_, token) =>
+        {
+            held = await assignments.CountHeldAsync(shiftId, token);
+            if (EditRefusal(edit, held) is { } code)
+            {
+                return new ShiftRefusal(code);
+            }
+
+            audit.Record(actorId, "SHIFT_CHANGED", "Shift", shiftId.ToString());
+            return new ShiftUpdate(edit.LocationId, edit.StartsAt, edit.EndsAt, edit.RequiredCount);
+        }, cancellationToken);
+
+        return result.Outcome == ShiftChangeOutcome.Saved
+            ? new(200, ApiResponse.Success(ToManaged(result.Shift!, target.Locations, held)))
+            : ChangeNotMade<ManagedShift>(result);
+    }
+
+    /// <summary>6a: removes a shift that has no assignment on record, deciding under the shift lock.</summary>
+    public async Task<AdminReply<ShiftRemovedResponse>> RemoveAsync(
+        Guid shiftId, string? expectedVersion, Guid actorId, CancellationToken cancellationToken)
+    {
+        if (!IsVersion(expectedVersion))
+        {
+            return InvalidVersion<ShiftRemovedResponse>();
+        }
+
+        try
+        {
+            var (target, refusal) = await FindTargetAsync<ShiftRemovedResponse>(shiftId, expectedVersion, cancellationToken);
+            if (target is null)
+            {
+                return refusal!;
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            LogShiftReadUnavailable(logger, exception.GetType().Name, null);
+            return NotRecorded<ShiftRemovedResponse>();
+        }
+
+        var result = await store.ChangeUnderLockAsync(shiftId, expectedVersion, async (_, token) =>
+        {
+            if (await RemovalRefusalAsync(shiftId, token) is { } code)
+            {
+                return new ShiftRefusal(code);
+            }
+
+            audit.Record(actorId, "SHIFT_REMOVED", "Shift", shiftId.ToString());
+            return new ShiftRemoval();
+        }, cancellationToken);
+
+        return result.Outcome == ShiftChangeOutcome.Removed
+            ? new(200, ApiResponse.Success(new ShiftRemovedResponse(shiftId)))
+            : ChangeNotMade<ShiftRemovedResponse>(result);
+    }
+
+    private static AdminReply<T> ChangeNotMade<T>(ShiftChangeResult result) => result.Outcome switch
+    {
+        ShiftChangeOutcome.NotFound => ShiftNotFound<T>(),
+        ShiftChangeOutcome.VersionStale => VersionStale<T>(),
+        ShiftChangeOutcome.Refused when result.RefusalCode == CapacityBelowHeld => Failure<T>(409, ApiErrorCategory.Validation,
+            CapacityBelowHeld, "Check the highlighted fields.", new Dictionary<string, string>
+            {
+                ["requiredCount"] = "Enter at least the number of volunteers already signed up.",
+            }),
+        ShiftChangeOutcome.Refused => Failure<T>(409, ApiErrorCategory.Validation, ChangeUnresolved,
+            "Volunteers have signed up for this shift, so this change is not available yet."),
+        _ => NotRecorded<T>(),
+    };
+
     /// <summary>The shift to change: in the current event and still at the version the administrator was shown.</summary>
     private async Task<(ShiftTarget? Target, AdminReply<T>? Refusal)> FindTargetAsync<T>(
         Guid shiftId, string expectedVersion, CancellationToken cancellationToken)
