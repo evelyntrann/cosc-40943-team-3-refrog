@@ -123,4 +123,3 @@ PRs #122, #135, #137, #138, and #140 were open when this audit checked GitHub. T
 ## Remaining work and completion claim
 
 The matrix audit can be reviewed with the named gaps. Registration, sign-in, recovery, volunteer sign-up, shift management, and event information retain Partial verification. Passing existing tests does not close these gaps. The code corrections in #143, #144, and #145, missing tests, and outstanding design dependencies remain follow-up work. Human approval and merge of the audit PR are still required before the updated matrix is evidence on main.
-
