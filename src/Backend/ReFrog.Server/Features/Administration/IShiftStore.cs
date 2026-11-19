@@ -103,6 +103,6 @@ public interface IShiftStore
     Task<ShiftChangeResult> ChangeUnderLockAsync(
         Guid shiftId,
         string expectedVersion,
-        Func<StoredShift, CancellationToken, Task<ShiftChangeDecision>> decide,
+        Func<CancellationToken, Task<ShiftChangeDecision>> decide,
         CancellationToken cancellationToken);
 }

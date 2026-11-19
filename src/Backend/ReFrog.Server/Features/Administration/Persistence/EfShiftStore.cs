@@ -134,7 +134,7 @@ public sealed class EfShiftStore(AdmDbContext db, SqlUnitOfWork unitOfWork, ILog
     public async Task<ShiftChangeResult> ChangeUnderLockAsync(
         Guid shiftId,
         string expectedVersion,
-        Func<StoredShift, CancellationToken, Task<ShiftChangeDecision>> decide,
+        Func<CancellationToken, Task<ShiftChangeDecision>> decide,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(decide);
@@ -160,7 +160,7 @@ public sealed class EfShiftStore(AdmDbContext db, SqlUnitOfWork unitOfWork, ILog
                 return false;
             }
 
-            switch (await decide(current, ct))
+            switch (await decide(ct))
             {
                 case ShiftUpdate update:
                     row.LocationId = update.LocationId;

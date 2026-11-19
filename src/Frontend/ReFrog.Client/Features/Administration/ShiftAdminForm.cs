@@ -2,7 +2,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using ReFrog.Contracts.Administration;
 using ReFrog.Contracts.Api;
-using ReFrog.Contracts.Authentication;
 
 namespace ReFrog.Client.Features.Administration;
 
@@ -169,16 +168,8 @@ public sealed class ShiftAdminForm(HttpClient http)
 
     private async Task<HttpRequestMessage?> WithTokenAsync<T>(HttpMethod method, string path, T body)
     {
-        var token = (await http.GetFromJsonAsync<ApiResponse<AntiforgeryTokenResponse>>(
-            new Uri("api/v1/auth/antiforgery", UriKind.Relative)))?.Data?.Token;
-        if (string.IsNullOrEmpty(token))
-        {
-            return null;
-        }
-
-        var message = new HttpRequestMessage(method, new Uri(path, UriKind.Relative)) { Content = JsonContent.Create(body) };
-        message.Headers.Add("RequestVerificationToken", token);
-        return message;
+        var token = await AntiforgeryRequests.FetchTokenAsync(http);
+        return string.IsNullOrEmpty(token) ? null : AntiforgeryRequests.Create(method, path, token, body);
     }
 
     private static ApiError NotRecorded() => Unavailable("NOT_RECORDED", "The change was not saved. Try again.");

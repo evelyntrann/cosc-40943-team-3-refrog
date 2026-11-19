@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
@@ -8,6 +9,7 @@ using ReFrog.Contracts.Api;
 using ReFrog.Contracts.Volunteer;
 using ReFrog.Server.Features.Administration;
 using ReFrog.Server.Features.Administration.Persistence;
+using ReFrog.Server.Features.Info.Persistence;
 using ReFrog.Server.Features.Volunteer;
 
 namespace ReFrog.Server.Tests.Administration;
@@ -171,6 +173,24 @@ public sealed class AdminShiftChangeEndpointTests
         var audit = (await fixture.AuditAsync()).Single();
         Assert.AreEqual("SHIFT_REMOVED", audit.Action);
         Assert.AreEqual(adminId, audit.ActorAccountId);
+    }
+
+    [TestMethod]
+    public async Task RemovalDoesNotDependOnReadingLocations()
+    {
+        var failure = new FailLocationReads();
+        await using var fixture = await AdminShiftFixture.CreateAsync(services =>
+            services.ConfigureDbContext<InfoDbContext>((_, options) => options.AddInterceptors(failure)));
+        await fixture.CreateAccountAsync(Admin, isAdministrator: true);
+        var shift = await fixture.SeedShiftAsync();
+        using var client = await fixture.SignedInClientAsync(Admin);
+        var token = await AdminShiftFixture.TokenAsync(client);
+
+        failure.Armed = true;
+        using var response = await DeleteAsync(client, shift.Id, Version(shift), token);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+        Assert.IsEmpty(await fixture.ShiftsAsync());
     }
 
     [TestMethod]
@@ -429,6 +449,24 @@ public sealed class AdminShiftChangeEndpointTests
         Assert.AreEqual(shift.EndsAt, stored.EndsAt);
         CollectionAssert.AreEqual(shift.Version, stored.Version);
         Assert.IsEmpty(await fixture.AuditAsync());
+    }
+
+    /// <summary>Fails every read of INF's locations, as an outage of that table would.</summary>
+    private sealed class FailLocationReads : DbCommandInterceptor
+    {
+        public bool Armed { get; set; }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Armed && command.CommandText.Contains("[DonationLocations]", StringComparison.Ordinal))
+            {
+                throw new TimeoutException("Simulated timeout.");
+            }
+
+            return ValueTask.FromResult(result);
+        }
     }
 
     /// <summary>Fails the next save on ADM's store, as a dropped connection would.</summary>

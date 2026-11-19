@@ -218,7 +218,8 @@ public sealed class ShiftAdminService(
 
         try
         {
-            var (target, refusal) = await FindTargetAsync<ShiftImpactResponse>(shiftId, request.ExpectedVersion, cancellationToken);
+            var (target, refusal) = await FindTargetAsync<ShiftImpactResponse>(
+                shiftId, request.ExpectedVersion, withLocations: !removal, cancellationToken);
             if (target is null)
             {
                 return refusal!;
@@ -270,7 +271,8 @@ public sealed class ShiftAdminService(
         ShiftTarget? target;
         try
         {
-            (target, var refusal) = await FindTargetAsync<ManagedShift>(shiftId, request.ExpectedVersion, cancellationToken);
+            (target, var refusal) = await FindTargetAsync<ManagedShift>(
+                shiftId, request.ExpectedVersion, withLocations: true, cancellationToken);
             if (target is null)
             {
                 return refusal!;
@@ -289,7 +291,7 @@ public sealed class ShiftAdminService(
         }
 
         var held = 0;
-        var result = await store.ChangeUnderLockAsync(shiftId, request.ExpectedVersion, async (_, token) =>
+        var result = await store.ChangeUnderLockAsync(shiftId, request.ExpectedVersion, async token =>
         {
             held = await assignments.CountHeldAsync(shiftId, token);
             if (EditRefusal(edit, held) is { } code)
@@ -317,7 +319,8 @@ public sealed class ShiftAdminService(
 
         try
         {
-            var (target, refusal) = await FindTargetAsync<ShiftRemovedResponse>(shiftId, expectedVersion, cancellationToken);
+            var (target, refusal) = await FindTargetAsync<ShiftRemovedResponse>(
+                shiftId, expectedVersion, withLocations: false, cancellationToken);
             if (target is null)
             {
                 return refusal!;
@@ -329,7 +332,7 @@ public sealed class ShiftAdminService(
             return NotRecorded<ShiftRemovedResponse>();
         }
 
-        var result = await store.ChangeUnderLockAsync(shiftId, expectedVersion, async (_, token) =>
+        var result = await store.ChangeUnderLockAsync(shiftId, expectedVersion, async token =>
         {
             if (await RemovalRefusalAsync(shiftId, token) is { } code)
             {
@@ -359,9 +362,12 @@ public sealed class ShiftAdminService(
         _ => NotRecorded<T>(),
     };
 
-    /// <summary>The shift to change: in the current event and still at the version the administrator was shown.</summary>
+    /// <summary>
+    /// The shift to change: in the current event and still at the version the administrator was shown. Only an edit
+    /// needs the event's locations, so a removal does not depend on reading them.
+    /// </summary>
     private async Task<(ShiftTarget? Target, AdminReply<T>? Refusal)> FindTargetAsync<T>(
-        Guid shiftId, string expectedVersion, CancellationToken cancellationToken)
+        Guid shiftId, string expectedVersion, bool withLocations, CancellationToken cancellationToken)
     {
         var current = await events.GetCurrentEventAsync(cancellationToken);
         if (current is null)
@@ -380,7 +386,7 @@ public sealed class ShiftAdminService(
             return (null, VersionStale<T>());
         }
 
-        var locations = await events.GetLocationsForEventAsync(current.Id, cancellationToken);
+        var locations = withLocations ? await events.GetLocationsForEventAsync(current.Id, cancellationToken) : [];
         return (new ShiftTarget(current, shift, locations), null);
     }
 

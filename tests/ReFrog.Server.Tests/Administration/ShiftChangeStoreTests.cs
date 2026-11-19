@@ -25,7 +25,7 @@ public sealed class ShiftChangeStoreTests
         var location = Guid.NewGuid();
         var startsAt = shift.StartsAt.AddHours(1);
 
-        var result = await WithScopeAsync(host, (store, audit, _) => store.ChangeUnderLockAsync(shift.Id, version, (_, _) =>
+        var result = await WithScopeAsync(host, (store, audit, _) => store.ChangeUnderLockAsync(shift.Id, version, ct =>
         {
             audit.Record(Guid.NewGuid(), "SHIFT_CHANGED", "Shift", shift.Id.ToString());
             return Task.FromResult<ShiftChangeDecision>(new ShiftUpdate(location, startsAt, startsAt.AddHours(2), 5));
@@ -48,7 +48,7 @@ public sealed class ShiftChangeStoreTests
         var shift = await SeedShiftAsync(host);
 
         var result = await WithScopeAsync(host, (store, audit, _) => store.ChangeUnderLockAsync(
-            shift.Id, Convert.ToHexString(shift.Version), (_, _) =>
+            shift.Id, Convert.ToHexString(shift.Version), ct =>
             {
                 audit.Record(Guid.NewGuid(), "SHIFT_REMOVED", "Shift", shift.Id.ToString());
                 return Task.FromResult<ShiftChangeDecision>(new ShiftRemoval());
@@ -67,7 +67,7 @@ public sealed class ShiftChangeStoreTests
         var decided = false;
 
         var result = await WithScopeAsync(host, (store, _, _) => store.ChangeUnderLockAsync(
-            shift.Id, "00000000000007D0", (_, _) =>
+            shift.Id, "00000000000007D0", ct =>
             {
                 decided = true;
                 return Task.FromResult<ShiftChangeDecision>(new ShiftRemoval());
@@ -86,7 +86,7 @@ public sealed class ShiftChangeStoreTests
         var shift = await SeedShiftAsync(host);
 
         var result = await WithScopeAsync(host, (store, audit, _) => store.ChangeUnderLockAsync(
-            shift.Id, Convert.ToHexString(shift.Version), (_, _) =>
+            shift.Id, Convert.ToHexString(shift.Version), ct =>
             {
                 audit.Record(Guid.NewGuid(), "SHIFT_CHANGED", "Shift", shift.Id.ToString());
                 return Task.FromResult<ShiftChangeDecision>(new ShiftRefusal("CAPACITY_BELOW_HELD"));
@@ -105,7 +105,7 @@ public sealed class ShiftChangeStoreTests
 
         var result = await WithScopeAsync(host, (store, _, _) => store.ChangeUnderLockAsync(
             Guid.NewGuid(), "00000000000007D0",
-            (_, _) => Task.FromResult<ShiftChangeDecision>(new ShiftRemoval()), CancellationToken.None));
+            ct => Task.FromResult<ShiftChangeDecision>(new ShiftRemoval()), CancellationToken.None));
 
         Assert.AreEqual(ShiftChangeOutcome.NotFound, result.Outcome);
     }
@@ -117,7 +117,7 @@ public sealed class ShiftChangeStoreTests
         var shift = await SeedShiftAsync(host);
 
         var result = await WithScopeAsync(host, (store, audit, _) => store.ChangeUnderLockAsync(
-            shift.Id, Convert.ToHexString(shift.Version), (_, _) =>
+            shift.Id, Convert.ToHexString(shift.Version), ct =>
             {
                 audit.Record(Guid.NewGuid(), "SHIFT_REMOVED", "Shift", shift.Id.ToString());
                 throw new TimeoutException("Simulated timeout.");
@@ -135,11 +135,11 @@ public sealed class ShiftChangeStoreTests
         var shift = await SeedShiftAsync(host);
 
         var result = await WithScopeAsync(host, (store, _, _) => store.ChangeUnderLockAsync(
-            shift.Id, Convert.ToHexString(shift.Version), async (current, _) =>
+            shift.Id, Convert.ToHexString(shift.Version), async ct =>
             {
                 var blocked = await Assert.ThrowsExactlyAsync<SqlException>(() => ChangeCapacityAsync(host, shift.Id, 9));
                 Assert.AreEqual(1222, blocked.Number, "A concurrent write must wait for the shift lock.");
-                return new ShiftUpdate(current.LocationId, current.StartsAt, current.EndsAt, 4);
+                return new ShiftUpdate(shift.LocationId, shift.StartsAt, shift.EndsAt, 4);
             }, CancellationToken.None));
 
         Assert.AreEqual(ShiftChangeOutcome.Saved, result.Outcome);
@@ -166,7 +166,7 @@ public sealed class ShiftChangeStoreTests
         var held = -1;
 
         var result = await WithScopeAsync(host, (store, _, assignments) => store.ChangeUnderLockAsync(
-            shift.Id, Convert.ToHexString(shift.Version), async (_, ct) =>
+            shift.Id, Convert.ToHexString(shift.Version), async ct =>
             {
                 held = await assignments.CountHeldAsync(shift.Id, ct);
                 return new ShiftRefusal("ASSIGNED_SHIFT_CHANGE_UNRESOLVED");

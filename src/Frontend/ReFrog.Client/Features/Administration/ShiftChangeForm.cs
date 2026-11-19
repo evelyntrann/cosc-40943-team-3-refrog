@@ -3,7 +3,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using ReFrog.Contracts.Administration;
 using ReFrog.Contracts.Api;
-using ReFrog.Contracts.Authentication;
 using ReFrog.Contracts.Time;
 using ReFrog.Contracts.Volunteer;
 
@@ -267,28 +266,22 @@ public sealed class ShiftChangeForm(HttpClient http)
 
     private async Task<HttpRequestMessage?> ChangeMessageAsync(ManagedShift shift)
     {
-        var token = (await http.GetFromJsonAsync<ApiResponse<AntiforgeryTokenResponse>>(
-            new Uri("api/v1/auth/antiforgery", UriKind.Relative)))?.Data?.Token;
+        var token = await AntiforgeryRequests.FetchTokenAsync(http);
         if (string.IsNullOrEmpty(token))
         {
             return null;
         }
 
-        var message = Removing
-            ? new HttpRequestMessage(HttpMethod.Delete, new Uri(
-                $"api/v1/admin/shifts/{shift.ShiftId}?expectedVersion={Uri.EscapeDataString(shift.Version)}", UriKind.Relative))
-            : new HttpRequestMessage(HttpMethod.Patch, new Uri($"api/v1/admin/shifts/{shift.ShiftId}", UriKind.Relative))
-            {
-                Content = JsonContent.Create(new ChangeShiftRequest(
-                    shift.Version,
-                    Guid.TryParse(LocationChoice, out var locationId) ? locationId : null,
-                    Date,
-                    StartTime,
-                    EndTime,
-                    RequiredCount)),
-            };
-        message.Headers.Add("RequestVerificationToken", token);
-        return message;
+        return Removing
+            ? AntiforgeryRequests.Create(HttpMethod.Delete,
+                $"api/v1/admin/shifts/{shift.ShiftId}?expectedVersion={Uri.EscapeDataString(shift.Version)}", token)
+            : AntiforgeryRequests.Create(HttpMethod.Patch, $"api/v1/admin/shifts/{shift.ShiftId}", token, new ChangeShiftRequest(
+                shift.Version,
+                Guid.TryParse(LocationChoice, out var locationId) ? locationId : null,
+                Date,
+                StartTime,
+                EndTime,
+                RequiredCount));
     }
 
     private static async Task<ApiError?> RefusalInAsync<T>(HttpResponseMessage response)
