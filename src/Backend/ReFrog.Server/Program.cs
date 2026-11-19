@@ -86,6 +86,7 @@ app.MapSessionEndpoints();
 app.MapRecoveryEndpoints();
 app.MapInfoEndpoints();
 app.MapAdminShiftEndpoints();
+app.MapAdminDashboardEndpoints();
 app.MapVolunteerEndpoints();
 app.Map("/api/{**path}", () => Results.Json(ApiResponse.Failure<object>(
     new ApiError(ApiErrorCategory.Validation, "NOT_FOUND", "The requested resource was not found.")),

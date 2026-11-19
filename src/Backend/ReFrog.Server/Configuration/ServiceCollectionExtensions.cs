@@ -80,6 +80,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IShiftStore, EfShiftStore>();
         services.AddScoped<ShiftService>();
         services.AddScoped<ShiftAdminService>();
+        services.AddScoped<DashboardService>();
         services.AddDbContext<VolDbContext>((provider, options) =>
             VolDbContext.Configure(options, provider.GetRequiredService<SqlUnitOfWork>().Connection));
         services.AddScoped<IVolStore, EfVolStore>();
