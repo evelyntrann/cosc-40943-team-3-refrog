@@ -1,0 +1,80 @@
+.intro,
+.hint {
+  color: #62596b;
+  line-height: 1.5;
+}
+
+.hint {
+  font-size: 0.9rem;
+  margin: 0.25rem 0;
+}
+
+.locations,
+.shifts {
+  display: grid;
+  list-style: none;
+  padding: 0;
+}
+
+.locations {
+  gap: 1rem;
+  max-width: 40rem;
+}
+
+.locations > li {
+  border: 1px solid #e2dde5;
+  border-radius: 0.75rem;
+  padding: 0.9rem 1rem;
+}
+
+.locations > li.unfilled {
+  border-color: #a1122f;
+  border-left-width: 0.35rem;
+}
+
+h2 {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.flag {
+  color: #a1122f;
+  font-weight: 700;
+  margin: 0.25rem 0;
+}
+
+.shifts {
+  gap: 0.5rem;
+  margin: 0.5rem 0 0;
+}
+
+.shifts li {
+  border-top: 1px solid #e2dde5;
+  display: grid;
+  gap: 0.15rem;
+  padding-top: 0.5rem;
+}
+
+.shifts .flag {
+  margin: 0;
+}
+
+.when {
+  font-weight: 700;
+}
+
+button {
+  background: #4d1979;
+  border: 0;
+  border-radius: 0.5rem;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 0.55rem 1rem;
+}
+
+.form-alert {
+  color: #a1122f;
+  margin-top: 1rem;
+}

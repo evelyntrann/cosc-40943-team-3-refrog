@@ -1,0 +1,85 @@
+@page "/admin/dashboard"
+@using ReFrog.Contracts.Administration
+@using ReFrog.Contracts.Api
+@inject HttpClient Http
+
+<PageTitle>Event dashboard | ReFrog</PageTitle>
+
+<h1>Event dashboard</h1>
+
+@if (view.Loading)
+{
+    <p role="status">Loading the dashboard…</p>
+}
+else if (view.Error is { } error)
+{
+    <p class="form-alert" role="alert">@error.Message</p>
+    @if (error.Code == "AUTHENTICATION_REQUIRED")
+    {
+        <a href="/sign-in?returnPath=%2Fadmin%2Fdashboard">Sign in</a>
+    }
+    else if (error.Category == ApiErrorCategory.Unavailable)
+    {
+        <button type="button" @onclick="view.LoadAsync">Try again</button>
+    }
+}
+else if (view.Summary is { } summary)
+{
+    @* Issue #136: donation and shopping counts are added when UC-DON-log-donation and UC-SHP-log-item-taken exist. *@
+    <p class="intro">
+        Volunteer coverage for each location of the current event. All times are Central time.
+        Donation and shopping counts are not recorded in ReFrog yet.
+    </p>
+
+    @if (summary.Locations.Count == 0)
+    {
+        <p>This event has no locations yet.</p>
+    }
+    <ul class="locations">
+        @foreach (var location in summary.Locations)
+        {
+            <li class="@(location.HasUnfilledShifts ? "unfilled" : null)">
+                <h2>@location.Name @(location.Status == "CLOSED" ? "(closed)" : "")</h2>
+                @if (location.HasUnfilledShifts)
+                {
+                    <p class="flag">Unfilled shifts</p>
+                }
+                @if (!location.HasActivity)
+                {
+                    <p class="hint">No activity yet.</p>
+                }
+                @if (location.Shifts.Count == 0)
+                {
+                    <p class="hint">No shifts.</p>
+                }
+                else
+                {
+                    <p>@DashboardView.Describe(location.Coverage).</p>
+                    <ul class="shifts">
+                        @foreach (var shift in location.Shifts)
+                        {
+                            <li>
+                                <span class="when">@DashboardView.When(shift)</span>
+                                @if (shift.Unfilled)
+                                {
+                                    <span class="flag">Unfilled</span>
+                                }
+                                <span>@DashboardView.Describe(shift.Coverage)</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private DashboardView view = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        view = new DashboardView(Http);
+        await view.LoadAsync();
+    }
+}
