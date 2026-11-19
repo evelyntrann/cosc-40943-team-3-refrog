@@ -578,6 +578,9 @@ public sealed class AdminShiftChangeEndpointTests
         public Task<IReadOnlyDictionary<Guid, int>> CountsHeldByShiftsAsync(
             IReadOnlyCollection<Guid> shiftIds, CancellationToken cancellationToken) => throw Failure();
 
+        public Task<IReadOnlyDictionary<Guid, AssignmentCounts>> CountsByShiftsAsync(
+            IReadOnlyCollection<Guid> shiftIds, CancellationToken cancellationToken) => throw Failure();
+
         public Task<IReadOnlyList<HeldAssignment>> ListHeldAsync(Guid shiftId, CancellationToken cancellationToken) => throw Failure();
 
         public Task<bool> HasAnyAssignmentAsync(Guid shiftId, CancellationToken cancellationToken) => throw Failure();
