@@ -22,6 +22,9 @@ public sealed class ShiftChangeForm(HttpClient http)
     private string endTime = string.Empty;
     private int? requiredCount;
 
+    // Exactly what the server previewed; this, not the live inputs, is what a confirmed edit sends.
+    private ChangeShiftRequest? reviewed;
+
     public IReadOnlyList<ManagedShift> Shifts { get; private set; } = [];
     public ApiError? LoadError { get; private set; }
 
@@ -42,7 +45,7 @@ public sealed class ShiftChangeForm(HttpClient http)
         set
         {
             locationChoice = value;
-            Impact = null;
+            ClearReview();
         }
     }
 
@@ -52,7 +55,7 @@ public sealed class ShiftChangeForm(HttpClient http)
         set
         {
             date = value;
-            Impact = null;
+            ClearReview();
         }
     }
 
@@ -62,7 +65,7 @@ public sealed class ShiftChangeForm(HttpClient http)
         set
         {
             startTime = value;
-            Impact = null;
+            ClearReview();
         }
     }
 
@@ -72,7 +75,7 @@ public sealed class ShiftChangeForm(HttpClient http)
         set
         {
             endTime = value;
-            Impact = null;
+            ClearReview();
         }
     }
 
@@ -82,7 +85,7 @@ public sealed class ShiftChangeForm(HttpClient http)
         set
         {
             requiredCount = value;
-            Impact = null;
+            ClearReview();
         }
     }
 
@@ -142,8 +145,8 @@ public sealed class ShiftChangeForm(HttpClient http)
         var starts = EventTime.ToEventLocal(shift.StartsAt);
         LocationChoice = shift.LocationId.ToString();
         Date = starts.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        StartTime = starts.ToString("HH:mm", CultureInfo.InvariantCulture);
-        EndTime = EventTime.ToEventLocal(shift.EndsAt).ToString("HH:mm", CultureInfo.InvariantCulture);
+        StartTime = TimeInput(starts);
+        EndTime = TimeInput(EventTime.ToEventLocal(shift.EndsAt));
         RequiredCount = shift.RequiredCount;
     }
 
@@ -174,7 +177,9 @@ public sealed class ShiftChangeForm(HttpClient http)
 
         Busy = true;
         Error = null;
-        Impact = null;
+        ClearReview();
+        var removing = Removing;
+        var details = EnteredDetails(shift);
         try
         {
             using var response = await http.GetAsync(new Uri(
@@ -182,7 +187,13 @@ public sealed class ShiftChangeForm(HttpClient http)
             var answer = await response.Content.ReadFromJsonAsync<ApiResponse<ShiftImpactResponse>>();
             if (answer?.Data is { } impact)
             {
-                Impact = impact;
+                // A detail changed while the review was on its way, so this answer describes something else.
+                if (ReferenceEquals(Selected, shift) && Removing == removing && details == EnteredDetails(shift))
+                {
+                    Impact = impact;
+                    reviewed = details with { ExpectedAffected = impact.AffectedVersion };
+                }
+
                 return;
             }
 
@@ -207,29 +218,62 @@ public sealed class ShiftChangeForm(HttpClient http)
         }
 
         var shift = Selected!;
+        var removing = Removing;
+        var details = reviewed!;
         Busy = true;
         Error = null;
         try
         {
-            using var message = await ChangeMessageAsync(shift);
-            if (message is null)
+            // Nothing has been sent until the token arrives, so a failure here keeps the reviewed change to retry.
+            var token = await TokenOrNullAsync();
+            if (token is null)
             {
                 Error = NotRecorded();
                 return false;
             }
 
+            return await SendChangeAsync(shift, removing, details, token);
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+    private async Task<bool> SendChangeAsync(ManagedShift shift, bool removing, ChangeShiftRequest details, string token)
+    {
+        try
+        {
+            using var message = removing
+                ? AntiforgeryRequests.Create(HttpMethod.Delete,
+                    $"api/v1/admin/shifts/{shift.ShiftId}?expectedVersion={Uri.EscapeDataString(shift.Version)}", token)
+                : AntiforgeryRequests.Create(HttpMethod.Patch, $"api/v1/admin/shifts/{shift.ShiftId}", token, details);
             using var response = await http.SendAsync(message);
-            var refusal = Removing
-                ? await RefusalInAsync<ShiftRemovedResponse>(response)
-                : await RefusalInAsync<ManagedShift>(response);
+
+            ApiError? refusal;
+            string confirmation;
+            if (removing)
+            {
+                refusal = await RefusalInAsync<ShiftRemovedResponse>(response);
+                confirmation = "Shift removed.";
+            }
+            else
+            {
+                var answer = await response.Content.ReadFromJsonAsync<ApiResponse<ManagedShift>>();
+                refusal = answer?.Data is null ? answer?.Error ?? NotRecorded() : null;
+                confirmation = answer?.Data?.Version == shift.Version
+                    ? "Nothing was different, so no change was saved."
+                    : "Shift saved.";
+            }
+
             if (refusal is not null)
             {
-                Impact = null;
+                ClearReview();
                 await ShowRefusalAsync(refusal);
                 return false;
             }
 
-            Confirmation = Removing ? "Shift removed." : "Shift saved.";
+            Confirmation = confirmation;
             Close();
             await LoadAsync();
             return true;
@@ -243,10 +287,37 @@ public sealed class ShiftChangeForm(HttpClient http)
             await LoadAsync();
             return false;
         }
-        finally
+    }
+
+    private async Task<string?> TokenOrNullAsync()
+    {
+        try
         {
-            Busy = false;
+            var token = await AntiforgeryRequests.FetchTokenAsync(http);
+            return string.IsNullOrEmpty(token) ? null : token;
         }
+        catch (Exception failure) when (failure is HttpRequestException or JsonException or TaskCanceledException)
+        {
+            return null;
+        }
+    }
+
+    private ChangeShiftRequest EnteredDetails(ManagedShift shift) => new(
+        shift.Version,
+        Guid.TryParse(LocationChoice, out var locationId) ? locationId : null,
+        Date,
+        StartTime,
+        EndTime,
+        RequiredCount);
+
+    /// <summary>Keeps any seconds a stored time has, so an untouched time still matches the shift on the server.</summary>
+    private static string TimeInput(DateTimeOffset local) =>
+        local.ToString(local.Second == 0 ? "HH:mm" : "HH:mm:ss", CultureInfo.InvariantCulture);
+
+    private void ClearReview()
+    {
+        Impact = null;
+        reviewed = null;
     }
 
     private string ImpactQuery(ManagedShift shift)
@@ -262,26 +333,6 @@ public sealed class ShiftChangeForm(HttpClient http)
             : string.Empty;
         return $"action=edit&{version}&locationId={Uri.EscapeDataString(LocationChoice)}&date={Uri.EscapeDataString(Date)}" +
             $"&startTime={Uri.EscapeDataString(StartTime)}&endTime={Uri.EscapeDataString(EndTime)}{count}";
-    }
-
-    private async Task<HttpRequestMessage?> ChangeMessageAsync(ManagedShift shift)
-    {
-        var token = await AntiforgeryRequests.FetchTokenAsync(http);
-        if (string.IsNullOrEmpty(token))
-        {
-            return null;
-        }
-
-        return Removing
-            ? AntiforgeryRequests.Create(HttpMethod.Delete,
-                $"api/v1/admin/shifts/{shift.ShiftId}?expectedVersion={Uri.EscapeDataString(shift.Version)}", token)
-            : AntiforgeryRequests.Create(HttpMethod.Patch, $"api/v1/admin/shifts/{shift.ShiftId}", token, new ChangeShiftRequest(
-                shift.Version,
-                Guid.TryParse(LocationChoice, out var locationId) ? locationId : null,
-                Date,
-                StartTime,
-                EndTime,
-                RequiredCount));
     }
 
     private static async Task<ApiError?> RefusalInAsync<T>(HttpResponseMessage response)
@@ -306,7 +357,7 @@ public sealed class ShiftChangeForm(HttpClient http)
     {
         Selected = null;
         Removing = false;
-        Impact = null;
+        ClearReview();
     }
 
     private static ApiError ListUnavailable() => new(ApiErrorCategory.Unavailable, "UNAVAILABLE",

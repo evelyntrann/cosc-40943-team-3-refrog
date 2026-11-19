@@ -124,6 +124,26 @@ public sealed class AdminShiftImpactEndpointTests
     }
 
     [TestMethod]
+    public async Task TheAffectedVersionChangesOnlyWhenTheHeldVolunteersDo()
+    {
+        await using var fixture = await AdminShiftFixture.CreateAsync();
+        await fixture.CreateAccountAsync(Admin, isAdministrator: true);
+        var shift = await fixture.SeedShiftAsync();
+        using var client = await fixture.SignedInClientAsync(Admin);
+
+        var before = await ImpactAsync(client, shift, RemoveQuery(shift));
+        var again = await ImpactAsync(client, shift, EditQuery(fixture, shift, count: 5));
+        await fixture.SeedAssignmentAsync(shift.Id, Guid.NewGuid(), AssignmentStatus.Cancelled);
+        var afterHistory = await ImpactAsync(client, shift, RemoveQuery(shift));
+        await fixture.SeedAssignmentAsync(shift.Id, Guid.NewGuid(), AssignmentStatus.Pending);
+        var afterSignUp = await ImpactAsync(client, shift, RemoveQuery(shift));
+
+        Assert.AreEqual(before.AffectedVersion, again.AffectedVersion);
+        Assert.AreEqual(before.AffectedVersion, afterHistory.AffectedVersion, "A cancelled sign-up affects nobody.");
+        Assert.AreNotEqual(before.AffectedVersion, afterSignUp.AffectedVersion);
+    }
+
+    [TestMethod]
     public async Task AHeldVolunteerWhoseAccountIsGoneIsStillCounted()
     {
         await using var fixture = await AdminShiftFixture.CreateAsync();
@@ -208,6 +228,9 @@ public sealed class AdminShiftImpactEndpointTests
             HttpStatusCode.UnprocessableEntity, "VALIDATION_FAILED", "requiredCount");
         await AssertRefusedAsync(client, shift.Id, EditQuery(fixture, shift, count: 0),
             HttpStatusCode.UnprocessableEntity, "VALIDATION_FAILED", "requiredCount");
+        await AssertRefusedAsync(client, shift.Id,
+            $"action=edit&expectedVersion={version}&locationId={fixture.Commons}&date=2027-05-03&startTime=14:00&endTime=18:00",
+            HttpStatusCode.UnprocessableEntity, "VALIDATION_FAILED", "requiredCount");
         await AssertRefusedAsync(client, shift.Id, EditQuery(fixture, shift, date: "2027-05-05", end: "21:00"),
             HttpStatusCode.UnprocessableEntity, "VALIDATION_FAILED", "endTime");
     }
@@ -239,7 +262,7 @@ public sealed class AdminShiftImpactEndpointTests
     private static string EditQuery(
         AdminShiftFixture fixture, Shift shift, string date = "2027-05-03", string end = "18:00", int? count = null) =>
         $"action=edit&expectedVersion={Convert.ToHexString(shift.Version)}&locationId={fixture.Commons}" +
-        $"&date={date}&startTime=14:00&endTime={end}" + (count is null ? string.Empty : $"&requiredCount={count}");
+        $"&date={date}&startTime=14:00&endTime={end}" + $"&requiredCount={count ?? shift.RequiredCount}";
 
     private static Uri ImpactUri(Guid shiftId, string query) => new($"/api/v1/admin/shifts/{shiftId}/impact?{query}", UriKind.Relative);
 

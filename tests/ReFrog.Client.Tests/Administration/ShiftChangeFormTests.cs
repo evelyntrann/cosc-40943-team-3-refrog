@@ -14,6 +14,8 @@ namespace ReFrog.Client.Tests.Administration;
 public sealed class ShiftChangeFormTests
 {
     private const string Version = "00000000000007D0";
+    private const string SavedVersion = "00000000000007D1";
+    private const string Affected = "A1B2";
     private static readonly Guid Commons = Guid.NewGuid();
 
     // Monday May 3, 2027, 2:00–6:00 p.m. CDT.
@@ -21,7 +23,7 @@ public sealed class ShiftChangeFormTests
         new DateTimeOffset(2027, 5, 3, 19, 0, 0, TimeSpan.Zero), new DateTimeOffset(2027, 5, 3, 23, 0, 0, TimeSpan.Zero), 3, 1, Version);
 
     private static readonly ShiftImpactResponse Allowed = new(Shift.ShiftId, Version, 1,
-        [new AffectedVolunteer("volunteer@example.org", AssignmentStatus.Active)], true, null);
+        [new AffectedVolunteer("volunteer@example.org", AssignmentStatus.Active)], true, null, Affected);
 
     [TestMethod]
     public async Task LoadListsTheShifts()
@@ -187,7 +189,7 @@ public sealed class ShiftChangeFormTests
 
         Assert.IsTrue(await form.ConfirmAsync());
 
-        Assert.AreEqual(new ChangeShiftRequest(Version, Commons, "2027-05-03", "14:00", "18:00", 4), server.LastPatch);
+        Assert.AreEqual(new ChangeShiftRequest(Version, Commons, "2027-05-03", "14:00", "18:00", 4, Affected), server.LastPatch);
         Assert.AreEqual("token-1", server.LastToken);
         Assert.AreEqual("Shift saved.", form.Confirmation);
         Assert.IsNull(form.Selected);
@@ -289,6 +291,90 @@ public sealed class ShiftChangeFormTests
     }
 
     [TestMethod]
+    public async Task ADetailChangedWhileTheReviewIsOnItsWayIsNotApprovedByThatReview()
+    {
+        var server = new ScriptedServer { ImpactGate = new TaskCompletionSource() };
+        var form = server.Form();
+        form.BeginEdit(Shift);
+        form.RequiredCount = 5;
+
+        var review = form.ReviewAsync();
+        form.RequiredCount = 8;
+        server.ImpactGate.SetResult();
+        await review;
+
+        Assert.IsNull(form.Impact);
+        Assert.IsFalse(form.CanConfirm);
+        Assert.IsFalse(await form.ConfirmAsync());
+        Assert.AreEqual(0, server.Writes);
+    }
+
+    [TestMethod]
+    public async Task ConfirmingSendsTheReviewedValuesEvenIfAnInputChangesMeanwhile()
+    {
+        var server = new ScriptedServer();
+        var form = server.Form();
+        form.BeginEdit(Shift);
+        form.RequiredCount = 5;
+        await form.ReviewAsync();
+        server.TokenGate = new TaskCompletionSource();
+
+        var confirm = form.ConfirmAsync();
+        form.RequiredCount = 8;
+        server.TokenGate.SetResult();
+
+        Assert.IsTrue(await confirm);
+        Assert.AreEqual(5, server.LastPatch?.RequiredCount);
+    }
+
+    [TestMethod]
+    public async Task AFailedTokenRequestSaysNotSavedAndKeepsTheReviewedChange()
+    {
+        var server = new ScriptedServer();
+        var form = server.Form();
+        form.BeginEdit(Shift);
+        form.RequiredCount = 4;
+        await form.ReviewAsync();
+        server.FailToken = true;
+
+        Assert.IsFalse(await form.ConfirmAsync());
+
+        Assert.AreEqual("NOT_RECORDED", form.Error?.Code, "No write was sent, so the outcome is known.");
+        Assert.AreEqual(0, server.Writes);
+        Assert.AreEqual(Shift, form.Selected);
+        Assert.AreEqual(4, form.RequiredCount);
+        Assert.IsTrue(form.CanConfirm);
+
+        server.FailToken = false;
+        Assert.IsTrue(await form.ConfirmAsync());
+        Assert.AreEqual(4, server.LastPatch?.RequiredCount);
+    }
+
+    [TestMethod]
+    public void EditingKeepsAnySecondsTheStoredTimesHave()
+    {
+        var form = new ScriptedServer().Form();
+
+        form.BeginEdit(Shift with { StartsAt = Shift.StartsAt.AddSeconds(30) });
+
+        Assert.AreEqual("14:00:30", form.StartTime);
+        Assert.AreEqual("18:00", form.EndTime);
+    }
+
+    [TestMethod]
+    public async Task AnEditThatChangedNothingIsNotReportedAsSaved()
+    {
+        var server = new ScriptedServer { Patch = (HttpStatusCode.OK, ApiResponse.Success(Shift)) };
+        var form = server.Form();
+        form.BeginEdit(Shift);
+        await form.ReviewAsync();
+
+        Assert.IsTrue(await form.ConfirmAsync());
+
+        Assert.AreEqual("Nothing was different, so no change was saved.", form.Confirmation);
+    }
+
+    [TestMethod]
     public void CancelClosesTheChange()
     {
         var form = new ScriptedServer().Form();
@@ -311,9 +397,12 @@ public sealed class ShiftChangeFormTests
             (HttpStatusCode.OK, ApiResponse.Success(Allowed));
 
         public (HttpStatusCode, ApiResponse<ManagedShift>) Patch { get; set; } =
-            (HttpStatusCode.OK, ApiResponse.Success(Shift));
+            (HttpStatusCode.OK, ApiResponse.Success(Shift with { Version = SavedVersion }));
 
         public bool DropNextWrite { get; set; }
+        public bool FailToken { get; set; }
+        public TaskCompletionSource? ImpactGate { get; set; }
+        public TaskCompletionSource? TokenGate { get; set; }
         public int Writes { get; private set; }
         public int ListReads { get; private set; }
         public string LastImpactQuery { get; private set; } = string.Empty;
@@ -328,6 +417,16 @@ public sealed class ShiftChangeFormTests
             var path = request.RequestUri!.AbsolutePath;
             if (path == "/api/v1/auth/antiforgery")
             {
+                if (TokenGate is { } tokenGate)
+                {
+                    await tokenGate.Task;
+                }
+
+                if (FailToken)
+                {
+                    return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+                }
+
                 return Json(HttpStatusCode.OK, ApiResponse.Success(new AntiforgeryTokenResponse($"token-{++tokens}")));
             }
 
@@ -340,6 +439,11 @@ public sealed class ShiftChangeFormTests
             if (path.EndsWith("/impact", StringComparison.Ordinal))
             {
                 LastImpactQuery = request.RequestUri.Query;
+                if (ImpactGate is { } impactGate)
+                {
+                    await impactGate.Task;
+                }
+
                 return Json(Impact.Item1, Impact.Item2);
             }
 

@@ -1,5 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using ReFrog.Contracts.Administration;
 using ReFrog.Contracts.Api;
 using ReFrog.Contracts.Time;
@@ -30,6 +32,7 @@ public sealed class ShiftAdminService(
 {
     private const string ChangeUnresolved = "ASSIGNED_SHIFT_CHANGE_UNRESOLVED";
     private const string CapacityBelowHeld = "CAPACITY_BELOW_HELD";
+    private const string ShiftStale = "SHIFT_VERSION_STALE";
 
     private static readonly IReadOnlyDictionary<Guid, int> NoDefaults = new Dictionary<Guid, int>();
     private static readonly IReadOnlyDictionary<string, string> NoFields = new Dictionary<string, string>();
@@ -41,6 +44,10 @@ public sealed class ShiftAdminService(
     private static readonly Action<ILogger, string, Exception?> LogShiftReadUnavailable =
         LoggerMessage.Define<string>(LogLevel.Error, new EventId(7204, "ShiftReadUnavailable"),
             "Shift information could not be read ({FailureType})");
+
+    private static readonly Action<ILogger, string, Exception?> LogShiftChangeNotRecorded =
+        LoggerMessage.Define<string>(LogLevel.Error, new EventId(7205, "ShiftChangeNotRecorded"),
+            "A shift change could not be completed ({FailureType})");
 
     public async Task<AdminReply<ShiftOptionsResponse>> GetOptionsAsync(CancellationToken cancellationToken)
     {
@@ -249,7 +256,8 @@ public sealed class ShiftAdminService(
                 held.Count,
                 held.Select(x => new AffectedVolunteer(emails.GetValueOrDefault(x.VolunteerId), x.Status)).ToList(),
                 refusalCode is null,
-                refusalCode)));
+                refusalCode,
+                AffectedVersionOf(held))));
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -258,7 +266,11 @@ public sealed class ShiftAdminService(
         }
     }
 
-    /// <summary>6a: saves a confirmed edit. The held count is read under the shift lock, so a sign-up cannot slip past it.</summary>
+    /// <summary>
+    /// 6a: saves a confirmed edit. Who is held is read under the shift lock, so a sign-up cannot slip past the rules,
+    /// and the edit is refused as stale if those volunteers are not the ones the preview showed (6a1). An edit that
+    /// changes nothing stores nothing and records no audit entry (§8.2.9).
+    /// </summary>
     public async Task<AdminReply<ManagedShift>> ApplyConfirmedChangeAsync(
         Guid shiftId, ChangeShiftRequest request, Guid actorId, CancellationToken cancellationToken)
     {
@@ -268,7 +280,16 @@ public sealed class ShiftAdminService(
             return InvalidVersion<ManagedShift>();
         }
 
+        if (!IsAffectedVersion(request.ExpectedAffected))
+        {
+            return Invalid<ManagedShift>(new Dictionary<string, string>
+            {
+                ["expectedAffected"] = "Review the change again before saving.",
+            });
+        }
+
         ShiftTarget? target;
+        ShiftEdit edit;
         try
         {
             (target, var refusal) = await FindTargetAsync<ManagedShift>(
@@ -277,6 +298,18 @@ public sealed class ShiftAdminService(
             {
                 return refusal!;
             }
+
+            edit = CheckEdit(target, request);
+            if (edit.Fields.Count > 0)
+            {
+                return Invalid<ManagedShift>(edit.Fields);
+            }
+
+            if (edit.SameDetails && edit.RequiredCount == target.Shift.RequiredCount)
+            {
+                var heldNow = await assignments.CountHeldAsync(shiftId, cancellationToken);
+                return new(200, ApiResponse.Success(ToManaged(target.Shift, target.Locations, heldNow)));
+            }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -284,16 +317,16 @@ public sealed class ShiftAdminService(
             return NotRecorded<ManagedShift>();
         }
 
-        var edit = CheckEdit(target, request);
-        if (edit.Fields.Count > 0)
-        {
-            return Invalid<ManagedShift>(edit.Fields);
-        }
-
         var held = 0;
-        var result = await store.ChangeUnderLockAsync(shiftId, request.ExpectedVersion, async token =>
+        var result = await ChangeAsync(shiftId, request.ExpectedVersion, async token =>
         {
-            held = await assignments.CountHeldAsync(shiftId, token);
+            var assigned = await assignments.ListHeldAsync(shiftId, token);
+            held = assigned.Count;
+            if (!string.Equals(AffectedVersionOf(assigned), request.ExpectedAffected, StringComparison.OrdinalIgnoreCase))
+            {
+                return new ShiftRefusal(ShiftStale);
+            }
+
             if (EditRefusal(edit, held) is { } code)
             {
                 return new ShiftRefusal(code);
@@ -332,7 +365,7 @@ public sealed class ShiftAdminService(
             return NotRecorded<ShiftRemovedResponse>();
         }
 
-        var result = await store.ChangeUnderLockAsync(shiftId, expectedVersion, async token =>
+        var result = await ChangeAsync(shiftId, expectedVersion, async token =>
         {
             if (await RemovalRefusalAsync(shiftId, token) is { } code)
             {
@@ -348,10 +381,32 @@ public sealed class ShiftAdminService(
             : ChangeNotMade<ShiftRemovedResponse>(result);
     }
 
+    /// <summary>
+    /// Runs the locked change. Any failure inside it has rolled the transaction back, so it is reported as not
+    /// recorded in the shared envelope (§8.2.1), not left to escape as an unformatted error.
+    /// </summary>
+    private async Task<ShiftChangeResult> ChangeAsync(
+        Guid shiftId,
+        string expectedVersion,
+        Func<CancellationToken, Task<ShiftChangeDecision>> decide,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await store.ChangeUnderLockAsync(shiftId, expectedVersion, decide, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            LogShiftChangeNotRecorded(logger, exception.GetType().Name, null);
+            return new ShiftChangeResult(ShiftChangeOutcome.NotRecorded);
+        }
+    }
+
     private static AdminReply<T> ChangeNotMade<T>(ShiftChangeResult result) => result.Outcome switch
     {
         ShiftChangeOutcome.NotFound => ShiftNotFound<T>(),
         ShiftChangeOutcome.VersionStale => VersionStale<T>(),
+        ShiftChangeOutcome.Refused when result.RefusalCode == ShiftStale => VersionStale<T>(),
         ShiftChangeOutcome.Refused when result.RefusalCode == CapacityBelowHeld => Failure<T>(409, ApiErrorCategory.Validation,
             CapacityBelowHeld, "Check the highlighted fields.", new Dictionary<string, string>
             {
@@ -397,7 +452,7 @@ public sealed class ShiftAdminService(
     private static ShiftEdit CheckEdit(ShiftTarget target, ChangeShiftRequest request)
     {
         var stored = target.Shift;
-        var count = request.RequiredCount ?? stored.RequiredCount;
+        var count = request.RequiredCount ?? 0;
         var details = new CreateShiftRequest(
             stored.CreateRequestId, request.LocationId, request.Date, request.StartTime, request.EndTime, null);
         if (SameInput(stored, details))
@@ -434,6 +489,18 @@ public sealed class ShiftAdminService(
 
     private static bool IsVersion([NotNullWhen(true)] string? value) =>
         value is { Length: 16 } && value.All(char.IsAsciiHexDigit);
+
+    private static bool IsAffectedVersion([NotNullWhen(true)] string? value) =>
+        value is { Length: 64 } && value.All(char.IsAsciiHexDigit);
+
+    /// <summary>
+    /// Identifies who is held and in what status. A sign-up does not change the shift's row version, so the preview
+    /// and the save compare this to tell whether the administrator saw the volunteers a change would affect (6a1).
+    /// </summary>
+    private static string AffectedVersionOf(IEnumerable<HeldAssignment> held) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', held
+            .Select(x => string.Create(CultureInfo.InvariantCulture, $"{x.VolunteerId:N}:{x.Status}"))
+            .Order(StringComparer.Ordinal)))));
 
     private static AdminReply<T> InvalidVersion<T>() => Invalid<T>(new Dictionary<string, string>
     {

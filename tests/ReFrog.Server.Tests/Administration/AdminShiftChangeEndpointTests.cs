@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using ReFrog.Contracts.Administration;
 using ReFrog.Contracts.Api;
 using ReFrog.Contracts.Volunteer;
@@ -23,6 +24,9 @@ public sealed class AdminShiftChangeEndpointTests
     private const string Admin = "admin@example.org";
     private const string Unresolved = "ASSIGNED_SHIFT_CHANGE_UNRESOLVED";
 
+    // The preview's affectedVersion for a shift nobody holds: the SHA-256 of nothing.
+    private const string NoVolunteers = "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855";
+
     [TestMethod]
     public async Task MovingOrRemovingAHeldShiftIsRefusedAndChangesNothing()
     {
@@ -33,8 +37,8 @@ public sealed class AdminShiftChangeEndpointTests
         using var client = await fixture.SignedInClientAsync(Admin);
         var token = await AdminShiftFixture.TokenAsync(client);
 
-        using var moved = await PatchAsync(client, shift.Id, Edit(shift, date: "2027-05-05"), token);
-        using var relocated = await PatchAsync(client, shift.Id, Edit(shift, location: fixture.Village), token);
+        using var moved = await PatchAsync(client, shift.Id, await ReviewedAsync(client, shift, Edit(shift, date: "2027-05-05")), token);
+        using var relocated = await PatchAsync(client, shift.Id, await ReviewedAsync(client, shift, Edit(shift, location: fixture.Village)), token);
         using var removed = await DeleteAsync(client, shift.Id, Version(shift), token);
 
         foreach (var response in new[] { moved, relocated, removed })
@@ -57,7 +61,7 @@ public sealed class AdminShiftChangeEndpointTests
         using var client = await fixture.SignedInClientAsync(Admin);
         var token = await AdminShiftFixture.TokenAsync(client);
 
-        using var response = await PatchAsync(client, shift.Id, Edit(shift, count: 2), token);
+        using var response = await PatchAsync(client, shift.Id, await ReviewedAsync(client, shift, Edit(shift, count: 2)), token);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
         var saved = (await response.Content.ReadFromJsonAsync<ApiResponse<ManagedShift>>())!.Data!;
@@ -89,7 +93,7 @@ public sealed class AdminShiftChangeEndpointTests
         using var client = await fixture.SignedInClientAsync(Admin);
         var token = await AdminShiftFixture.TokenAsync(client);
 
-        using var response = await PatchAsync(client, shift.Id, Edit(shift, count: 1), token);
+        using var response = await PatchAsync(client, shift.Id, await ReviewedAsync(client, shift, Edit(shift, count: 1)), token);
 
         var error = await AssertRefusedAsync(response, HttpStatusCode.Conflict, "CAPACITY_BELOW_HELD");
         Assert.IsNotNull(error.Fields?.GetValueOrDefault("requiredCount"));
@@ -97,7 +101,7 @@ public sealed class AdminShiftChangeEndpointTests
     }
 
     [TestMethod]
-    public async Task AShiftWithNoVolunteersCanBeMovedAndKeepsItsCountWhenNoneIsSent()
+    public async Task AShiftWithNoVolunteersCanBeMoved()
     {
         await using var fixture = await AdminShiftFixture.CreateAsync();
         await fixture.CreateAccountAsync(Admin, isAdministrator: true);
@@ -113,6 +117,102 @@ public sealed class AdminShiftChangeEndpointTests
         Assert.AreEqual(new DateTimeOffset(2027, 5, 5, 20, 0, 0, TimeSpan.Zero), stored.StartsAt);
         Assert.AreEqual(new DateTimeOffset(2027, 5, 5, 22, 0, 0, TimeSpan.Zero), stored.EndsAt);
         Assert.AreEqual(3, stored.RequiredCount);
+    }
+
+    [TestMethod]
+    public async Task AnEditWithoutACountIsRefusedRatherThanKeepingTheOldOne()
+    {
+        await using var fixture = await AdminShiftFixture.CreateAsync();
+        await fixture.CreateAccountAsync(Admin, isAdministrator: true);
+        var shift = await fixture.SeedShiftAsync(requiredCount: 3);
+        using var client = await fixture.SignedInClientAsync(Admin);
+        var token = await AdminShiftFixture.TokenAsync(client);
+
+        using var sameDetails = await PatchAsync(client, shift.Id, Edit(shift) with { RequiredCount = null }, token);
+        using var moved = await PatchAsync(client, shift.Id, Edit(shift, date: "2027-05-05") with { RequiredCount = null }, token);
+
+        foreach (var response in new[] { sameDetails, moved })
+        {
+            var error = await AssertRefusedAsync(response, HttpStatusCode.UnprocessableEntity, "VALIDATION_FAILED");
+            Assert.IsNotNull(error.Fields?.GetValueOrDefault("requiredCount"));
+        }
+
+        await AssertUnchangedAsync(fixture, shift);
+    }
+
+    [TestMethod]
+    public async Task AVolunteerWhoSignsUpAfterThePreviewStopsTheEditFromSaving()
+    {
+        await using var fixture = await AdminShiftFixture.CreateAsync();
+        await fixture.CreateAccountAsync(Admin, isAdministrator: true);
+        var shift = await fixture.SeedShiftAsync(requiredCount: 3);
+        using var client = await fixture.SignedInClientAsync(Admin);
+        var token = await AdminShiftFixture.TokenAsync(client);
+        var reviewed = await ReviewedAsync(client, shift, Edit(shift, count: 5));
+
+        await fixture.SeedAssignmentAsync(shift.Id, Guid.NewGuid(), AssignmentStatus.Active);
+        using var response = await PatchAsync(client, shift.Id, reviewed, token);
+
+        await AssertRefusedAsync(response, HttpStatusCode.Conflict, "SHIFT_VERSION_STALE");
+        await AssertUnchangedAsync(fixture, shift);
+    }
+
+    [TestMethod]
+    public async Task AnEditMustCarryThePreviewOfWhoIsAffected()
+    {
+        await using var fixture = await AdminShiftFixture.CreateAsync();
+        await fixture.CreateAccountAsync(Admin, isAdministrator: true);
+        var shift = await fixture.SeedShiftAsync();
+        using var client = await fixture.SignedInClientAsync(Admin);
+        var token = await AdminShiftFixture.TokenAsync(client);
+
+        using var missing = await PatchAsync(client, shift.Id, Edit(shift, count: 5) with { ExpectedAffected = null }, token);
+        using var malformed = await PatchAsync(client, shift.Id, Edit(shift, count: 5) with { ExpectedAffected = "not-a-preview" }, token);
+
+        foreach (var response in new[] { missing, malformed })
+        {
+            var error = await AssertRefusedAsync(response, HttpStatusCode.UnprocessableEntity, "VALIDATION_FAILED");
+            Assert.IsNotNull(error.Fields?.GetValueOrDefault("expectedAffected"));
+        }
+
+        await AssertUnchangedAsync(fixture, shift);
+    }
+
+    [TestMethod]
+    public async Task AnEditThatChangesNothingStoresNothingAndRecordsNoAuditEntry()
+    {
+        await using var fixture = await AdminShiftFixture.CreateAsync();
+        await fixture.CreateAccountAsync(Admin, isAdministrator: true);
+        var shift = await fixture.SeedShiftAsync();
+        using var client = await fixture.SignedInClientAsync(Admin);
+        var token = await AdminShiftFixture.TokenAsync(client);
+
+        using var response = await PatchAsync(client, shift.Id, Edit(shift), token);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+        Assert.AreEqual(Version(shift), (await response.Content.ReadFromJsonAsync<ApiResponse<ManagedShift>>())!.Data!.Version);
+        await AssertUnchangedAsync(fixture, shift);
+    }
+
+    [TestMethod]
+    public async Task AnUnexpectedFailureUnderTheLockIsNotRecordedInTheSharedEnvelope()
+    {
+        await using var fixture = await AdminShiftFixture.CreateAsync(services =>
+        {
+            services.RemoveAll<IAssignmentQueryService>();
+            services.AddScoped<IAssignmentQueryService, BrokenAssignments>();
+        });
+        await fixture.CreateAccountAsync(Admin, isAdministrator: true);
+        var shift = await fixture.SeedShiftAsync();
+        using var client = await fixture.SignedInClientAsync(Admin);
+        var token = await AdminShiftFixture.TokenAsync(client);
+
+        using var patch = await PatchAsync(client, shift.Id, Edit(shift, count: 5), token);
+        using var delete = await DeleteAsync(client, shift.Id, Version(shift), token);
+
+        await AssertRefusedAsync(patch, HttpStatusCode.ServiceUnavailable, "NOT_RECORDED");
+        await AssertRefusedAsync(delete, HttpStatusCode.ServiceUnavailable, "NOT_RECORDED");
+        await AssertUnchangedAsync(fixture, shift);
     }
 
     [TestMethod]
@@ -362,8 +462,9 @@ public sealed class AdminShiftChangeEndpointTests
             var shift = await fixture.SeedShiftAsync(requiredCount: 2);
             await fixture.SeedAssignmentAsync(shift.Id, Guid.NewGuid(), AssignmentStatus.Active);
 
+            var affected = await AffectedVersionAsync(fixture, shift);
             var signUp = SignUpAsync(fixture, shift.Id);
-            var cut = CutCapacityAsync(fixture, shift);
+            var cut = CutCapacityAsync(fixture, shift, affected);
             await Task.WhenAll(signUp, cut);
 
             var stored = (await fixture.ShiftsAsync()).Single(x => x.Id == shift.Id);
@@ -391,12 +492,28 @@ public sealed class AdminShiftChangeEndpointTests
         return outcome.StatusCode;
     }
 
-    private static async Task<int> CutCapacityAsync(AdminShiftFixture fixture, Shift shift)
+    private static async Task<int> CutCapacityAsync(AdminShiftFixture fixture, Shift shift, string affected)
     {
         await using var scope = fixture.Host.Factory.Services.CreateAsyncScope();
         var reply = await scope.ServiceProvider.GetRequiredService<ShiftAdminService>()
-            .ApplyConfirmedChangeAsync(shift.Id, Edit(shift, count: 1), Guid.NewGuid(), CancellationToken.None);
+            .ApplyConfirmedChangeAsync(shift.Id, Edit(shift, count: 1) with { ExpectedAffected = affected }, Guid.NewGuid(), CancellationToken.None);
         return reply.StatusCode;
+    }
+
+    private static async Task<string> AffectedVersionAsync(AdminShiftFixture fixture, Shift shift)
+    {
+        await using var scope = fixture.Host.Factory.Services.CreateAsyncScope();
+        var reply = await scope.ServiceProvider.GetRequiredService<ShiftAdminService>().AssessChangeAsync(
+            shift.Id, "remove", new ChangeShiftRequest(Version(shift), null, null, null, null, null), CancellationToken.None);
+        return reply.Response.Data!.AffectedVersion;
+    }
+
+    /// <summary>The edit as the page sends it: carrying the affected version the preview returned.</summary>
+    private static async Task<ChangeShiftRequest> ReviewedAsync(HttpClient client, Shift shift, ChangeShiftRequest edit)
+    {
+        var impact = await client.GetFromJsonAsync<ApiResponse<ShiftImpactResponse>>(new Uri(
+            $"/api/v1/admin/shifts/{shift.Id}/impact?action=remove&expectedVersion={Version(shift)}", UriKind.Relative));
+        return edit with { ExpectedAffected = impact!.Data!.AffectedVersion };
     }
 
     private static string Version(Shift shift) => Convert.ToHexString(shift.Version);
@@ -404,7 +521,7 @@ public sealed class AdminShiftChangeEndpointTests
     /// <summary>The seeded shift's own details (Monday May 3, 2:00–6:00 p.m.), with the given ones changed.</summary>
     private static ChangeShiftRequest Edit(
         Shift shift, string date = "2027-05-03", string start = "14:00", string end = "18:00", int? count = null, Guid? location = null) =>
-        new(Version(shift), location ?? shift.LocationId, date, start, end, count);
+        new(Version(shift), location ?? shift.LocationId, date, start, end, count ?? shift.RequiredCount, NoVolunteers);
 
     private static Uri ShiftUri(Guid shiftId, string? version = null) => new(
         $"/api/v1/admin/shifts/{shiftId}" + (version is null ? string.Empty : $"?expectedVersion={version}"), UriKind.Relative);
@@ -449,6 +566,23 @@ public sealed class AdminShiftChangeEndpointTests
         Assert.AreEqual(shift.EndsAt, stored.EndsAt);
         CollectionAssert.AreEqual(shift.Version, stored.Version);
         Assert.IsEmpty(await fixture.AuditAsync());
+    }
+
+    /// <summary>VOL's read contract failing in a way the store does not classify as a store failure.</summary>
+    private sealed class BrokenAssignments : IAssignmentQueryService
+    {
+        public Task<int> CountHeldAsync(Guid shiftId, CancellationToken cancellationToken) => throw Failure();
+
+        public Task<bool> IsActiveAsync(Guid shiftId, Guid volunteerId, CancellationToken cancellationToken) => throw Failure();
+
+        public Task<IReadOnlyDictionary<Guid, int>> CountsHeldByShiftsAsync(
+            IReadOnlyCollection<Guid> shiftIds, CancellationToken cancellationToken) => throw Failure();
+
+        public Task<IReadOnlyList<HeldAssignment>> ListHeldAsync(Guid shiftId, CancellationToken cancellationToken) => throw Failure();
+
+        public Task<bool> HasAnyAssignmentAsync(Guid shiftId, CancellationToken cancellationToken) => throw Failure();
+
+        private static InvalidOperationException Failure() => new("The connection was closed.");
     }
 
     /// <summary>Fails every read of INF's locations, as an outage of that table would.</summary>

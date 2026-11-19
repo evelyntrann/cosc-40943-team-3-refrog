@@ -58,8 +58,10 @@ public sealed record ShiftListResponse(IReadOnlyList<ManagedShift> Shifts);
 
 /// <summary>
 /// An intended edit of a shift (6a). <see cref="ExpectedVersion"/> is the <see cref="ManagedShift.Version"/> the
-/// administrator was shown. The date and times follow <see cref="CreateShiftRequest"/>. Omit
-/// <see cref="RequiredCount"/> to keep the shift's count.
+/// administrator was shown. The date and times follow <see cref="CreateShiftRequest"/>, and
+/// <see cref="RequiredCount"/> is required. Saving also needs <see cref="ExpectedAffected"/>, the
+/// <see cref="ShiftImpactResponse.AffectedVersion"/> of the preview, so a change to who is affected since then is
+/// refused (6a1).
 /// </summary>
 public sealed record ChangeShiftRequest(
     string? ExpectedVersion,
@@ -67,7 +69,8 @@ public sealed record ChangeShiftRequest(
     string? Date,
     string? StartTime,
     string? EndTime,
-    int? RequiredCount);
+    int? RequiredCount,
+    string? ExpectedAffected = null);
 
 /// <summary><c>DELETE /api/v1/admin/shifts/{shiftId}</c>: the shift that was removed.</summary>
 public sealed record ShiftRemovedResponse(Guid ShiftId);
@@ -78,6 +81,7 @@ public sealed record AffectedVolunteer(string? Email, string Status);
 /// <summary>
 /// <c>GET /api/v1/admin/shifts/{shiftId}/impact</c>: who a change would affect and whether it is allowed. When
 /// <see cref="Permitted"/> is false, <see cref="RefusalCode"/> is the error applying the change would return.
+/// <see cref="AffectedVersion"/> identifies the volunteers shown and is sent back when the edit is saved.
 /// </summary>
 public sealed record ShiftImpactResponse(
     Guid ShiftId,
@@ -85,4 +89,5 @@ public sealed record ShiftImpactResponse(
     int HeldCount,
     IReadOnlyList<AffectedVolunteer> AffectedVolunteers,
     bool Permitted,
-    string? RefusalCode);
+    string? RefusalCode,
+    string AffectedVersion);
