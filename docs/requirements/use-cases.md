@@ -492,7 +492,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 2. The person enters an email address.
 3. The system displays the same acknowledgement whether or not an account exists.
 4. If a matching account exists, the system sends a one-time password-reset link valid for 30 minutes.
-5. The person opens the link and enters a new password satisfying `FR-AUTH-password-policy`.
+5. The person opens the link and enters a new password satisfying `FR-AUTH-password-policy`, then enters it again to confirm it.
 6. The system verifies and consumes the token, changes the password, and invalidates existing sessions in one completed operation.
 7. The system confirms the reset and directs the person to `UC-AUTH-sign-in`.
 8. Use case ends.
@@ -505,8 +505,8 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 - **4b. Email delivery fails or has an unknown outcome:**
     - 4b1. The public response remains the same acknowledgement and no password or session state changes.
     - 4b2. The person may make another recovery request.
-- **5a. The new password is invalid:**
-    - 5a1. The system identifies the password-policy failure without consuming the reset token.
+- **5a. The new password is invalid or its confirmation does not match:**
+    - 5a1. The system identifies the password-policy or confirmation failure without consuming the reset token.
     - 5a2. Use case resumes at step 5 while the token remains valid.
 - **6a. The token is invalid, expired, or already used:**
     - 6a1. The system changes nothing and asks the person to request a new recovery link.

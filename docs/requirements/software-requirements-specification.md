@@ -246,11 +246,13 @@ Five consecutive failed password attempts for a registered account shall produce
 
 Account recovery shall return the same public acknowledgement for registered and unregistered emails. For a registered account, the system shall send a one-time password-reset link that expires 30 minutes after server-side issuance. A successful reset shall atomically replace the password, consume the reset token, and invalidate all earlier sessions. An invalid, expired, or reused token shall change neither password nor session state.
 
+Password reset shall display `FR-AUTH-password-policy` before submission and require two matching entries of the new password. A confirmation mismatch shall identify the confirmation field and leave the reset token available for correction.
+
 Accepted recovery messages to one normalized destination email shall be at least 60 seconds apart, with at most five accepted messages in any rolling hour. Refused, unknown-account, and failed-delivery requests shall return the same public acknowledgement and shall not disclose account existence, throttling, or delivery outcome. These recovery limits are separate from `FR-AUTH-verification-limits`, which governs six-digit registration and affiliation codes.
 
-**Verification:** Compare public responses for known, unknown, throttled, and failed-delivery recovery requests; confirm only registered accounts receive links. With a fixed clock, accept a recovery send at 60 seconds but not 59, accept five sends in a rolling hour but not a sixth, accept a reset token immediately before 30 minutes and reject it at 30 minutes, confirm a token works once, confirm a successful reset invalidates old credentials and sessions, and simulate a failed password write to confirm the old password and sessions remain valid.
+**Verification:** Compare public responses for known, unknown, throttled, and failed-delivery recovery requests; confirm only registered accounts receive links. With a fixed clock, accept a recovery send at 60 seconds but not 59, accept five sends in a rolling hour but not a sixth, accept a reset token immediately before 30 minutes and reject it at 30 minutes, confirm a token works once, confirm a successful reset invalidates old credentials and sessions, and simulate a failed password write to confirm the old password and sessions remain valid. Confirm the page displays the password policy before submission and the server rejects missing or mismatched confirmation, including case differences, without consuming the token.
 
-**Source:** Team decision, November 4, 2026; not a client business rule.
+**Source:** Team decision, November 4, 2026; not a client business rule. Password confirmation and visible policy guidance added by developer request on November 18, 2026.
 
 **`FR-AUTH-affiliation-from-signin`**
 
@@ -855,6 +857,13 @@ _Example: `AVL-uptime`: The system shall be available 99% of the time during the
 
 - `AVL-event-hours`: The system shall be available during the recruitment period and all published ReFrog event operating hours, subject to the approved availability target.
 - `AVL-uptime`: The system shall maintain at least 99 percent availability during the volunteer-recruitment period and finals-week event period, excluding approved maintenance windows.
+  - **SLI:** good probes ÷ all attempted probes of `GET /api/v1/info/event`, sent once per minute by a process outside the application. A good probe receives `200`, `application/json`, a known event status, and no error within three seconds.
+  - **Window:** the volunteer-recruitment period and finals-week event period, excluding approved maintenance windows. The exact dates are open under `OI-33`.
+  - **Target:** at least 99 percent of probes are good over the window.
+  - **Error budget:** 1 percent of probes, which is about 14 minutes per day of the window at one probe per minute.
+  - **Current measured value:** 100 percent (20 of 20 probes) from 9:12 a.m. to 9:31 a.m. on November 18, 2026. This is a limited local measurement, not production availability: ReFrog is not deployed, so the probe measured `v0.2.0` running on one development machine, outside the requirement's window.
+  - **Source:** [availability-probes.csv](../operations/slo-evidence/availability-probes.csv), recorded by [availability-slo.sh](../../scripts/availability-slo.sh). The method and the proof that the probe can fail are in [availability-slo.md](../operations/availability-slo.md).
+  - **What it misses:** network, DNS, TLS, and hosting failures; outages shorter than one minute; every workflow other than reading event information; real users and peak load; and any time outside the 20-minute sample.
 - `AVL-maintenance-window`: The system shall not schedule routine maintenance during published event operating hours.
 - `AVL-fallback-information`: Before each event, the system shall allow administrators to obtain an accessible backup of schedules, location information, and attendance procedures for use during an outage.
 - `AVL-outage-recovery`: The system shall restore essential scheduling and event-information functions within 30 minutes of a service interruption.

@@ -120,6 +120,51 @@ public static class AuthEndpoints
         return endpoints;
     }
 
+    public static IEndpointRouteBuilder MapRecoveryEndpoints(this IEndpointRouteBuilder endpoints)
+    {
+        endpoints.MapPost("/api/v1/auth/recoveries", async (
+            HttpRequest request, RecoveryService service, CancellationToken cancellationToken) =>
+        {
+            if (request.HttpContext.User.Identity?.IsAuthenticated == true)
+            {
+                return RecoverySignedIn<RecoveryAcknowledgement>();
+            }
+
+            var input = await ReadAsync<RequestRecoveryRequest>(request, cancellationToken);
+            if (input is null)
+            {
+                return InvalidRequest<RecoveryAcknowledgement>();
+            }
+
+            var reply = await service.RequestAsync(input, cancellationToken);
+            return Results.Json(reply.Response, statusCode: reply.StatusCode);
+        }).AllowAnonymous();
+
+        endpoints.MapPost("/api/v1/auth/password-resets", async (
+            HttpRequest request, RecoveryService service, CancellationToken cancellationToken) =>
+        {
+            if (request.HttpContext.User.Identity?.IsAuthenticated == true)
+            {
+                return RecoverySignedIn<PasswordResetResponse>();
+            }
+
+            var input = await ReadAsync<ResetPasswordRequest>(request, cancellationToken);
+            if (input is null)
+            {
+                return InvalidRequest<PasswordResetResponse>();
+            }
+
+            var reply = await service.ResetAsync(input, cancellationToken);
+            return Results.Json(reply.Response, statusCode: reply.StatusCode);
+        }).AllowAnonymous();
+
+        return endpoints;
+    }
+
+    private static IResult RecoverySignedIn<T>() => Results.Json(
+        ApiResponse.Failure<T>(new ApiError(ApiErrorCategory.Authorization, "ALREADY_SIGNED_IN",
+            "Sign out before recovering an account.")), statusCode: StatusCodes.Status403Forbidden);
+
     private static async Task<T?> ReadAsync<T>(HttpRequest request, CancellationToken cancellationToken)
     {
         if (!request.HasJsonContentType())

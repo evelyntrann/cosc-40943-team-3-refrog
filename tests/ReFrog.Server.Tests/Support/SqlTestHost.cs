@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using ReFrog.Server.Features.Administration.Persistence;
 using ReFrog.Server.Features.Authentication.Persistence;
 using ReFrog.Server.Features.Info.Persistence;
+using ReFrog.Server.Features.Volunteer.Persistence;
 
 namespace ReFrog.Server.Tests.Support;
 
@@ -124,6 +125,7 @@ internal sealed class SqlTestHost : IAsyncDisposable
         yield return services.GetRequiredService<AuthDbContext>();
         yield return services.GetRequiredService<InfoDbContext>();
         yield return services.GetRequiredService<AdmDbContext>();
+        yield return services.GetRequiredService<VolDbContext>();
     }
 }
 
