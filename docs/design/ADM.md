@@ -159,8 +159,9 @@ classDiagram
 
 | Planned file / boundary | New or reused | Responsibility |
 |---|---|---|
-| `administration/AdminController` | New | Admin-only HTTP entry points for the dashboard, notifications, and volunteer review; delegates business decisions |
-| `administration/AdminService` | New | Dashboard aggregation |
+| `administration/AdminController` | New | Admin-only HTTP entry points for the dashboard, notifications, and volunteer review; delegates business decisions. *As built (#136):* the dashboard route is `src/Backend/ReFrog.Server/Features/Administration/AdminDashboardEndpoints`, a minimal-API route like `AdminShiftEndpoints` |
+| `administration/AdminService` | New | Dashboard aggregation. *As built (#136):* `src/Backend/ReFrog.Server/Features/Administration/DashboardService` (`GetSummaryAsync`), reading INF's `EventConfigService`, ADM's `IShiftStore`, and VOL's `IAssignmentQueryService.CountsByShiftsAsync` |
+| Admin dashboard page (Blazor, `src/Frontend/ReFrog.Client/Features/Administration/`) | New (#136) | `/admin/dashboard` (`AdminDashboardPage`, `DashboardView`): each location's coverage and shifts, unfilled ones flagged, no-activity locations labelled; a failed load says unavailable and offers a retry. The Account page links administrators to it |
 | `src/Backend/ReFrog.Server/Features/Administration/AdminShiftEndpoints` | New | `/api/v1/admin` shift and location-staffing routes; checks request shape only and returns the shared envelope |
 | `src/Backend/ReFrog.Server/Features/Administration/ShiftAdminService` | New | `UC-ADM-manage-shifts`: shift options, location default counts, create-shift validation against INF's event window and operating hours, idempotent create, and (PR 2) change preview and guarded edits |
 | `src/Backend/ReFrog.Server/Features/Administration/ShiftService` | New (ADM-owned) | `FindSignupCandidatesAsync(now)`, `FindByIdAsync(id)`, `LockForAssignmentAsync(id)`; supplies stable shift IDs and UTC instants. The lock method uses parameterized SQL Server `UPDLOCK, HOLDLOCK` behind the persistence abstraction and joins VOL's EF Core transaction. *As built (#111):* returns `ScheduledShift` (shift id, event id and status, location id, UTC start and end, required count) through `IShiftStore` / `EfShiftStore`; the lock joins the transaction through `SqlUnitOfWork` (next row) and throws if none is open. |
@@ -222,6 +223,13 @@ sequenceDiagram
 ```
 
 The dashboard includes **every configured relevant location even when no donation or shopping records exist**. Counts represent stored records, not estimated physical inventory; the client said donated goods are not individually tagged. The exact definition of the event/date filter must use the approved event configuration, not an invented calendar window.
+
+**As built (#136), volunteer coverage only.** `UC-DON-log-donation` and `UC-SHP-log-item-taken` are not built (release Spring) while this use case is release v1.0.0, so the developer decided to ship volunteer coverage first (issue #136). Donation and shopping counts are left out of the response and the page, not shown as zero (key decision 1, `FR-DISPLAY-unavailable-data`); the page says they are not recorded yet. They are added, with the DON and SHP calls in the sequence above, when those use cases are built. Where this document was silent, the build took these defaults:
+- **Event:** the current event (planned or active) only, with no filter, since "approved event filter" is not defined. With no current event the route answers `409 NO_CURRENT_EVENT`, as `GET /shifts` does.
+- **Coverage:** per shift, held is `ACTIVE` + `PENDING` and open is max(required − held, 0); a location's totals are its shifts' sums, so one shift's spare capacity never hides another's gap. A shift with an open slot is unfilled, and a location with an unfilled shift is highlighted (step 4). Pending sign-ups are shown as "awaiting approval" beside approved ones.
+- **No activity (3a):** a location with no held sign-up, including one with no shifts, stays listed and is labelled "No activity yet". Every location of the event is listed, closed ones included and marked closed.
+- **Sources:** any failure reading INF, ADM, or VOL makes the whole answer `503 UNAVAILABLE`; the page then says the data is unavailable and drops any earlier answer.
+- **Privacy:** counts only; no volunteer id, name, or email.
 
 ### UC-ADM-manage-shifts: Create and configure volunteer shifts
 
@@ -451,7 +459,7 @@ Every route is under `/api/v1/admin` and answers in the shared `ApiResponse<T>` 
 
 | Endpoint or job | Caller (who may) | Request | Success | Errors, by extension |
 |---|---|---|---|---|
-| `GET /api/v1/admin/dashboard` | Authenticated ReFrog administrator | Optional approved event filter (default current configured event) | `200`: all configured locations, recorded donation counts, shopping counts, shift required count, `ACTIVE` count, `PENDING` count, held count (`ACTIVE+PENDING`), available slots and unfilled indicators; zero/no-activity locations included | `401` unauthenticated; `403` non-admin (2a); `503` if required source unavailable, **not** a misleading partial “current” total |
+| `GET /api/v1/admin/dashboard` | Authenticated ReFrog administrator | Optional approved event filter (default current configured event) | `200`: all configured locations, recorded donation counts, shopping counts, shift required count, `ACTIVE` count, `PENDING` count, held count (`ACTIVE+PENDING`), available slots and unfilled indicators; zero/no-activity locations included. *As built (#136):* no event filter, and no donation or shopping counts until DON and SHP exist; each location has `hasActivity`, `hasUnfilledShifts`, summed `coverage`, and its `shifts` with `startsAt`, `endsAt`, `unfilled`, and `coverage` (`requiredCount`, `activeCount`, `pendingCount`, `heldCount`, `openCount`) | `401` unauthenticated; `403` non-admin (2a); `503` if required source unavailable, **not** a misleading partial “current” total. *As built (#136):* `503 AUTHENTICATION_UNAVAILABLE` when the role cannot be read, `409 NO_CURRENT_EVENT`, `503 UNAVAILABLE` |
 | `GET /api/v1/admin/shift-options` | Administrator | None | `200`: the current event (id, dates, status), its locations with weekly operating hours, and each location's default count (null if not set) | `401`; `403 ADMINISTRATOR_REQUIRED` (2a); `409 NO_CURRENT_EVENT` when no event is planned or active; `503 UNAVAILABLE` when INF cannot answer |
 | `POST /api/v1/admin/shifts` | Administrator; the actor comes from the session, never the body | `requestId` (one per form fill), `locationId`, `date`, `startTime`, `endTime` in America/Chicago local time, optional `requiredCount` (else the location's default) | `201`: `shiftId`, `locationId`, `startsAt` and `endsAt` as ISO 8601 with offset, `requiredCount`. The same `requestId` with the same input returns the same shift | 2a: `401` / `403 ADMINISTRATOR_REQUIRED`. 4a: `422 VALIDATION_FAILED` naming `locationId`, `date`, `startTime`, `endTime`, or `requiredCount`. Same `requestId`, changed input: `409 REQUEST_ID_REUSED`. No planned or active event: `409 NO_CURRENT_EVENT`. 4b: `503 NOT_RECORDED`, nothing stored |
 | `GET /api/v1/admin/shifts` (second PR) | Administrator | None | `200`: the current event's shifts, each with its location name, UTC start and end, required count, held count, and `version`, for choosing one to change (6a) | `401` / `403`; `409 NO_CURRENT_EVENT`; `503 UNAVAILABLE` |
@@ -594,7 +602,7 @@ Tests below are **specifications**, not code. They correspond to each main path 
 
 | Use case, flow | Level | Asserts |
 |---|---|---|
-| `UC-ADM-view-dashboard` main | Integration | Admin receives all configured locations, correct persisted donation/shopping counts, volunteer required/assigned counts, and an unfilled-shift indicator |
+| `UC-ADM-view-dashboard` main | Integration | Admin receives all configured locations, correct persisted donation/shopping counts, volunteer required/assigned counts, and an unfilled-shift indicator. *#136:* volunteer coverage only; the donation and shopping counts are tested when DON and SHP are built |
 | `UC-ADM-view-dashboard` 2a | Integration | Unauthenticated user gets `401`; signed-in non-admin gets `403`; neither receives dashboard data |
 | `UC-ADM-view-dashboard` 3a | Integration | Location with no activity stays visible with zero/no-activity representation, not omitted or treated as unavailable |
 | Dashboard source outage | Integration | If mandatory source is unavailable, request clearly fails rather than claiming stale/partial data is complete |

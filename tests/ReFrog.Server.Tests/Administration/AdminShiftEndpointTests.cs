@@ -136,8 +136,9 @@ public sealed class AdminShiftEndpointTests
         using var remove = new HttpRequestMessage(HttpMethod.Delete, new Uri($"/api/v1/admin/shifts/{Guid.NewGuid()}", UriKind.Relative));
         remove.Headers.Add("RequestVerificationToken", token);
         using var removed = await client.SendAsync(remove);
+        using var dashboard = await client.GetAsync(new Uri("/api/v1/admin/dashboard", UriKind.Relative));
 
-        foreach (var refused in new[] { response, list, impact, removed })
+        foreach (var refused in new[] { response, list, impact, removed, dashboard })
         {
             Assert.IsTrue(refused.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized,
                 $"Expected a refusal, got {(int)refused.StatusCode}.");
@@ -168,8 +169,9 @@ public sealed class AdminShiftEndpointTests
         using var remove = new HttpRequestMessage(HttpMethod.Delete, new Uri($"/api/v1/admin/shifts/{Guid.NewGuid()}", UriKind.Relative));
         remove.Headers.Add("RequestVerificationToken", token);
         using var removed = await client.SendAsync(remove);
+        using var dashboard = await client.GetAsync(new Uri("/api/v1/admin/dashboard", UriKind.Relative));
 
-        foreach (var response in new[] { options, create, list, impact, removed })
+        foreach (var response in new[] { options, create, list, impact, removed, dashboard })
         {
             Assert.AreEqual(HttpStatusCode.ServiceUnavailable, response.StatusCode);
             var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();

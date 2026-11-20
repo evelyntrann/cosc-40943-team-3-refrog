@@ -18,6 +18,10 @@ public sealed class AssignmentQueryService(IVolStore store) : IAssignmentQuerySe
         IReadOnlyCollection<Guid> shiftIds, CancellationToken cancellationToken) =>
         store.CountsHeldByShiftsAsync(shiftIds, cancellationToken);
 
+    public Task<IReadOnlyDictionary<Guid, AssignmentCounts>> CountsByShiftsAsync(
+        IReadOnlyCollection<Guid> shiftIds, CancellationToken cancellationToken) =>
+        store.CountsByShiftsAsync(shiftIds, cancellationToken);
+
     public async Task<IReadOnlyList<HeldAssignment>> ListHeldAsync(Guid shiftId, CancellationToken cancellationToken)
     {
         var held = await store.ListHeldByShiftAsync(shiftId, cancellationToken);
