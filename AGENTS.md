@@ -15,6 +15,7 @@ ReFrog: a phone-first progressive web app for TCU's finals-week move-out donatio
 ## How to work
 
 - Build only from a merged design-of-record and a build-context issue that cites a `UC-*`; read the use case, its design, and everything they cite before writing code.
+- Before marking a use case `✅ Verified`, map its main flow, every extension, and the design's failure-path test list to actual passing assertions, and record missing evidence as `🟡 Partial`; requests for agent code reviews must name the `UC-*` and its design test list ([VOL code review](https://github.com/evelyntrann/cosc-40943-team-3-refrog/pull/130#issuecomment-7023772178), [AUTH code review](https://github.com/evelyntrann/cosc-40943-team-3-refrog/pull/133#issuecomment-7023784031); architecture §8.2.10).
 - Cite identifiers (`UC-*`, `BR-*`, `FR-*`, `OI-*`); never copy a use case or rule into code comments, issues, or docs.
 - Never invent a rule, threshold, or term: if the repository does not say it, stop and list it as an assumption; client questions go in `OPEN-ISSUES.md`.
 - Do not implement anything blocked on an open issue; build the stated default and leave it at that.

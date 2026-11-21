@@ -131,9 +131,19 @@ public sealed class AdminShiftEndpointTests
         }
 
         using var response = await AdminShiftFixture.PostShiftAsync(client, fixture.ValidRequest(2), token);
+        using var list = await client.GetAsync(new Uri("/api/v1/admin/shifts", UriKind.Relative));
+        using var impact = await client.GetAsync(new Uri($"/api/v1/admin/shifts/{Guid.NewGuid()}/impact?action=remove", UriKind.Relative));
+        using var remove = new HttpRequestMessage(HttpMethod.Delete, new Uri($"/api/v1/admin/shifts/{Guid.NewGuid()}", UriKind.Relative));
+        remove.Headers.Add("RequestVerificationToken", token);
+        using var removed = await client.SendAsync(remove);
+        using var dashboard = await client.GetAsync(new Uri("/api/v1/admin/dashboard", UriKind.Relative));
 
-        Assert.IsTrue(response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized,
-            $"Expected a refusal, got {(int)response.StatusCode}.");
+        foreach (var refused in new[] { response, list, impact, removed, dashboard })
+        {
+            Assert.IsTrue(refused.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized,
+                $"Expected a refusal, got {(int)refused.StatusCode}.");
+        }
+
         Assert.IsEmpty(await fixture.ShiftsAsync());
     }
 
@@ -154,8 +164,14 @@ public sealed class AdminShiftEndpointTests
 
         using var options = await client.GetAsync(new Uri("/api/v1/admin/shift-options", UriKind.Relative));
         using var create = await AdminShiftFixture.PostShiftAsync(client, fixture.ValidRequest(2), token);
+        using var list = await client.GetAsync(new Uri("/api/v1/admin/shifts", UriKind.Relative));
+        using var impact = await client.GetAsync(new Uri($"/api/v1/admin/shifts/{Guid.NewGuid()}/impact?action=remove", UriKind.Relative));
+        using var remove = new HttpRequestMessage(HttpMethod.Delete, new Uri($"/api/v1/admin/shifts/{Guid.NewGuid()}", UriKind.Relative));
+        remove.Headers.Add("RequestVerificationToken", token);
+        using var removed = await client.SendAsync(remove);
+        using var dashboard = await client.GetAsync(new Uri("/api/v1/admin/dashboard", UriKind.Relative));
 
-        foreach (var response in new[] { options, create })
+        foreach (var response in new[] { options, create, list, impact, removed, dashboard })
         {
             Assert.AreEqual(HttpStatusCode.ServiceUnavailable, response.StatusCode);
             var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();

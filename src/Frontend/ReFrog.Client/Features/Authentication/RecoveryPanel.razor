@@ -1,0 +1,12 @@
+<section class="recovery-panel" aria-labelledby="recovery-heading">
+    <h1 id="recovery-heading">@Heading</h1>
+    @ChildContent
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Heading { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public RenderFragment ChildContent { get; set; } = null!;
+}

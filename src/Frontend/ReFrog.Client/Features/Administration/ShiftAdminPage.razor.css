@@ -97,3 +97,22 @@ button[disabled] {
 .saved {
   color: #1d6b38;
 }
+
+button.secondary {
+  background: #fff;
+  border: 1px solid #4d1979;
+  color: #4d1979;
+}
+
+.change-panel {
+  border-top: 1px solid #e2dde5;
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+}
+
+.affected {
+  margin: 0.25rem 0 0;
+  padding-left: 1.25rem;
+}

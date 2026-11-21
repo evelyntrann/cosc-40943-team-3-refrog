@@ -8,6 +8,8 @@ using ReFrog.Server.Features.Authentication;
 using ReFrog.Server.Features.Authentication.Persistence;
 using ReFrog.Server.Features.Info;
 using ReFrog.Server.Features.Info.Persistence;
+using ReFrog.Server.Features.Volunteer;
+using ReFrog.Server.Features.Volunteer.Persistence;
 using ReFrog.Server.Persistence;
 
 namespace ReFrog.Server.Configuration;
@@ -29,6 +31,7 @@ public static class ServiceCollectionExtensions
             options.Password.RequireDigit = true;
             options.Password.RequireNonAlphanumeric = true;
             options.User.RequireUniqueEmail = true;
+            options.Tokens.PasswordResetTokenProvider = RecoveryTokenProvider.ProviderName;
             // The user name is the verified email, which registration already validates
             // (FR-AUTH-account-signup: any domain), so Identity's narrower character list must not apply.
             options.User.AllowedUserNameCharacters = string.Empty;
@@ -39,7 +42,8 @@ public static class ServiceCollectionExtensions
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<AuthDbContext>()
             .AddSignInManager()
-            .AddDefaultTokenProviders();
+            .AddDefaultTokenProviders()
+            .AddTokenProvider<RecoveryTokenProvider>(RecoveryTokenProvider.ProviderName);
 
         services.AddAuthentication(IdentityConstants.ApplicationScheme)
             .AddCookie(IdentityConstants.ApplicationScheme, options =>
@@ -49,16 +53,19 @@ public static class ServiceCollectionExtensions
                 options.Cookie.SameSite = SameSiteMode.Lax;
                 options.ExpireTimeSpan = TimeSpan.FromDays(30);
                 options.SlidingExpiration = true;
-                options.Events.OnValidatePrincipal = SecurityStampValidator.ValidatePrincipalAsync;
+                options.Events.OnValidatePrincipal = AuthCookieValidation.ValidateAsync;
             });
         services.Configure<SecurityStampValidatorOptions>(options => options.ValidationInterval = TimeSpan.Zero);
         services.AddSingleton<IPostConfigureOptions<CookieAuthenticationOptions>, CookieTimeProviderConfiguration>();
         services.AddAuthorization();
         services.AddAntiforgery();
         services.AddScoped<IAuthRepository, EfAuthRepository>();
+        services.AddScoped<IAccountEmailDirectory, EfAccountEmailDirectory>();
         services.AddScoped<IAdministratorSignInAudit, EfAdministratorSignInAudit>();
         services.AddScoped<RegistrationService>();
         services.AddScoped<SessionService>();
+        services.AddScoped<IRecoveryRepository, EfRecoveryRepository>();
+        services.AddScoped<RecoveryService>();
         services.AddScoped<SqlUnitOfWork>();
         services.AddDbContext<InfoDbContext>((provider, options) =>
             InfoDbContext.Configure(options, provider.GetRequiredService<SqlUnitOfWork>().Connection));
@@ -73,6 +80,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IShiftStore, EfShiftStore>();
         services.AddScoped<ShiftService>();
         services.AddScoped<ShiftAdminService>();
+        services.AddScoped<DashboardService>();
+        services.AddDbContext<VolDbContext>((provider, options) =>
+            VolDbContext.Configure(options, provider.GetRequiredService<SqlUnitOfWork>().Connection));
+        services.AddScoped<IVolStore, EfVolStore>();
+        services.AddScoped<IAssignmentQueryService, AssignmentQueryService>();
+        services.AddScoped<VolunteerAuthorization>();
+        services.AddScoped<AssignmentService>();
         if (string.Equals(configuration["Email:Provider"], "MicrosoftGraph", StringComparison.OrdinalIgnoreCase))
         {
             services.AddHttpClient<IEmailSender, MicrosoftGraphEmailSender>();

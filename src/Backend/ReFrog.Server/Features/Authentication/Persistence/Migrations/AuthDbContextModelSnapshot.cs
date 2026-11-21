@@ -22,6 +22,32 @@ namespace ReFrog.Server.Features.Authentication.Persistence.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("ReFrog.Server.Features.Authentication.Persistence.RecoveryRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("NormalizedEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTimeOffset>("AcceptedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("NormalizedEmail", "AcceptedAt");
+
+                    b.ToTable("RecoveryRequests");
+                });
+
             modelBuilder.Entity("ReFrog.Server.Features.Authentication.Persistence.AdministratorSignInAudit", b =>
                 {
                     b.Property<Guid>("Id")
@@ -516,6 +542,16 @@ namespace ReFrog.Server.Features.Authentication.Persistence.Migrations
             modelBuilder.Entity("ReFrog.Server.Features.Authentication.Persistence.VerificationChallenge", b =>
                 {
                     b.Navigation("Failures");
+                });
+            modelBuilder.Entity("ReFrog.Server.Features.Authentication.Persistence.RecoveryRequest", b =>
+                {
+                    b.HasOne("ReFrog.Server.Features.Authentication.Persistence.AuthAccount", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Account");
                 });
 #pragma warning restore 612, 618
         }

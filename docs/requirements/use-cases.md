@@ -132,7 +132,7 @@ A note on `UC-VOL-claim-open-shift`: an earlier draft of this list had it as a s
 
 ---
 
-**Volunteer role decision (2026-10-16):** Team decision with Alexa Mercado: administrators approve volunteer requests or grant access manually by verified sign-in email. Approval creates the volunteer role; pending requests do not. A signed-in role holder may shop without TCU email verification. This is separate from shift assignment. Shift sign-up does not require the role first: a person without it signs up as pending approval (`UC-VOL-signup` 5c), and an account whose access was removed or expired cannot sign up (`UC-VOL-signup` 1a).
+**Volunteer role decision (2026-10-16):** Team decision with Alexa Mercado: administrators approve volunteer requests or grant access manually by verified sign-in email. Approval creates the volunteer role; pending requests do not. A signed-in role holder may shop without TCU email verification. This is separate from shift assignment. Shift sign-up does not require the role first: a person without it signs up as pending approval (`UC-VOL-signup` 5c), and an account an administrator restricted cannot sign up (`UC-VOL-signup` 1a). Annual expiry removes only the role and does not restrict the account (`BR-volunteer-role-lifecycle`, revised 2026-11-18).
 
 ## 4. Use Cases
 
@@ -169,7 +169,7 @@ A note on `UC-VOL-claim-open-shift`: an earlier draft of this list had it as a s
 
 **Extensions:**
 
-- **1a. The account's volunteer access was removed or has expired (`FR-AUTH-volunteer-lifecycle`), at step 1 or when the volunteer selects a shift at step 3:**
+- **1a. An administrator restricted the account (`FR-AUTH-volunteer-lifecycle`), at step 1 or when the volunteer selects a shift at step 3:**
     - 1a1. The system informs the volunteer that volunteer access is inactive and administrator review is required, and shows no shifts.
     - 1a2. Use case ends.
 - **2a. No shifts are currently open:**
@@ -337,7 +337,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 - **2b. A pending request already exists:** Return its status without a duplicate; continue at step 4.
 - **2c. A prior request was declined for the current annual event:** Do not create another request for the same event or grant permissions. Explain that the user may request again for the next annual event, or Wendy may manually grant access through `UC-ADM-grant-volunteer-access`.
 - **2d. A prior request was declined for a previous annual event:** Allow a new request for the next annual event; continue at step 3. The new request remains pending until administrator approval.
-- **2e. Access was removed or expired:** Do not restore privileges through request submission alone; use the administrator renewal workflow.
+- **2e. An administrator restricted the account:** Do not record a request or restore privileges; only an administrator can lift the restriction (`UC-ADM-lift-account-restriction`). After annual expiry or a role-only removal the account is not restricted, and this extension does not apply.
 - **3a. Saving fails:** Report that the request was not confirmed, preserve the previous state, and allow retry. A retry after an actual successful write returns the existing request.
 
 **Priority:** High for the approved-volunteer access workflow.
@@ -492,7 +492,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 2. The person enters an email address.
 3. The system displays the same acknowledgement whether or not an account exists.
 4. If a matching account exists, the system sends a one-time password-reset link valid for 30 minutes.
-5. The person opens the link and enters a new password satisfying `FR-AUTH-password-policy`.
+5. The person opens the link and enters a new password satisfying `FR-AUTH-password-policy`, then enters it again to confirm it.
 6. The system verifies and consumes the token, changes the password, and invalidates existing sessions in one completed operation.
 7. The system confirms the reset and directs the person to `UC-AUTH-sign-in`.
 8. Use case ends.
@@ -505,8 +505,8 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 - **4b. Email delivery fails or has an unknown outcome:**
     - 4b1. The public response remains the same acknowledgement and no password or session state changes.
     - 4b2. The person may make another recovery request.
-- **5a. The new password is invalid:**
-    - 5a1. The system identifies the password-policy failure without consuming the reset token.
+- **5a. The new password is invalid or its confirmation does not match:**
+    - 5a1. The system identifies the password-policy or confirmation failure without consuming the reset token.
     - 5a2. Use case resumes at step 5 while the token remains valid.
 - **6a. The token is invalid, expired, or already used:**
     - 6a1. The system changes nothing and asks the person to request a new recovery link.
@@ -561,7 +561,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 - **2b. The signed-in account has an administrator-granted volunteer role:**
     - 2b1. The account displays its current role as “Volunteer” and the system skips steps 3-6, whether or not the volunteer has a TCU email. If TCU email is also verified, its verification status is displayed separately.
     - 2b2. Use case continues at step 8; email-verification state is unchanged.
-- **2c. The account has revoked or expired volunteer access:**
+- **2c. An administrator restricted the account (`UC-ADM-remove-volunteer-access`):**
     - 2c1. The account view shows “Volunteer access inactive—administrator review required”; the system denies shopping access despite retained TCU email verification.
     - 2c2. Use case ends without restoring participation permissions.
 - **2d. Required current restriction or eligibility state is unavailable:**
@@ -919,7 +919,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 **Related Use Cases:** `UC-VOL-signup`: Sign up for a volunteer shift; `UC-ADM-view-dashboard`; `UC-ADM-notify-volunteers`: Notify volunteers of open shifts
 **Assumptions:** Shift creation happens inside this app rather than a separate tool — confirmed 2026-10-02 (resolves `OI-9`).
-**Open Issues:** none beyond editing/removing a shift with assigned volunteers (extension 6a), which is still unspecified.
+**Open Issues:** `OI-34`: editing/removing a shift with assigned volunteers (extension 6a) is still unspecified.
 
 ---
 
@@ -1109,7 +1109,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 **Associated Information:** A typed profile email or TCU affiliation email is insufficient to claim a manual grant; match the sign-in email verified at sign-up (`FR-AUTH-account-signup`). Pending approval grants no access. No account credentials, invitation message, or shift assignment are created by this use case.
 **Related Use Cases:** `UC-ADM-remove-volunteer-access`, `UC-IDV-verify-affiliation`
 **Assumptions:** General sign-in remains the existing authentication flow.
-**Role lifecycle:** At the configured annual event end, volunteer privileges expire. Each new annual event requires administrator review and approval before renewal; access does not renew automatically. Email changes on the same account preserve an active role. See `BR-volunteer-role-lifecycle`.
+**Role lifecycle:** At the configured annual event end, volunteer privileges expire; expiry removes only the role and does not restrict the account. Each new annual event requires administrator review and approval before renewal; access does not renew automatically. Email changes on the same account preserve an active role. See `BR-volunteer-role-lifecycle`.
 **Open Issues:** Remaining policies in partially resolved `OI-18`; shift approval and assignments are outside this update.
 
 ---
@@ -1122,18 +1122,18 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 **Primary Actor:** Administrator
 **Secondary Actors:** Affected user
 **Trigger:** An administrator decides a role or pending email approval should be removed.
-**Description:** Revoke volunteer access and restrict the account to general information; retained TCU email verification does not permit participation. Source: team decision with Alexa Mercado, not a recorded client approval.
+**Description:** Revoke volunteer access and, if the administrator chooses, restrict the account to general information, where retained TCU email verification does not permit participation. Source: team decision with Alexa Mercado, not a recorded client approval; the remove-or-restrict choice added by team decision, November 18, 2026 (`OI-22`).
 **Preconditions:**
 - PRE-1. The administrator is signed in with administrator privileges.
 **Postconditions:**
 - POST-1. The role or pending approval is revoked and older pending grants cannot restore it on sign-in.
-- POST-2. The administrator action is audited; the account has general-information access only even if TCU email verification is retained.
+- POST-2. The administrator action and the choice made are audited. After a role-only removal the account keeps its other capabilities, including shopping through retained TCU email verification; after removal with restriction it has general-information access only, even if TCU email verification is retained.
 **Main Success Scenario:**
 1. The administrator selects an account or pending email approval.
 2. The system verifies privileges and displays the current access state.
-3. The administrator confirms removal.
-4. The system removes the role or revokes the pending approval, invalidates older pending grants and requests, records the account restriction where an account exists, clears active assignments and releases occupied capacity, and records the audit event atomically.
-5. The system confirms removal. Subsequent protected checks enforce general-information-only access, including for existing sessions.
+3. The administrator chooses **Remove role** or **Remove role and restrict account**, and confirms.
+4. The system removes the role or revokes the pending approval, invalidates older pending grants and requests, records the account restriction when the administrator chose it and an account exists, clears active assignments and releases occupied capacity, and records the audit event atomically.
+5. The system confirms removal and whether the account is restricted. Subsequent protected checks enforce the new state, including for existing sessions.
 **Extensions:**
 - **2a. Caller lacks privileges:** Deny access; use case ends.
 - **2b. Target does not exist:** Report not found; make no changes.
@@ -1142,11 +1142,47 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 - **4b. Persistence fails:** Preserve prior state and report failure; permit retry.
 **Priority:** High for role integrity.
 **Frequency of Use:** Occasional corrections or volunteer status changes.
-**Business Rules:** `BR-volunteer-role-approval`, `BR-shopper-verification`
-**Associated Information:** Role removal places the account in general-information-only access, even if it retains previously verified TCU email; administrator renewal is required to restore volunteer privileges. Shift cancellation alone never removes the role. Role removal clears active assignments and their occupied capacity; historical records follow retention policy. Shift approval remains with the scheduling owner.
-**Related Use Cases:** `UC-ADM-review-volunteer-request`, `UC-ADM-grant-volunteer-access`, `UC-IDV-verify-affiliation`
+**Business Rules:** `BR-volunteer-role-approval`, `BR-volunteer-role-lifecycle`, `BR-shopper-verification`
+**Associated Information:** Removal with restriction places the account in general-information-only access, even if it retains previously verified TCU email, until an administrator lifts it (`UC-ADM-lift-account-restriction`). A role-only removal, for example correcting a mistaken grant, leaves the account unrestricted. Either way, a new administrator approval is required to restore volunteer privileges. Shift cancellation alone never removes the role. Role removal clears active assignments and their occupied capacity; historical records follow retention policy. Shift approval remains with the scheduling owner.
+**Related Use Cases:** `UC-ADM-review-volunteer-request`, `UC-ADM-grant-volunteer-access`, `UC-ADM-lift-account-restriction`, `UC-IDV-verify-affiliation`
 **Assumptions:** Any later role grant requires a new explicit administrator decision.
-**Open Issues:** `OI-18`.
+**Open Issues:** `OI-18`; `OI-22` resolved by team decision 2026-11-18.
+
+---
+
+### UC-ADM-lift-account-restriction: Lift an account restriction
+
+**UC ID and Name:** `UC-ADM-lift-account-restriction`: Lift an account restriction
+**Created By:** Alfonsotomax
+**Date Created:** 2026-11-18
+**Primary Actor:** Administrator
+**Secondary Actors:** Affected user
+**Trigger:** An administrator decides a restricted account should regain participation, for example after a restriction made by mistake.
+**Description:** End an administrator restriction so the account returns to no volunteer role and regains its other participant capabilities. Lifting grants no volunteer role. Source: team decision, November 18, 2026 (`OI-22`, issue #123), not a recorded client approval.
+**Preconditions:**
+- PRE-1. The administrator is signed in with administrator privileges.
+**Postconditions:**
+- POST-1. The account is not restricted and holds no volunteer role; shopping eligibility again follows `FR-AUTH-shopping-eligibility`.
+- POST-2. The administrator action is audited.
+**Main Success Scenario:**
+1. The administrator selects a restricted account.
+2. The system verifies privileges and displays the current access state.
+3. The administrator confirms lifting the restriction.
+4. The system removes the restriction and records the audit event atomically.
+5. The system confirms the restriction was lifted. Subsequent protected checks use the unrestricted state, including for existing sessions.
+**Extensions:**
+- **2a. Caller lacks privileges:** Deny access; use case ends.
+- **2b. Target does not exist:** Report not found; make no changes.
+- **3a. Administrator cancels:** Make no changes; use case ends.
+- **4a. The account is not restricted:** Confirm the existing state without further effect.
+- **4b. Persistence fails:** Preserve prior state and report failure; permit retry.
+**Priority:** Medium; corrects a mistaken or outdated restriction.
+**Frequency of Use:** Rare.
+**Business Rules:** `BR-volunteer-role-lifecycle`, `BR-volunteer-role-approval`
+**Associated Information:** Lifting restores no shift assignments the earlier removal cleared and grants no volunteer role; the person may then request access (`UC-VOL-request-access`) or be granted it (`UC-ADM-grant-volunteer-access`) like any unrestricted account. Retained TCU email verification applies again at once.
+**Related Use Cases:** `UC-ADM-remove-volunteer-access`, `UC-ADM-grant-volunteer-access`, `UC-VOL-request-access`, `UC-IDV-verify-affiliation`
+**Assumptions:** None.
+**Open Issues:** None; `OI-22` resolved by team decision 2026-11-18.
 
 ---
 ## Area: Shopping-Abuse Monitoring (`ABU`)

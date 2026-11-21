@@ -1,0 +1,136 @@
+.intro {
+  margin-bottom: 1.5rem;
+  color: #4a5568;
+}
+
+.alert {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: 4px;
+  font-size: 0.95rem;
+}
+
+.alert-success {
+  background-color: #def7ec;
+  color: #03543f;
+  border: 1px solid #84e1bc;
+}
+
+.alert-danger {
+  background-color: #fde8e8;
+  color: #9b1c1c;
+  border: 1px solid #f8b4b4;
+}
+
+.empty-notice {
+  padding: 2rem 1rem;
+  text-align: center;
+  background: #f7fafc;
+  border: 1px dashed #cbd5e0;
+  border-radius: 8px;
+  color: #4a5568;
+}
+
+.shift-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .shift-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+}
+
+.shift-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1.25rem;
+  background-color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.shift-card.assigned {
+  border-color: #4d1979;
+  background-color: #faf5ff;
+}
+
+.shift-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.shift-header h2 {
+  font-size: 1.15rem;
+  margin: 0;
+  color: #1a202c;
+}
+
+.badge-assigned {
+  background-color: #4d1979;
+  color: #fff;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  font-weight: 600;
+}
+
+.shift-details p {
+  margin: 0.25rem 0;
+  font-size: 0.9rem;
+  color: #4a5568;
+}
+
+.shift-actions {
+  margin-top: 1rem;
+}
+
+.btn {
+  display: inline-block;
+  width: 100%;
+  padding: 0.6rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+  border-radius: 6px;
+  cursor: pointer;
+  border: none;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background-color: #4d1979;
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #3b135c;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-disabled {
+  background-color: #e2e8f0;
+  color: #718096;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background-color: #2b6cb0;
+  color: #fff;
+}
+
+.btn-outline {
+  background-color: transparent;
+  border: 1px solid #4d1979;
+  color: #4d1979;
+}

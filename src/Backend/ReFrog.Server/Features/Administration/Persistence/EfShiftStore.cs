@@ -36,6 +36,16 @@ public sealed class EfShiftStore(AdmDbContext db, SqlUnitOfWork unitOfWork, ILog
         return shifts.Select(ToStored).ToList();
     }
 
+    public async Task<IReadOnlyList<StoredShift>> ListForEventAsync(Guid eventId, CancellationToken cancellationToken)
+    {
+        await unitOfWork.JoinIfOpenAsync(db, cancellationToken);
+        var shifts = await db.Shifts.AsNoTracking()
+            .Where(x => x.EventId == eventId)
+            .OrderBy(x => x.StartsAt).ThenBy(x => x.Id)
+            .ToListAsync(cancellationToken);
+        return shifts.Select(ToStored).ToList();
+    }
+
     public async Task<StoredShift?> LockAsync(Guid shiftId, CancellationToken cancellationToken)
     {
         // Joins the caller's transaction on the shared connection, so the lock lasts until that caller commits
@@ -121,6 +131,70 @@ public sealed class EfShiftStore(AdmDbContext db, SqlUnitOfWork unitOfWork, ILog
             return true;
         }, cancellationToken);
 
+    public async Task<ShiftChangeResult> ChangeUnderLockAsync(
+        Guid shiftId,
+        string expectedVersion,
+        Func<CancellationToken, Task<ShiftChangeDecision>> decide,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(decide);
+        Shift? row = null;
+        ShiftChangeResult? unchanged = null;
+        var removed = false;
+        var outcome = await InTransactionAsync(async ct =>
+        {
+            // The same row lock as LockAsync, so a sign-up or cancellation on this shift waits for this change.
+            row = await db.Shifts
+                .FromSqlInterpolated($"SELECT * FROM [adm].[Shifts] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {shiftId}")
+                .SingleOrDefaultAsync(ct);
+            if (row is null)
+            {
+                unchanged = new ShiftChangeResult(ShiftChangeOutcome.NotFound);
+                return false;
+            }
+
+            var current = ToStored(row);
+            if (!string.Equals(current.Version, expectedVersion, StringComparison.OrdinalIgnoreCase))
+            {
+                unchanged = new ShiftChangeResult(ShiftChangeOutcome.VersionStale, current);
+                return false;
+            }
+
+            switch (await decide(ct))
+            {
+                case ShiftUpdate update:
+                    row.LocationId = update.LocationId;
+                    row.StartsAt = update.StartsAt;
+                    row.EndsAt = update.EndsAt;
+                    row.RequiredCount = update.RequiredCount;
+                    return true;
+                case ShiftRemoval:
+                    db.Shifts.Remove(row);
+                    removed = true;
+                    return true;
+                case ShiftRefusal refusal:
+                    unchanged = new ShiftChangeResult(ShiftChangeOutcome.Refused, current, refusal.Code);
+                    return false;
+                default:
+                    throw new InvalidOperationException("Unknown shift change decision.");
+            }
+        }, cancellationToken);
+
+        if (outcome == SaveOutcome.NotRecorded)
+        {
+            return new ShiftChangeResult(ShiftChangeOutcome.NotRecorded);
+        }
+
+        if (unchanged is not null)
+        {
+            return unchanged;
+        }
+
+        return removed
+            ? new ShiftChangeResult(ShiftChangeOutcome.Removed)
+            : new ShiftChangeResult(ShiftChangeOutcome.Saved, ToStored(row!));
+    }
+
     /// <summary>
     /// One shared transaction for the change and its staged audit entry (§8.2.8, §8.2.9). <paramref name="prepare"/>
     /// runs inside it and returns false to store nothing. Every path that does not commit discards what the
@@ -162,5 +236,6 @@ public sealed class EfShiftStore(AdmDbContext db, SqlUnitOfWork unitOfWork, ILog
          failure.InnerException is DbUpdateException or DbException or TimeoutException);
 
     internal static StoredShift ToStored(Shift shift) => new(shift.Id, shift.EventId, shift.LocationId,
-        shift.StartsAt.ToUniversalTime(), shift.EndsAt.ToUniversalTime(), shift.RequiredCount, shift.CreateRequestId);
+        shift.StartsAt.ToUniversalTime(), shift.EndsAt.ToUniversalTime(), shift.RequiredCount, shift.CreateRequestId,
+        Convert.ToHexString(shift.Version));
 }
