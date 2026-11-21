@@ -27,6 +27,8 @@ dotnet run --launch-profile https      # then open https://localhost:7257/regist
 
 Email goes through the shared `IEmailSender` adapter. Local development uses Mailpit over SMTP: run `docker compose up -d mailpit`, start ReFrog in the Development environment, then inspect captured messages at `http://localhost:8025`. Mailpit listens only on the local machine through the compose port bindings and does not deliver real email. The repository also contains a candidate Microsoft Graph adapter for evaluation ([setup](docs/operations/microsoft-365-email.md)), but no production provider is approved or selected (`OI-25`). A non-development deployment without an approved provider reports email delivery unavailable.
 
+For `UC-AUTH-recover-account`, Development settings supply `Authentication:PublicBaseUrl` as `https://localhost:7257`, matching the HTTPS launch profile. To check delivery, request recovery for a registered account at `/recover-account` and open the reset link in Mailpit. If you change the HTTPS address, override `Authentication:PublicBaseUrl` with that address (environment variable: `Authentication__PublicBaseUrl`). Non-development deployments must supply their own trusted HTTPS application URL through deployment configuration. As specified in [AUTH.md](docs/design/AUTH.md), a missing or invalid URL prevents reset-email dispatch while preserving the generic public acknowledgement.
+
 ## Tests
 
 ```bash
