@@ -1,8 +1,30 @@
 # Observability verification runbook
 
-**Current status:** design only, [issue #117](https://github.com/evelyntrann/cosc-40943-team-3-refrog/issues/117). Health, metrics and diagnostic changes in [the design](../design/observability.md) are not implemented. No deployed URL or platform log-stream evidence is recorded. The [availability sample](availability-slo.md) is local, not production availability.
+**Current status:** design only, [issue #117](https://github.com/evelyntrann/cosc-40943-team-3-refrog/issues/117). Health, metrics and diagnostic changes in [the design](../design/observability.md) are not implemented. The developer confirmed on 2026-11-20 that the immediate target is a local demo and the app is not deployed. The [availability sample](availability-slo.md) is local, not production availability.
 
-This procedure supports `UC-INF-view-event-info`, `UC-AUTH-register-account`, `MNT-diagnostics`, `MNT-error-notification` and `AVL-uptime`. Complete it after the design is merged, its implementation passes the design test list, and EAS supplies a deployed test instance and operator access.
+This procedure supports `UC-INF-view-event-info`, `UC-AUTH-register-account`, `MNT-diagnostics`, `MNT-error-notification` and `AVL-uptime`. The local path needs the merged design and its implementation; only the later deployed-platform exercise needs EAS access.
+
+## Local demo first
+
+After the design merges and O1–O8 are implemented:
+
+1. Use [Running locally](../../README.md#running-locally) with a disposable SQL Server database and synthetic accounts. Start the app using the existing HTTPS launch profile. Keep the application console visible to show the actual structured output; label it **local application console**, not platform-stream evidence.
+2. From a second terminal, make cookie-free checks of the proposed endpoints. Use the trusted local HTTPS certificate and the configured launch address:
+
+   ```sh
+   DEMO_BASE_URL=https://localhost:7257
+   curl --include "$DEMO_BASE_URL/health"
+   curl --include "$DEMO_BASE_URL/api/v1/operations/metrics"
+   curl --include "$DEMO_BASE_URL/api/v1/info/event"
+   ```
+
+   Show health's `200` JSON, metrics' anonymous `401`, and event information's normal response. These health/metrics commands are future demo steps, not working endpoints at this PR's source revision.
+3. Sign in as a synthetic local administrator using the existing UI. Request metrics in that authenticated browser, capture its safe aggregate JSON, send another public event-information request, and show the count/duration change. Do not copy cookies or passwords into evidence.
+4. Stop only the disposable local test database, keep the app running, and make one cookie-free event-information request. Record its actual `500 UNEXPECTED_ERROR` and `X-Trace-Id`, then find that ID in the local JSON diagnostic/completion records. Wait for an actual application response; a client-side timeout alone does not demonstrate the diagnostic. Restore SQL immediately, including if the check fails, and show a successful cookie-free retry. `/health` should still report process liveness while SQL is unavailable.
+5. Inspect the actual emitted records against the privacy table below; show safe exception/code-location details without email, token, password, code or connection details. Run and record O1–O8 assertions, including positive diagnostic and negative privacy checks.
+6. Show the existing local [availability report](availability-slo.md#measure-it-again) with its sample window and limitations. Keep deliberate-failure probes separate from the normal sample and identify any new run separately.
+
+Today the repository's Compose setup runs Mailpit, not the ReFrog application, so Mailpit's Docker logs are not ReFrog request diagnostics. If an application container is provided later, its Docker Desktop Logs view can demonstrate local host collection; it must still be labelled a local container demonstration. The course's deployed-platform-stream requirement remains deferred until deployment.
 
 ## Where telemetry goes
 
@@ -58,6 +80,8 @@ Replace `Pending` only with observed values and reviewed, privacy-safe artifacts
 
 | Evidence | Recorded value |
 |---|---|
+| Immediate demo environment | Local only, confirmed 2026-11-20; implementation pending |
+| Local failure response ID, diagnostic excerpt and recovery | Pending implementation; never substitute for deployed evidence below |
 | Deployed test URL, environment and commit | Pending |
 | EAS host/service and instance | Pending |
 | Platform application-log view location/access role | Pending |

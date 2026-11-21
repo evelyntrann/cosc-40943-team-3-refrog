@@ -41,4 +41,4 @@ Each integration test creates and drops its own database. If `REFROG_TEST_SQL` i
 
 ## Observability
 
-The [proposed observability design](docs/design/observability.md) and [verification runbook](docs/operations/observability.md) track issue #117: health/metrics contracts, useful privacy-safe diagnostics, and the platform-stream failure exercise. These changes are design only; endpoints and deployed evidence are pending. The existing [availability measurement](docs/operations/availability-slo.md) is a local sample, not production availability.
+The [proposed observability design](docs/design/observability.md) and [verification runbook](docs/operations/observability.md) track issue #117: health/metrics contracts, useful privacy-safe diagnostics, a [local demo path](docs/operations/observability.md#local-demo-first), and the later platform-stream failure exercise. These changes are design only; endpoints are pending implementation and deployment is deferred. The existing [availability measurement](docs/operations/availability-slo.md) is a local sample, not production availability.

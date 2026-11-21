@@ -10,6 +10,8 @@
 
 This crosscutting design adds diagnostics around existing flows; it does not replace either area's design or change account, event, delivery, or retry behavior. The operational procedure and evidence status live in [the observability runbook](../operations/observability.md). No new dependency, database table, business notification, or public failure-injection endpoint is proposed.
 
+**Immediate target:** a local demonstration, confirmed by the developer on 2026-11-20; ReFrog is not deployed. Implement and demonstrate O1–O8 locally after this design merges. O9 is a later deployment obligation, and O10 still depends on `OI-23`. Local application-console evidence must be labelled local rather than presented as the course's deployed-platform log-stream proof.
+
 ## Existing evidence and gaps
 
 | Evidence at the designed-against revision | Consequence |
@@ -147,7 +149,7 @@ Keep the definition, source, good/all events, target, window and budget under [`
 
 These are technical proposals requiring design review, not new client business rules. `OI-6` governs retention, `OI-23` governs automated error notification, `OI-25` governs the production mail provider, and `OI-33` governs production measurement inputs. Do not implement those unresolved choices. The public deployment URL, EAS host type, stream location and access have not been supplied; the runbook cannot record live evidence until they are.
 
-**Architecture changes:** link this design from §8.2.7; add no deployment topology or operational policy without evidence. No use-case Build/Verify status changes.
+**Architecture changes:** link this design from §8.2.7; add no deployment topology or operational policy without evidence. No use-case Build/Verify status changes. Local demonstration does not depend on obtaining EAS platform access; that is required only for the later O9 evidence.
 
 ## Questions test
 
