@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace ReFrog.Server.Features.Info.Persistence;
@@ -126,9 +127,15 @@ public sealed class InfoDbContext(DbContextOptions<InfoDbContext> options) : DbC
     }
 
     /// <summary>
-    /// The SQL Server options for this context, shared by the app, tests, and EF tools so all three use the
-    /// <c>info</c> migration history. <c>AuthDbContext</c> still configures itself inline; aligning it is a follow-up.
+    /// The app's options: the scope's shared connection and the <c>info</c> migration history.
     /// </summary>
+    public static void Configure(DbContextOptionsBuilder options, DbConnection connection)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        options.UseSqlServer(connection, sql => sql.MigrationsHistoryTable("__EFMigrationsHistory", Schema));
+    }
+
+    /// <summary>The EF tools' options: a connection string and the <c>info</c> migration history.</summary>
     public static void Configure(DbContextOptionsBuilder options, string? connectionString)
     {
         ArgumentNullException.ThrowIfNull(options);

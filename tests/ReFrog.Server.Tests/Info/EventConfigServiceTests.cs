@@ -1,7 +1,10 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using ReFrog.Server.Features.Info;
 using ReFrog.Server.Features.Info.Persistence;
+using ReFrog.Server.Persistence;
 using ReFrog.Server.Tests.Support;
 
 namespace ReFrog.Server.Tests.Info;
@@ -42,6 +45,100 @@ public sealed class EventConfigServiceTests
         });
 
         Assert.IsNull(await WithService(host, service => service.GetCurrentEventAsync(CancellationToken.None)));
+    }
+
+    [TestMethod]
+    public async Task CurrentEventLockUsesTheSharedTransactionUntilCommit()
+    {
+        await using var host = await SqlTestHost.CreateAsync(Now);
+        var current = Event(ReFrogEventStatus.Active, 2027);
+        await host.WithAsync<InfoDbContext>(db =>
+        {
+            db.Events.Add(current);
+            return db.SaveChangesAsync();
+        });
+
+        await using (var scope = host.Factory.Services.CreateAsyncScope())
+        {
+            var unitOfWork = scope.ServiceProvider.GetRequiredService<SqlUnitOfWork>();
+            await using var transaction = await unitOfWork.BeginAsync(CancellationToken.None);
+            var locked = await scope.ServiceProvider.GetRequiredService<EventConfigService>()
+                .GetCurrentEventForUpdateAsync(CancellationToken.None);
+
+            Assert.AreEqual(current.Id, locked?.Id);
+            var info = scope.ServiceProvider.GetRequiredService<InfoDbContext>();
+            Assert.AreSame(unitOfWork.Connection, info.Database.GetDbConnection());
+            Assert.AreSame(unitOfWork.Current, info.Database.CurrentTransaction?.GetDbTransaction());
+            var blocked = await Assert.ThrowsExactlyAsync<SqlException>(() =>
+                ChangeStatusAsync(host, current.Id, ReFrogEventStatus.Closed));
+            Assert.AreEqual(1222, blocked.Number, "A concurrent rollover must wait for the selector lock.");
+
+            await transaction.CommitAsync(CancellationToken.None);
+        }
+
+        await ChangeStatusAsync(host, current.Id, ReFrogEventStatus.Closed);
+        Assert.IsNull(await WithService(host, service => service.GetCurrentEventAsync(CancellationToken.None)));
+    }
+
+    [TestMethod]
+    public async Task EmptySelectorLockBlocksPromotionAndRollbackReleasesIt()
+    {
+        await using var host = await SqlTestHost.CreateAsync(Now);
+        var closed = Event(ReFrogEventStatus.Closed, 2027);
+        await host.WithAsync<InfoDbContext>(db =>
+        {
+            db.Events.Add(closed);
+            return db.SaveChangesAsync();
+        });
+
+        await using (var scope = host.Factory.Services.CreateAsyncScope())
+        {
+            var unitOfWork = scope.ServiceProvider.GetRequiredService<SqlUnitOfWork>();
+            await using var transaction = await unitOfWork.BeginAsync(CancellationToken.None);
+            Assert.IsNull(await scope.ServiceProvider.GetRequiredService<EventConfigService>()
+                .GetCurrentEventForUpdateAsync(CancellationToken.None));
+
+            var blocked = await Assert.ThrowsExactlyAsync<SqlException>(() =>
+                ChangeStatusAsync(host, closed.Id, ReFrogEventStatus.Planned));
+            Assert.AreEqual(1222, blocked.Number, "A concurrent promotion must wait even when no current row exists.");
+            // Disposing without CommitAsync rolls back and releases the empty selector's key-range lock.
+        }
+
+        await ChangeStatusAsync(host, closed.Id, ReFrogEventStatus.Planned);
+        Assert.AreEqual(closed.Id,
+            (await WithService(host, service => service.GetCurrentEventAsync(CancellationToken.None)))?.Id);
+    }
+
+    [TestMethod]
+    public async Task EmptySelectorLockBlocksInsertionUntilCommit()
+    {
+        await using var host = await SqlTestHost.CreateAsync(Now);
+        var planned = Event(ReFrogEventStatus.Planned, 2028);
+
+        await using (var scope = host.Factory.Services.CreateAsyncScope())
+        {
+            var unitOfWork = scope.ServiceProvider.GetRequiredService<SqlUnitOfWork>();
+            await using var transaction = await unitOfWork.BeginAsync(CancellationToken.None);
+            Assert.IsNull(await scope.ServiceProvider.GetRequiredService<EventConfigService>()
+                .GetCurrentEventForUpdateAsync(CancellationToken.None));
+
+            var blocked = await Assert.ThrowsExactlyAsync<SqlException>(() => InsertEventAsync(host, planned));
+            Assert.AreEqual(1222, blocked.Number, "A concurrent insert must wait for the empty selector lock.");
+            await transaction.CommitAsync(CancellationToken.None);
+        }
+
+        await InsertEventAsync(host, planned);
+        Assert.AreEqual(planned.Id,
+            (await WithService(host, service => service.GetCurrentEventAsync(CancellationToken.None)))?.Id);
+    }
+
+    [TestMethod]
+    public async Task CurrentEventLockWithoutAnOpenSharedTransactionIsRefused()
+    {
+        await using var host = await SqlTestHost.CreateAsync(Now);
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => WithService(host,
+            service => service.GetCurrentEventForUpdateAsync(CancellationToken.None)));
     }
 
     [TestMethod]
@@ -161,5 +258,38 @@ public sealed class EventConfigServiceTests
     {
         await using var scope = host.Factory.Services.CreateAsyncScope();
         return await action(scope.ServiceProvider.GetRequiredService<EventConfigService>());
+    }
+
+    private static async Task ChangeStatusAsync(SqlTestHost host, Guid eventId, string status)
+    {
+        await using var connection = new SqlConnection(host.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            "SET LOCK_TIMEOUT 1000; UPDATE [info].[ReFrogEvents] SET [Status] = @status WHERE [Id] = @id";
+        command.Parameters.AddWithValue("@status", status);
+        command.Parameters.AddWithValue("@id", eventId);
+        Assert.AreEqual(1, await command.ExecuteNonQueryAsync());
+    }
+
+    private static async Task InsertEventAsync(SqlTestHost host, ReFrogEvent item)
+    {
+        await using var connection = new SqlConnection(host.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SET LOCK_TIMEOUT 1000;
+            INSERT INTO [info].[ReFrogEvents]
+                ([Id], [EventYear], [StartDate], [EndDate], [DailyOperatingHoursDescription], [CampusOverview], [Status])
+            VALUES (@id, @year, @start, @end, @hours, @overview, @status)
+            """;
+        command.Parameters.AddWithValue("@id", item.Id);
+        command.Parameters.AddWithValue("@year", item.EventYear);
+        command.Parameters.AddWithValue("@start", item.StartDate.ToDateTime(TimeOnly.MinValue));
+        command.Parameters.AddWithValue("@end", item.EndDate.ToDateTime(TimeOnly.MinValue));
+        command.Parameters.AddWithValue("@hours", item.DailyOperatingHoursDescription);
+        command.Parameters.AddWithValue("@overview", item.CampusOverview);
+        command.Parameters.AddWithValue("@status", item.Status);
+        Assert.AreEqual(1, await command.ExecuteNonQueryAsync());
     }
 }

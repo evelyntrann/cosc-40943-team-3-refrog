@@ -66,13 +66,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<SessionService>();
         services.AddScoped<IRecoveryRepository, EfRecoveryRepository>();
         services.AddScoped<RecoveryService>();
-        services.AddDbContext<InfoDbContext>(options =>
-            InfoDbContext.Configure(options, configuration.GetConnectionString("ReFrog")));
+        services.AddScoped<SqlUnitOfWork>();
+        services.AddDbContext<InfoDbContext>((provider, options) =>
+            InfoDbContext.Configure(options, provider.GetRequiredService<SqlUnitOfWork>().Connection));
         services.AddScoped<IEventInfoStore, EfEventInfoStore>();
         services.AddScoped<InfoService>();
         services.AddScoped<IEventConfigStore, EfEventConfigStore>();
         services.AddScoped<EventConfigService>();
-        services.AddScoped<SqlUnitOfWork>();
         services.AddDbContext<AdmDbContext>((provider, options) =>
             AdmDbContext.Configure(options, provider.GetRequiredService<SqlUnitOfWork>().Connection));
         services.AddScoped<IAdminAuditLog, EfAdminAuditLog>();

@@ -154,15 +154,18 @@ public sealed class EventInfoEndpointTests
 
     private sealed class InfoFixture : IAsyncDisposable
     {
-        private InfoFixture(WebApplicationFactory<Program> factory, HttpClient client)
+        private InfoFixture(WebApplicationFactory<Program> factory, HttpClient client, string connectionString)
         {
             Factory = factory;
             Client = client;
+            ConnectionString = connectionString;
         }
 
         public WebApplicationFactory<Program> Factory { get; }
 
         public HttpClient Client { get; }
+
+        private string ConnectionString { get; }
 
         public async Task AddAsync(params ReFrogEvent[] events)
         {
@@ -188,9 +191,19 @@ public sealed class EventInfoEndpointTests
                 host.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
                     new Dictionary<string, string?> { ["ConnectionStrings:ReFrog"] = builder.ConnectionString })));
             var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost/") });
-            var fixture = new InfoFixture(factory, client);
+            var fixture = new InfoFixture(factory, client, builder.ConnectionString);
             try
             {
+                // The app-scoped InfoDbContext now uses SqlUnitOfWork's existing DbConnection. Bootstrap this
+                // isolated fixture's database through the design-time connection-string path first; production
+                // migration applies AUTH first, which creates the shared database before INF joins it.
+                var options = new DbContextOptionsBuilder<InfoDbContext>();
+                InfoDbContext.Configure(options, builder.ConnectionString);
+                await using (var bootstrap = new InfoDbContext(options.Options))
+                {
+                    await bootstrap.Database.MigrateAsync();
+                }
+
                 await using var scope = factory.Services.CreateAsyncScope();
                 await scope.ServiceProvider.GetRequiredService<InfoDbContext>().Database.MigrateAsync();
                 return fixture;
@@ -213,8 +226,12 @@ public sealed class EventInfoEndpointTests
 
         public async ValueTask DisposeAsync()
         {
-            await using var scope = Factory.Services.CreateAsyncScope();
-            await scope.ServiceProvider.GetRequiredService<InfoDbContext>().Database.EnsureDeletedAsync();
+            // Database creation/deletion must use a connection string so EF can switch to master after deleting
+            // the target. The app's externally supplied shared connection is intentionally scoped to that target.
+            var options = new DbContextOptionsBuilder<InfoDbContext>();
+            InfoDbContext.Configure(options, ConnectionString);
+            await using var cleanup = new InfoDbContext(options.Options);
+            await cleanup.Database.EnsureDeletedAsync();
             Client.Dispose();
             await Factory.DisposeAsync();
         }
