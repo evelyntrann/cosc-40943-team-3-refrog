@@ -38,3 +38,7 @@ dotnet test ReFrog.slnx --no-build
 ```
 
 Each integration test creates and drops its own database. If `REFROG_TEST_SQL` is not set, those tests are reported as **skipped**, not passed. Check the skipped count before you trust a green run.
+
+## Observability
+
+The [proposed observability design](docs/design/observability.md) and [verification runbook](docs/operations/observability.md) track issue #117: health/metrics contracts, useful privacy-safe diagnostics, and the platform-stream failure exercise. These changes are design only; endpoints and deployed evidence are pending. The existing [availability measurement](docs/operations/availability-slo.md) is a local sample, not production availability.
