@@ -12,6 +12,39 @@ This crosscutting design adds diagnostics around existing flows; it does not rep
 
 **Immediate target:** a local demonstration, confirmed by the developer on 2026-11-20; ReFrog is not deployed. Implement and demonstrate O1–O8 locally after this design merges. O9 is a later deployment obligation, and O10 still depends on `OI-23`. Local application-console evidence must be labelled local rather than presented as the course's deployed-platform log-stream proof.
 
+## Observability 4.3: adaptation to ReFrog
+
+The [course adaptation step](https://washingtonwei.github.io/cosc-40943/studio/#adapt) maps responsibilities onto `KD-tcu-it-stack`. Project Pulse's Java dependencies and Azure services are examples; this design selects the following ReFrog mechanisms, with their current status explicit.
+
+| Responsibility / Project Pulse example | ReFrog mechanism and evidence boundary |
+|---|---|
+| Application logging / SLF4J + Logback | Existing `ILogger<T>` interface and console provider; proposed safe JSON formatter and request correlation. Local output goes to the app console; EAS collection is pending |
+| Health inspection / Actuator `health` | Proposed public `/health` liveness route; the existing event-information probe separately exercises the app/store workflow |
+| Request measurements / Micrometer | Proposed in-process request counters, duration total and active-request gauge using existing .NET APIs; no package added |
+| Human metrics inspection / Actuator `metrics` | Proposed Development-only, current-administrator `/api/v1/operations/metrics` JSON snapshot; not a scraper format or a history store |
+| Time-series collection / Prometheus | Not configured. A future collector/exporter requires approved scope and dependencies; a spot-check snapshot cannot supply historical panels |
+| Dashboard and alerting / Grafana | Not configured. Show the local snapshot and the existing SLI CSV/report in this demo; automated notification still needs `OI-23` |
+| Request correlation / Brave | Proposed local `traceId` links request logs and response; it does not create exported or stored spans |
+| Trace storage and timeline / Zipkin | Not configured; no trace exporter or distributed tracing backend is selected |
+| Production telemetry / Application Insights | Not selected. EAS hosting remains provider-neutral; production collector, platform stream and access need actual operator inputs |
+| Local mail dependency / Mailpit | Existing SMTP development service in `compose.yaml`; its logs describe Mailpit, not ReFrog's HTTP requests |
+
+The studio's live logger changes, Prometheus scrape authentication, Grafana dashboards/alerts and Zipkin timelines demonstrate these separate roles in Project Pulse. They are not additional ReFrog endpoints or dependencies in #117. ReFrog log filtering uses configuration; this design adds no public logger-control, environment, configuration-dump or memory-dump endpoint. A future dashboard must read a collector's retained data rather than treating this JSON inspection route as Prometheus.
+
+### Implementation 4.9: logging conventions
+
+These conventions are proposed in architecture §8.2.7 with a one-line `AGENTS.md` reminder. They adapt the supplied logging guidance without copying participant content or exposing provider exception messages.
+
+| Course concern | .NET convention in this design |
+|---|---|
+| Logger/category ownership | Inject one `ILogger<T>` per class; retain its category in emitted records |
+| Levels by audience | `Error`: operator action needed; `Warning`: degraded function; `Information`: permitted business/operational outcome; `Debug`: development detail. Level semantics do not enable every event or select a notification threshold |
+| Parameterized records | Use static structured templates (`LoggerMessage` or `ILogger` templates), not interpolation/concatenation of request data |
+| Handled failures retain the cause | Pass the caught exception to the safe diagnostic projection; record its type, code-location frames and allowed numeric provider code, or rethrow to the owning logging boundary. The projection never emits raw exception text. Expected validation/authorization refusals remain distinct from unexpected/dependency failures |
+| Identity and privacy | Use a stable internal identifier only when diagnosis needs it; omit emails, tokens, passwords and participant content. Operational request diagnostics do not expand administrator auditing |
+
+Changing a filter to `Debug` does not waive redaction. Apply the same output/privacy assertions to development-detail events and inspect the formatted output. Notification delivery, recipient and threshold remain open under `OI-23`.
+
 ## Existing evidence and gaps
 
 | Evidence at the designed-against revision | Consequence |
@@ -68,10 +101,10 @@ All JSON uses the existing `ApiResponse<T>` serializer and error categories (arc
 | Operation | Caller and input | Success | Refusals and limitations |
 |---|---|---|---|
 | `GET /health` | Anonymous, no request fields | `200`, JSON envelope whose data has `status: "UP"`; `Cache-Control: no-store` | Liveness only: confirms that the process can answer. No SQL or email call. Not a readiness or `AVL-uptime` measurement |
-| `GET /api/v1/operations/metrics` | Current administrator session, no request fields; reuse `AdminAuthorization.RequireAdministratorAsync` | `200`, JSON envelope containing the snapshot below; `Cache-Control: no-store` | Existing `401 AUTHENTICATION_REQUIRED`, `403 ADMINISTRATOR_REQUIRED`, `503 AUTHENTICATION_UNAVAILABLE`; no snapshot on refusal and no redirect to HTML |
+| `GET /api/v1/operations/metrics` | Development environment only; current administrator session, no request fields; reuse `AdminAuthorization.RequireAdministratorAsync` | `200`, JSON envelope containing the snapshot below; `Cache-Control: no-store` | In Development: existing `401 AUTHENTICATION_REQUIRED`, `403 ADMINISTRATOR_REQUIRED`, `503 AUTHENTICATION_UNAVAILABLE`; outside Development: route is not mapped and returns shared `404 NOT_FOUND`, including for an administrator; no redirect to HTML |
 | Existing application responses | Existing callers and payloads | Add server-generated `X-Trace-Id` header without changing response bodies | Preserve existing status/error contracts, including the AUTH unavailable path and INF `500 UNEXPECTED_ERROR` |
 
-Liveness must remain independent of cookie validation and the database, even when a caller supplies an expired or otherwise invalid cookie. Route it before authentication while retaining the host's HTTPS behavior. Metrics must run through authentication and the live administrator check; an old role claim is insufficient. Apply `no-store` to successful and failed management responses, and preserve correlation/cache headers when the error handler clears a response.
+Liveness must remain independent of cookie validation and the database, even when a caller supplies an expired or otherwise invalid cookie. Route it before authentication while retaining the host's HTTPS behavior. Register the metrics snapshot handler only when `Environment.IsDevelopment()` is true; tests of its access/counts explicitly select Development. Within that environment, metrics must run through authentication and the live administrator check; an old role claim is insufficient. Outside Development, refuse this reserved management path with a pre-authentication safe `404` and leave the snapshot handler unregistered. This refusal must not invoke cookie/database validation, including with a supplied cookie; otherwise an authorization outage could obscure the route's absence. Apply `no-store` to management responses, including this refusal, and preserve correlation/cache headers when the error handler clears a response.
 
 ### Metrics snapshot
 
@@ -89,6 +122,8 @@ Measure application API requests under `/api/v1/`, excluding the metrics route i
 An escaped exception or signalled request cancellation is an aborted request: increment none of `requestsCompleted`, `serverErrors`, or `requestDurationSecondsTotal`, and always release `activeRequests` in `finally`. Its log records outcome `aborted`, elapsed time and a nullable status (only retain a status actually started); never invent a delivered `500` or label an escaped exception a successful `200`. A completed pipeline means a response was produced, not proof the caller received all bytes. Snapshot related counters under the same synchronization boundary; concurrency must not lose increments. Process resource sampling failure returns the shared safe unexpected-error response rather than a misleading zero value.
 
 Across two snapshots from the same process, deltas give completed-request rate, 5xx fraction, and mean completed-request duration; aborted attempts are absent from all three and must be investigated through their logs. The active-request gauge and working set show load/resource use, not remaining capacity. Totals restart with the process and apply to one instance. They provide neither latency percentiles nor historical retention, database-pool saturation, or detection of requests that never reached the app. EAS must identify a collector before claiming dashboards or alerts work. No alert threshold is selected here (`OI-23`).
+
+`serverErrors` counts HTTP 5xx responses, not every failed business/dependency operation. A generic `200` acknowledgement can coexist with failed email delivery; its request metrics alone cannot establish functional success. Diagnose such outcomes through the safe operation/failure events. Preserve each existing use case's actual response contract rather than changing a status merely to improve a metric.
 
 ## Logging and privacy contract
 
@@ -122,14 +157,14 @@ These are required future assertions, **not passing evidence**. Add them to `tes
 | Row | Level | Assertions |
 |---|---|---|
 | O1 — liveness | Integration, no SQL | Anonymous `/health` returns the JSON/envelope/status above; invalid cookies and broken SQL do not change liveness; no SPA HTML; no private fields; no-store |
-| O2 — metrics access | SQL integration | Current administrator succeeds; anonymous, ordinary account, removed administrator, and unreadable authorization state receive their specified refusals with no metrics; no-store on all outcomes |
+| O2 — metrics access | SQL integration | In Development, current administrator succeeds; anonymous, ordinary account, removed administrator, and unreadable authorization state receive their specified refusals with no metrics. In non-Development environments (including Production), the unmapped path returns shared `404`, even with an administrator cookie or unavailable authorization store; no-store on all outcomes |
 | O3 — measurement | Integration + deterministic unit | Success/4xx each add one completion and no server error; caught 500/503 each add one completion and one server error; durations add only for those completions; health/metrics add nothing; fixed-clock timestamps and monotonic duration units agree with logs |
 | O4 — concurrent/aborted requests | Integration + unit | Concurrent requests lose no increments; cancellation or escaped exceptions add zero completions/errors/completed duration, release the active gauge and log aborted; snapshots are consistent; new singleton starts new totals; resource failure never appears as zero usage |
 | O5 — INF failure and correlation | Integration, failing `IEventInfoStore` | Existing `500 UNEXPECTED_ERROR` and safe response remain; error and completion events exist, share the response ID, and include useful type/frame, route, status, duration; supplied correlation text is not echoed |
 | O6 — registration 4b | SQL integration, fake `IEmailSender` | Thrown, Failed and Unknown delivery each produce an actionable safe diagnostic while retaining the AUTH 4b assertions; replay sends nothing again and does not invent another attempted delivery |
-| O7 — privacy | Unit + integration, actual JSON formatter | Synthetic email/password/code/token/connection-string values in request fields, query, headers, raw paths, nested exception messages/data and arbitrary scopes appear nowhere in emitted logs; valid upstream `traceparent` is not copied into the local ID or framework scope output; positive assertions prove useful cause/type/frame/correlation information exists |
+| O7 — privacy | Unit + integration, actual JSON formatter | Synthetic email/password/code/token/connection-string values in request fields, query, headers, raw paths, nested exception messages/data and arbitrary scopes appear nowhere in emitted logs, including when a category is enabled at Debug; valid upstream `traceparent` is not copied into the local ID or framework scope output; positive assertions prove useful cause/type/frame/correlation information exists |
 | O8 — SMTP failure | Adapter unit/integration | Synthetic recipient/provider secrets in an SMTP exception do not reach emitted JSON, state, scopes or exception output; safe cause details and failure outcome remain present |
-| O9 — deployment | Operator evidence | From a deployed test instance: health JSON, admin metrics change, refused anonymous metrics, one deliberate failure's response ID and matching platform-stream entry, private-data inspection, and successful recovery; save the runbook evidence fields |
+| O9 — deployment | Operator evidence, deferred | From a deployed non-Development test instance: health JSON, absent metrics (`404` with and without an administrator cookie), one deliberate failure's response ID and matching platform-stream entry, private-data inspection, and successful recovery; local metrics inspection remains O2/O3 |
 | O10 — notification | Deferred integration | After `OI-23` is resolved, an approved error reaches the approved destination with no sensitive content; do not mark this tested before policy and delivery exist |
 
 Use capture providers that preserve structured state, scopes and exception output, plus assertions against real formatted console JSON. The existing message-only privacy capture is insufficient for O7. O5 must fail before the diagnostic change; a test that only finds no secrets can pass with no logs at all.
@@ -143,13 +178,13 @@ Keep the definition, source, good/all events, target, window and budget under [`
 | Decision proposed for review | Rationale and limit |
 |---|---|
 | Public process-only health; existing event-information probe for user-visible availability | Avoid restarting a responsive app for an email outage; dependency health is not silently treated as readiness |
-| Administrator JSON metrics with bounded in-memory aggregates | Gives this deployment an inspectable endpoint without unapproved exporter packages; not a Prometheus endpoint or historical monitoring service |
+| Development-only administrator JSON metrics with bounded in-memory aggregates | Gives the local demo an inspectable endpoint without unapproved exporter packages; the route stays unmapped outside Development and is not a Prometheus endpoint or historical monitoring service |
 | Fresh local trace ID, safe exception projection and allowlisting console formatter | Correlates useful diagnostics without storing caller content, upstream request scopes or provider exception messages; default JSON scope serialization cannot enforce this boundary |
 | Host collects console logs | Fits EAS hosting; the host-specific collection/access procedure remains pending, not an Azure assumption |
 
 These are technical proposals requiring design review, not new client business rules. `OI-6` governs retention, `OI-23` governs automated error notification, `OI-25` governs the production mail provider, and `OI-33` governs production measurement inputs. Do not implement those unresolved choices. The public deployment URL, EAS host type, stream location and access have not been supplied; the runbook cannot record live evidence until they are.
 
-**Architecture changes:** link this design from §8.2.7; add no deployment topology or operational policy without evidence. No use-case Build/Verify status changes. Local demonstration does not depend on obtaining EAS platform access; that is required only for the later O9 evidence.
+**Architecture changes:** define the .NET logging conventions in §8.2.7 and mirror its reminder in `AGENTS.md`; keep notification thresholds/category filters unresolved and link this design/runbook. Add no deployment topology or operational policy without evidence. No use-case Build/Verify status changes. Local demonstration does not depend on obtaining EAS platform access; that is required only for the later O9 evidence.
 
 ## Questions test
 
@@ -159,4 +194,5 @@ A read-only agent review checked this design against `UC-INF-view-event-info`, `
 
 - [Observability §4.3, §4.4, §4.7 and studio §7](https://washingtonwei.github.io/cosc-40943/modules/observability/): stack mapping, log collection, management access and deployed evidence.
 - [Implementation §4.9](https://washingtonwei.github.io/cosc-40943/modules/implementation/#49-log-what-the-person-at-2-am-will-need): actionable diagnostics and private-data review. ReFrog's exception projection reconciles cause information with its stricter privacy boundary.
+- Microsoft: [.NET logging](https://learn.microsoft.com/en-us/dotnet/core/extensions/logging) documents `ILogger<T>`, categories, structured templates and level meanings.
 - Microsoft: [ASP.NET Core health checks](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/health-checks?view=aspnetcore-10.0), [metrics](https://learn.microsoft.com/en-us/aspnet/core/log-mon/metrics/metrics?view=aspnetcore-10.0), and [JSON console formatting](https://learn.microsoft.com/en-us/dotnet/core/extensions/logging/console-log-formatter). Built-in instrumentation does not by itself collect or retain telemetry.

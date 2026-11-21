@@ -53,7 +53,7 @@ ReFrog: a phone-first progressive web app for TCU's finals-week move-out donatio
 - **Code:** one formatter, linter, and test layout across the repo; do not duplicate business rules between client and server (§8.2.4).
 - **Validation:** the server check is the one that counts; name the bad field and keep the user's valid input (§8.2.5).
 - **Config and secrets:** settings come from deployment configuration; secrets never appear in source, docs, logs, exports, or error responses (§8.2.6).
-- **Logging:** use centralized automated logging for diagnosis and operational error notification; never log secrets, verification codes, raw TCU IDs, or unnecessary personal data (§8.2.7, `MNT-error-notification`).
+- **Logging:** use one `ILogger<T>` per class, structured message templates, audience-based levels, correlated safe exception diagnostics for handled failures, and identifiers rather than personal content; centralized collection and operational error notification follow §8.2.7 and `MNT-error-notification`; never log secrets, verification codes, raw TCU IDs, or unnecessary personal data.
 - **Persistence:** persist only after validation and business rules pass; one transaction per smallest complete business operation (§8.2.8).
 - **Auditing:** record admin sign-in attempts and admin changes only; no general-purpose audit subsystem (§8.2.9).
 - **Testing:** cover both accepted and rejected requests with non-production data, including auth, validation, duplicates, time zones, and persistence failures (§8.2.10).
