@@ -38,3 +38,56 @@ public sealed record ShiftResponse(Guid ShiftId, Guid LocationId, DateTimeOffset
 public sealed record SetLocationStaffingRequest(int? DefaultRequiredCount);
 
 public sealed record LocationStaffingResponse(Guid EventId, Guid LocationId, int DefaultRequiredCount);
+
+/// <summary>
+/// A shift an administrator can choose to change (<c>UC-ADM-manage-shifts</c> 6a). <see cref="HeldCount"/> counts
+/// approved and pending sign-ups. <see cref="Version"/> is sent back with a change, so a stale one can be refused.
+/// </summary>
+public sealed record ManagedShift(
+    Guid ShiftId,
+    Guid LocationId,
+    string LocationName,
+    DateTimeOffset StartsAt,
+    DateTimeOffset EndsAt,
+    int RequiredCount,
+    int HeldCount,
+    string Version);
+
+/// <summary><c>GET /api/v1/admin/shifts</c>: the current event's shifts, earliest first.</summary>
+public sealed record ShiftListResponse(IReadOnlyList<ManagedShift> Shifts);
+
+/// <summary>
+/// An intended edit of a shift (6a). <see cref="ExpectedVersion"/> is the <see cref="ManagedShift.Version"/> the
+/// administrator was shown. The date and times follow <see cref="CreateShiftRequest"/>, and
+/// <see cref="RequiredCount"/> is required. Saving also needs <see cref="ExpectedAffected"/>, the
+/// <see cref="ShiftImpactResponse.AffectedVersion"/> of the preview, so a change to who is affected since then is
+/// refused (6a1).
+/// </summary>
+public sealed record ChangeShiftRequest(
+    string? ExpectedVersion,
+    Guid? LocationId,
+    string? Date,
+    string? StartTime,
+    string? EndTime,
+    int? RequiredCount,
+    string? ExpectedAffected = null);
+
+/// <summary><c>DELETE /api/v1/admin/shifts/{shiftId}</c>: the shift that was removed.</summary>
+public sealed record ShiftRemovedResponse(Guid ShiftId);
+
+/// <summary>A volunteer a change would affect (6a1). <see cref="Email"/> is null if the account no longer exists.</summary>
+public sealed record AffectedVolunteer(string? Email, string Status);
+
+/// <summary>
+/// <c>GET /api/v1/admin/shifts/{shiftId}/impact</c>: who a change would affect and whether it is allowed. When
+/// <see cref="Permitted"/> is false, <see cref="RefusalCode"/> is the error applying the change would return.
+/// <see cref="AffectedVersion"/> identifies the volunteers shown and is sent back when the edit is saved.
+/// </summary>
+public sealed record ShiftImpactResponse(
+    Guid ShiftId,
+    string Version,
+    int HeldCount,
+    IReadOnlyList<AffectedVolunteer> AffectedVolunteers,
+    bool Permitted,
+    string? RefusalCode,
+    string AffectedVersion);

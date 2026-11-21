@@ -37,12 +37,49 @@ public sealed class EfVolStore(VolDbContext db, SqlUnitOfWork unitOfWork, ILogge
         return counts;
     }
 
+    public async Task<IReadOnlyDictionary<Guid, AssignmentCounts>> CountsByShiftsAsync(
+        IEnumerable<Guid> shiftIds, CancellationToken cancellationToken)
+    {
+        await unitOfWork.JoinIfOpenAsync(db, cancellationToken);
+        var targetIds = shiftIds.ToList();
+        if (targetIds.Count == 0)
+        {
+            return new Dictionary<Guid, AssignmentCounts>();
+        }
+
+        return await db.ShiftAssignments
+            .Where(x => targetIds.Contains(x.ShiftId) && (x.Status == AssignmentStatus.Active || x.Status == AssignmentStatus.Pending))
+            .GroupBy(x => x.ShiftId)
+            .Select(g => new
+            {
+                ShiftId = g.Key,
+                Active = g.Count(x => x.Status == AssignmentStatus.Active),
+                Pending = g.Count(x => x.Status == AssignmentStatus.Pending),
+            })
+            .ToDictionaryAsync(x => x.ShiftId, x => new AssignmentCounts(x.Active, x.Pending), cancellationToken);
+    }
+
     public async Task<ShiftAssignment?> FindByShiftAndVolunteerAsync(
         Guid shiftId, Guid volunteerId, CancellationToken cancellationToken)
     {
         await unitOfWork.JoinIfOpenAsync(db, cancellationToken);
         return await db.ShiftAssignments
             .SingleOrDefaultAsync(x => x.ShiftId == shiftId && x.VolunteerId == volunteerId, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ShiftAssignment>> ListHeldByShiftAsync(Guid shiftId, CancellationToken cancellationToken)
+    {
+        await unitOfWork.JoinIfOpenAsync(db, cancellationToken);
+        return await db.ShiftAssignments.AsNoTracking()
+            .Where(x => x.ShiftId == shiftId && (x.Status == AssignmentStatus.Active || x.Status == AssignmentStatus.Pending))
+            .OrderBy(x => x.AssignedAt).ThenBy(x => x.Id)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<bool> HasAnyAssignmentAsync(Guid shiftId, CancellationToken cancellationToken)
+    {
+        await unitOfWork.JoinIfOpenAsync(db, cancellationToken);
+        return await db.ShiftAssignments.AnyAsync(x => x.ShiftId == shiftId, cancellationToken);
     }
 
     public async Task<IReadOnlySet<Guid>> ListHeldShiftIdsForVolunteerAsync(

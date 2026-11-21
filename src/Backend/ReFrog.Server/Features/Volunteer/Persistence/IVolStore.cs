@@ -11,8 +11,18 @@ public interface IVolStore
     Task<IReadOnlyDictionary<Guid, int>> CountsHeldByShiftsAsync(
         IEnumerable<Guid> shiftIds, CancellationToken cancellationToken);
 
+    /// <summary>ACTIVE and PENDING counts by shift id; a shift with nothing held is left out.</summary>
+    Task<IReadOnlyDictionary<Guid, AssignmentCounts>> CountsByShiftsAsync(
+        IEnumerable<Guid> shiftIds, CancellationToken cancellationToken);
+
     Task<ShiftAssignment?> FindByShiftAndVolunteerAsync(
         Guid shiftId, Guid volunteerId, CancellationToken cancellationToken);
+
+    /// <summary>The shift's held (ACTIVE or PENDING) assignments, earliest first.</summary>
+    Task<IReadOnlyList<ShiftAssignment>> ListHeldByShiftAsync(Guid shiftId, CancellationToken cancellationToken);
+
+    /// <summary>Whether the shift has an assignment in any status, including CANCELLED and DENIED.</summary>
+    Task<bool> HasAnyAssignmentAsync(Guid shiftId, CancellationToken cancellationToken);
 
     Task<IReadOnlySet<Guid>> ListHeldShiftIdsForVolunteerAsync(
         Guid volunteerId, CancellationToken cancellationToken);

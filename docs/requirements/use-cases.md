@@ -919,7 +919,7 @@ A failed save leaves no assignment recorded (fails cleanly, no partial state). A
 
 **Related Use Cases:** `UC-VOL-signup`: Sign up for a volunteer shift; `UC-ADM-view-dashboard`; `UC-ADM-notify-volunteers`: Notify volunteers of open shifts
 **Assumptions:** Shift creation happens inside this app rather than a separate tool — confirmed 2026-10-02 (resolves `OI-9`).
-**Open Issues:** none beyond editing/removing a shift with assigned volunteers (extension 6a), which is still unspecified.
+**Open Issues:** `OI-34`: editing/removing a shift with assigned volunteers (extension 6a) is still unspecified.
 
 ---
 

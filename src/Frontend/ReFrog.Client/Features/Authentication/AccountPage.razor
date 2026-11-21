@@ -18,6 +18,7 @@ else if (session is not null)
         @if (session.IsAdministrator)
         {
             <p>Administrator</p>
+            <p><a href="/admin/dashboard">Event dashboard</a></p>
             <p><a href="/admin/shifts">Manage volunteer shifts</a></p>
         }
         <button type="button" disabled="@busy" @onclick="SignOutAsync">@(busy ? "Signing out…" : "Sign out")</button>

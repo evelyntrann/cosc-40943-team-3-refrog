@@ -1,6 +1,9 @@
 namespace ReFrog.Server.Features.Administration;
 
-/// <summary>A stored shift as ADM's business code sees it. Start and end are UTC instants.</summary>
+/// <summary>
+/// A stored shift as ADM's business code sees it. Start and end are UTC instants. <see cref="Version"/> is the row's
+/// version as hexadecimal text; it is empty on a shift that has not been stored yet.
+/// </summary>
 public sealed record StoredShift(
     Guid Id,
     Guid EventId,
@@ -8,7 +11,38 @@ public sealed record StoredShift(
     DateTimeOffset StartsAt,
     DateTimeOffset EndsAt,
     int RequiredCount,
-    Guid CreateRequestId);
+    Guid CreateRequestId,
+    string Version = "");
+
+/// <summary>What to do with a shift once its row is locked (<see cref="IShiftStore.ChangeUnderLockAsync"/>).</summary>
+public abstract record ShiftChangeDecision;
+
+/// <summary>Store these details on the shift.</summary>
+public sealed record ShiftUpdate(Guid LocationId, DateTimeOffset StartsAt, DateTimeOffset EndsAt, int RequiredCount)
+    : ShiftChangeDecision;
+
+/// <summary>Delete the shift.</summary>
+public sealed record ShiftRemoval : ShiftChangeDecision;
+
+/// <summary>Change nothing, for the reason <paramref name="Code"/> names.</summary>
+public sealed record ShiftRefusal(string Code) : ShiftChangeDecision;
+
+/// <summary>What a locked change did. Every outcome except <see cref="Saved"/> and <see cref="Removed"/> changed nothing.</summary>
+public enum ShiftChangeOutcome
+{
+    Saved,
+    Removed,
+    NotFound,
+    VersionStale,
+    Refused,
+    NotRecorded,
+}
+
+/// <summary>
+/// The result of a locked change. <see cref="Shift"/> is the shift as saved, or as found when the version was stale
+/// or the change refused. <see cref="RefusalCode"/> is set on <see cref="ShiftChangeOutcome.Refused"/>.
+/// </summary>
+public sealed record ShiftChangeResult(ShiftChangeOutcome Outcome, StoredShift? Shift = null, string? RefusalCode = null);
 
 /// <summary>What a write did. <see cref="NotRecorded"/> means nothing was stored (§8.2.1).</summary>
 public enum SaveOutcome
@@ -34,6 +68,9 @@ public interface IShiftStore
     /// <summary>The event's shifts that start after <paramref name="now"/>, earliest first.</summary>
     Task<IReadOnlyList<StoredShift>> ListStartingAfterAsync(Guid eventId, DateTimeOffset now, CancellationToken cancellationToken);
 
+    /// <summary>All of the event's shifts, earliest first.</summary>
+    Task<IReadOnlyList<StoredShift>> ListForEventAsync(Guid eventId, CancellationToken cancellationToken);
+
     /// <summary>
     /// Reads the shift under an update lock held until the scope's open shared transaction ends
     /// (<c>SqlUnitOfWork</c>). Throws <see cref="InvalidOperationException"/> when no transaction is open.
@@ -56,4 +93,16 @@ public interface IShiftStore
     /// for the same location run one after the other. A failure stores nothing and discards the staged entry.
     /// </summary>
     Task<SaveOutcome> SetLocationDefaultAsync(Guid eventId, Guid locationId, int count, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Changes one shift in one transaction, holding the row lock VOL takes for sign-ups and cancellations
+    /// (ADM.md key decision 8). When the row's version is <paramref name="expectedVersion"/>, <paramref name="decide"/>
+    /// runs under that lock, so the held count it reads cannot change before the decision is stored. An audit entry
+    /// it stages commits with the change and is discarded on every other outcome.
+    /// </summary>
+    Task<ShiftChangeResult> ChangeUnderLockAsync(
+        Guid shiftId,
+        string expectedVersion,
+        Func<CancellationToken, Task<ShiftChangeDecision>> decide,
+        CancellationToken cancellationToken);
 }

@@ -9,6 +9,7 @@ using ReFrog.Server.Features.Administration.Persistence;
 using ReFrog.Server.Features.Authentication;
 using ReFrog.Server.Features.Authentication.Persistence;
 using ReFrog.Server.Features.Info.Persistence;
+using ReFrog.Server.Features.Volunteer.Persistence;
 using ReFrog.Server.Tests.Info;
 using ReFrog.Server.Tests.Support;
 
@@ -124,6 +125,45 @@ internal sealed class AdminShiftFixture : IAsyncDisposable
         db.LocationStaffing.Add(new LocationStaffing { EventId = EventId, LocationId = locationId, DefaultRequiredCount = count });
         return db.SaveChangesAsync();
     });
+
+    /// <summary>A stored shift on Monday May 3, 2:00–6:00 p.m. Chicago time, at Commons unless another location is given.</summary>
+    public async Task<Shift> SeedShiftAsync(Guid? locationId = null, int requiredCount = 2, Guid? eventId = null)
+    {
+        var shift = new Shift
+        {
+            Id = Guid.NewGuid(),
+            EventId = eventId ?? EventId,
+            LocationId = locationId ?? Commons,
+            StartsAt = new DateTimeOffset(2027, 5, 3, 19, 0, 0, TimeSpan.Zero),
+            EndsAt = new DateTimeOffset(2027, 5, 3, 23, 0, 0, TimeSpan.Zero),
+            RequiredCount = requiredCount,
+            CreateRequestId = Guid.NewGuid(),
+            CreatedByAccountId = Guid.NewGuid(),
+            CreatedAt = Now,
+        };
+        await Host.WithAsync<AdmDbContext>(db =>
+        {
+            db.Shifts.Add(shift);
+            return db.SaveChangesAsync();
+        });
+        return shift;
+    }
+
+    public Task SeedAssignmentAsync(Guid shiftId, Guid volunteerId, string status) => Host.WithAsync<VolDbContext>(db =>
+    {
+        db.ShiftAssignments.Add(new ShiftAssignment
+        {
+            Id = Guid.NewGuid(),
+            ShiftId = shiftId,
+            VolunteerId = volunteerId,
+            Status = status,
+            AssignedAt = Now,
+        });
+        return db.SaveChangesAsync();
+    });
+
+    public Task<List<ShiftAssignment>> AssignmentsAsync(Guid shiftId) => Host.WithAsync<VolDbContext, List<ShiftAssignment>>(db =>
+        db.ShiftAssignments.AsNoTracking().Where(x => x.ShiftId == shiftId).ToListAsync());
 
     public Task<List<Shift>> ShiftsAsync() => Host.WithAsync<AdmDbContext, List<Shift>>(db => db.Shifts.AsNoTracking().ToListAsync());
 
