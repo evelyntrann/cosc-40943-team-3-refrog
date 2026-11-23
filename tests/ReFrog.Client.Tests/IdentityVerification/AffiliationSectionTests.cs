@@ -243,6 +243,59 @@ public sealed class AffiliationSectionTests
         Assert.AreEqual("Send code", cut.Find("[data-testid=send-code]").TextContent.Trim());
     }
 
+    // Code review finding 4 on PR #149: a 429 shows when the shopper can try again, in Chicago time.
+    [TestMethod]
+    public void TooManyCodeRequestsShowsTheRetryTime()
+    {
+        var api = new ScriptedApi().Ok(ScriptedApi.Status())
+            .Reply(ScriptedApi.Codes, HttpStatusCode.TooManyRequests, Limited(RetryAt));
+        using var context = new BunitContext();
+        var cut = Render(context, api);
+        cut.WaitForAssertion(() => cut.Find("#affiliation-email"));
+
+        cut.Find("#affiliation-email").Change("kim@tcu.edu");
+        cut.Find("#affiliation-email-form").Submit();
+
+        cut.WaitForAssertion(() => StringAssert.Contains(cut.Find("[data-testid=retry-at]").TextContent, "11:00 a.m."));
+    }
+
+    [TestMethod]
+    public void TooManyWrongCodesShowsTheRetryTime()
+    {
+        var api = new ScriptedApi().Ok(ScriptedApi.Status(pending: DateTimeOffset.UtcNow.AddMinutes(5)))
+            .Reply(ScriptedApi.Verification, HttpStatusCode.TooManyRequests, Limited(RetryAt));
+        using var context = new BunitContext();
+        var cut = Render(context, api);
+        cut.WaitForAssertion(() => cut.Find("#affiliation-code"));
+
+        cut.Find("#affiliation-code").Change("123456");
+        cut.Find("#affiliation-code-form").Submit();
+
+        cut.WaitForAssertion(() => StringAssert.Contains(cut.Find("[data-testid=retry-at]").TextContent, "11:00 a.m."));
+    }
+
+    [TestMethod]
+    public void ErrorsWithoutARetryTimeShowNoTimeLine()
+    {
+        var api = new ScriptedApi().Ok(ScriptedApi.Status(pending: DateTimeOffset.UtcNow.AddMinutes(5)))
+            .Fail(ScriptedApi.Verification, HttpStatusCode.UnprocessableEntity, "CODE_INVALID");
+        using var context = new BunitContext();
+        var cut = Render(context, api);
+        cut.WaitForAssertion(() => cut.Find("#affiliation-code"));
+
+        cut.Find("#affiliation-code").Change("123456");
+        cut.Find("#affiliation-code-form").Submit();
+
+        cut.WaitForAssertion(() => cut.Find("[data-testid=affiliation-error]"));
+        Assert.IsEmpty(cut.FindAll("[data-testid=retry-at]"));
+    }
+
+    // 4:00 p.m. UTC on April 26, 2027 is 11:00 a.m. in Chicago (CDT).
+    private static readonly DateTimeOffset RetryAt = new(2027, 4, 26, 16, 0, 0, TimeSpan.Zero);
+
+    private static ApiResponse<object> Limited(DateTimeOffset retryAt) => ApiResponse.Failure<object>(new ApiError(
+        ApiErrorCategory.Validation, "TOO_MANY_REQUESTS", "Try again after the stated time.", RetryAt: retryAt));
+
     private static IRenderedComponent<AffiliationSection> Render(BunitContext context, ScriptedApi api)
     {
         context.Services.AddSingleton(api.Client());

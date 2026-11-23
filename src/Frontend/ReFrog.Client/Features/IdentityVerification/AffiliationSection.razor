@@ -89,6 +89,10 @@
         @if (form.Error is { } error && error.Fields is null)
         {
             <p role="alert" data-testid="affiliation-error">@error.Message</p>
+            @if (error.RetryAt is { } retryAt)
+            {
+                <p data-testid="retry-at">Try again after @EventTime.FormatInstant(retryAt).</p>
+            }
         }
     }
 </section>
