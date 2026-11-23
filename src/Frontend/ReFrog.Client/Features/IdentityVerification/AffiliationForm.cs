@@ -36,6 +36,12 @@ public sealed class AffiliationForm(HttpClient http, TimeProvider? clock = null)
 
     public bool Busy { get; private set; }
 
+    /// <summary>
+    /// The email form is shown again while a code is still live, because the address it went to is not known
+    /// (the server never returns it, and a reload loses what was typed).
+    /// </summary>
+    public bool ChangingEmail { get; private set; }
+
     public bool Restricted => Status?.VolunteerAccess == VolunteerAccessValues.Restricted;
 
     public bool IsVolunteer => Status?.VolunteerAccess == VolunteerAccessValues.RoleActive;
@@ -46,7 +52,8 @@ public sealed class AffiliationForm(HttpClient http, TimeProvider? clock = null)
     public bool OffersVerification => Status is { Eligible: false } && !Restricted;
 
     /// <summary>A code form is shown once a code was sent, in this visit or an earlier one that is still live.</summary>
-    public bool AwaitingCode => OffersVerification && (Pending is not null || Status?.PendingCodeExpiresAt is not null);
+    public bool AwaitingCode => OffersVerification && !ChangingEmail &&
+        (Pending is not null || Status?.PendingCodeExpiresAt is not null);
 
     public DateTimeOffset? CodeExpiresAt => Pending?.ExpiresAt ?? Status?.PendingCodeExpiresAt;
 
@@ -88,8 +95,23 @@ public sealed class AffiliationForm(HttpClient http, TimeProvider? clock = null)
         }
     }
 
+    /// <summary>Shows the email form again; any remaining wait is enforced by the server's 429.</summary>
+    public void ChangeEmail()
+    {
+        ChangingEmail = true;
+        Pending = null;
+        Error = null;
+    }
+
     public async Task RequestCodeAsync()
     {
+        if (AwaitingCode && string.IsNullOrWhiteSpace(Email))
+        {
+            // Resend with no known address (for example after a reload): ask for it instead of posting a blank one.
+            ChangeEmail();
+            return;
+        }
+
         if (!CanResend)
         {
             return;
@@ -114,6 +136,7 @@ public sealed class AffiliationForm(HttpClient http, TimeProvider? clock = null)
         {
             Pending = answer.Data;
             Code = string.Empty;
+            ChangingEmail = false;
         }
         else if (status == HttpStatusCode.Conflict && answer.Error?.Code == "ALREADY_VERIFIED")
         {

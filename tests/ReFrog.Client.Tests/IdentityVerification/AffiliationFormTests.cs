@@ -47,6 +47,24 @@ public sealed class AffiliationFormTests
     }
 
     [TestMethod]
+    public async Task ResendInTheSameVisitPostsTheRememberedAddress()
+    {
+        var clock = new FixedClock(Now);
+        var api = new ScriptedApi()
+            .Reply(ScriptedApi.Codes, HttpStatusCode.Accepted, ApiResponse.Success(Sent))
+            .Reply(ScriptedApi.Codes, HttpStatusCode.Accepted, ApiResponse.Success(Sent));
+        var form = new AffiliationForm(api.Client(), clock) { Email = "kim@tcu.edu" };
+        await form.RequestCodeAsync();
+
+        clock.Now = Sent.ResendAvailableAt;
+        await form.RequestCodeAsync();
+
+        Assert.HasCount(2, api.CodeRequests);
+        Assert.AreEqual("kim@tcu.edu", api.CodeRequests[1].Email);
+        Assert.IsFalse(form.ChangingEmail);
+    }
+
+    [TestMethod]
     public async Task ResendWaitsForTheServersResendTime()
     {
         var clock = new FixedClock(Now);

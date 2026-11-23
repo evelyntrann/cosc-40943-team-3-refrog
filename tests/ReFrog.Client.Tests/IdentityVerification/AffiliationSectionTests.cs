@@ -160,6 +160,31 @@ public sealed class AffiliationSectionTests
         Assert.IsFalse(cut.Find("[data-testid=resend]").HasAttribute("disabled"));
     }
 
+    // Code review finding 1 on PR #149: after a reload the address is unknown, so resend asks for it.
+    [TestMethod]
+    public void ResendAfterAReloadAsksForTheAddressInsteadOfPostingABlankOne()
+    {
+        var expires = DateTimeOffset.UtcNow.AddMinutes(9);
+        var api = new ScriptedApi().Ok(ScriptedApi.Status(pending: expires))
+            .Reply(ScriptedApi.Codes, HttpStatusCode.Accepted,
+                ApiResponse.Success(new TcuCodeResponse(expires.AddMinutes(1), DateTimeOffset.UtcNow.AddMinutes(1))));
+        using var context = new BunitContext();
+        var cut = Render(context, api);
+        cut.WaitForAssertion(() => cut.Find("#affiliation-code"));
+
+        cut.Find("[data-testid=resend]").Click();
+
+        cut.WaitForAssertion(() => cut.Find("#affiliation-email"));
+        Assert.IsEmpty(api.CodeRequests, "no blank address is posted");
+        Assert.IsEmpty(cut.FindAll("#affiliation-code"));
+
+        cut.Find("#affiliation-email").Change("kim.frog@tcu.edu");
+        cut.Find("form").Submit();
+
+        cut.WaitForAssertion(() => cut.Find("#affiliation-code"));
+        Assert.AreEqual("kim.frog@tcu.edu", api.CodeRequests.Single().Email);
+    }
+
     private static IRenderedComponent<AffiliationSection> Render(BunitContext context, ScriptedApi api)
     {
         context.Services.AddSingleton(api.Client());
