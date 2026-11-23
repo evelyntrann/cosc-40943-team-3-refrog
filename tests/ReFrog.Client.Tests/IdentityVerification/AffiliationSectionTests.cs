@@ -210,6 +210,39 @@ public sealed class AffiliationSectionTests
         Assert.AreNotEqual(api.CodeRequests[0].RequestId, api.CodeRequests[1].RequestId);
     }
 
+    // Code review finding 3 on PR #149: the button re-enables itself when the resend time passes.
+    [TestMethod]
+    public void SendANewCodeEnablesItselfWhenTheResendTimeArrives()
+    {
+        var sent = new TcuCodeResponse(DateTimeOffset.UtcNow.AddMinutes(10), DateTimeOffset.UtcNow.AddSeconds(1));
+        var api = new ScriptedApi().Ok(ScriptedApi.Status())
+            .Reply(ScriptedApi.Codes, HttpStatusCode.Accepted, ApiResponse.Success(sent));
+        using var context = new BunitContext();
+        var cut = Render(context, api);
+        cut.WaitForAssertion(() => cut.Find("#affiliation-email"));
+        cut.Find("#affiliation-email").Change("kim@tcu.edu");
+        cut.Find("#affiliation-email-form").Submit();
+        cut.WaitForAssertion(() => cut.Find("#affiliation-code"));
+        Assert.IsTrue(cut.Find("[data-testid=send-code]").HasAttribute("disabled"));
+
+        cut.WaitForAssertion(() => Assert.IsFalse(cut.Find("[data-testid=send-code]").HasAttribute("disabled")),
+            TimeSpan.FromSeconds(5));
+        Assert.DoesNotContain("You can send a new code at", cut.Markup);
+    }
+
+    // Code review finding 3 on PR #149: an expired code's field goes away without interaction.
+    [TestMethod]
+    public void TheCodeFieldDisappearsWhenTheCodeExpires()
+    {
+        var api = new ScriptedApi().Ok(ScriptedApi.Status(pending: DateTimeOffset.UtcNow.AddSeconds(1)));
+        using var context = new BunitContext();
+        var cut = Render(context, api);
+        cut.WaitForAssertion(() => cut.Find("#affiliation-code"));
+
+        cut.WaitForAssertion(() => Assert.IsEmpty(cut.FindAll("#affiliation-code")), TimeSpan.FromSeconds(5));
+        Assert.AreEqual("Send code", cut.Find("[data-testid=send-code]").TextContent.Trim());
+    }
+
     private static IRenderedComponent<AffiliationSection> Render(BunitContext context, ScriptedApi api)
     {
         context.Services.AddSingleton(api.Client());

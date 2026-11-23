@@ -56,6 +56,32 @@ public sealed class AffiliationForm(HttpClient http, TimeProvider? clock = null)
     /// <summary>True once the server's <c>resendAvailableAt</c> has passed; the wait itself comes from the server.</summary>
     public bool CanResend => Pending is null || time.GetUtcNow() >= Pending.ResendAvailableAt;
 
+    /// <summary>
+    /// How long until the view next changes on its own: the resend time opening or the live code expiring.
+    /// Null when nothing is waiting. The server still enforces both times; this only keeps the screen accurate.
+    /// </summary>
+    public TimeSpan? NextChangeIn => NextChangeAt - time.GetUtcNow();
+
+    /// <summary>The instant behind <see cref="NextChangeIn"/>, so a view can tell when it moved.</summary>
+    public DateTimeOffset? NextChangeAt
+    {
+        get
+        {
+            DateTimeOffset? next = null;
+            if (Pending is not null && !CanResend)
+            {
+                next = Pending.ResendAvailableAt;
+            }
+
+            if (AwaitingCode && CodeExpiresAt is { } expiresAt && (next is null || expiresAt < next))
+            {
+                next = expiresAt;
+            }
+
+            return next;
+        }
+    }
+
     public string? FieldError(string name) =>
         Error?.Fields?.TryGetValue(name, out var message) == true ? message : null;
 

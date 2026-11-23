@@ -1,4 +1,5 @@
 @using ReFrog.Contracts.Time
+@implements IDisposable
 @inject HttpClient Http
 
 @* The identity section of UI-account-profile (UC-IDV-verify-affiliation, IDV.md AffiliationSection). *@
@@ -95,9 +96,57 @@
 @code {
     private AffiliationForm form = null!;
 
+    private CancellationTokenSource? refreshTimer;
+
+    private DateTimeOffset? refreshAt;
+
     protected override async Task OnInitializedAsync()
     {
         form = new AffiliationForm(Http);
         await form.LoadStatusAsync();
+    }
+
+    // Re-render when the resend time opens or the live code expires, as RegisterPage does for registration,
+    // so the button and the code field change without another UI event (code review of PR #149, finding 3).
+    protected override void OnAfterRender(bool firstRender)
+    {
+        var next = form?.NextChangeAt;
+        if (next == refreshAt && (refreshTimer is not null || next is null))
+        {
+            return;
+        }
+
+        // A new send or a verification moved the next change: replace the waiting timer.
+        refreshTimer?.Cancel();
+        refreshTimer?.Dispose();
+        refreshTimer = null;
+        refreshAt = next;
+        if (form?.NextChangeIn is { } wait)
+        {
+            refreshTimer = new CancellationTokenSource();
+            _ = RefreshAfterAsync(wait, refreshTimer.Token);
+        }
+    }
+
+    private async Task RefreshAfterAsync(TimeSpan wait, CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(wait > TimeSpan.Zero ? wait : TimeSpan.Zero, token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        refreshTimer?.Dispose();
+        refreshTimer = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        refreshTimer?.Cancel();
+        refreshTimer?.Dispose();
     }
 }

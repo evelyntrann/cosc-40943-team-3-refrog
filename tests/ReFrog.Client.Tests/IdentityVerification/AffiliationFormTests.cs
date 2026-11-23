@@ -63,6 +63,27 @@ public sealed class AffiliationFormTests
         Assert.AreEqual("kim@tcu.edu", api.CodeRequests[1].Email);
     }
 
+    // Code review finding 3 on PR #149: the view's next change is the resend opening, then the code expiring.
+    [TestMethod]
+    public async Task NextChangeIsTheResendTimeThenTheExpiry()
+    {
+        var clock = new FixedClock(Now);
+        var api = new ScriptedApi().Ok(ScriptedApi.Status())
+            .Reply(ScriptedApi.Codes, HttpStatusCode.Accepted, ApiResponse.Success(Sent));
+        var form = new AffiliationForm(api.Client(), clock) { Email = "kim@tcu.edu" };
+        await form.LoadStatusAsync();
+        Assert.IsNull(form.NextChangeIn, "nothing is waiting before a send");
+
+        await form.RequestCodeAsync();
+        Assert.AreEqual(Sent.ResendAvailableAt - Now, form.NextChangeIn);
+
+        clock.Now = Sent.ResendAvailableAt;
+        Assert.AreEqual(Sent.ExpiresAt - Sent.ResendAvailableAt, form.NextChangeIn);
+
+        clock.Now = Sent.ExpiresAt;
+        Assert.IsNull(form.NextChangeIn);
+    }
+
     // Code review finding 2 on PR #149: an expired code no longer counts as awaiting a code.
     [TestMethod]
     public async Task AnExpiredCodeIsNoLongerAwaited()
