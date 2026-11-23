@@ -99,7 +99,7 @@ public sealed class AffiliationSectionTests
             "Please use a tcu.edu email if you are a TCU affiliate.");
 
         cut.Find("#affiliation-email").Change("person@example.org");
-        cut.Find("form").Submit();
+        cut.Find("#affiliation-email-form").Submit();
 
         cut.WaitForAssertion(() => Assert.AreEqual("Enter a TCU email address ending in @tcu.edu.",
             cut.Find("[data-testid=email-error]").TextContent));
@@ -132,11 +132,11 @@ public sealed class AffiliationSectionTests
         cut.WaitForAssertion(() => cut.Find("#affiliation-email"));
 
         cut.Find("#affiliation-email").Change("kim.frog@tcu.edu");
-        cut.Find("form").Submit();
+        cut.Find("#affiliation-email-form").Submit();
         cut.WaitForAssertion(() => cut.Find("#affiliation-code"));
         StringAssert.Contains(cut.Markup, "10:10 a.m.", "expiry shown in America/Chicago on a 12-hour clock");
         cut.Find("#affiliation-code").Change("012345");
-        cut.Find("form").Submit();
+        cut.Find("#affiliation-code-form").Submit();
 
         cut.WaitForAssertion(() => Assert.AreEqual(TcuVerified, cut.Find("[data-testid=tcu-verified]").TextContent));
         Assert.AreEqual("012345", api.CodeSubmissions.Single().Code, "leading zero kept");
@@ -154,15 +154,18 @@ public sealed class AffiliationSectionTests
         cut.WaitForAssertion(() => cut.Find("#affiliation-code"));
 
         cut.Find("#affiliation-code").Change("000000");
-        cut.Find("form").Submit();
+        cut.Find("#affiliation-code-form").Submit();
 
         cut.WaitForAssertion(() => Assert.AreEqual("message for CODE_INVALID", cut.Find("[data-testid=affiliation-error]").TextContent));
-        Assert.IsFalse(cut.Find("[data-testid=resend]").HasAttribute("disabled"));
+        var resend = cut.Find("[data-testid=send-code]");
+        Assert.AreEqual("Send a new code", resend.TextContent.Trim());
+        Assert.IsFalse(resend.HasAttribute("disabled"));
     }
 
-    // Code review finding 1 on PR #149: after a reload the address is unknown, so resend asks for it.
+    // Code review finding 1 on PR #149: after a reload the address is unknown, so the email box is shown
+    // beside the live code's box and the shopper enters the address to send a new code.
     [TestMethod]
-    public void ResendAfterAReloadAsksForTheAddressInsteadOfPostingABlankOne()
+    public void AfterAReloadTheEmailBoxIsShownBesideTheLiveCode()
     {
         var expires = DateTimeOffset.UtcNow.AddMinutes(9);
         var api = new ScriptedApi().Ok(ScriptedApi.Status(pending: expires))
@@ -171,18 +174,40 @@ public sealed class AffiliationSectionTests
         using var context = new BunitContext();
         var cut = Render(context, api);
         cut.WaitForAssertion(() => cut.Find("#affiliation-code"));
-
-        cut.Find("[data-testid=resend]").Click();
-
-        cut.WaitForAssertion(() => cut.Find("#affiliation-email"));
-        Assert.IsEmpty(api.CodeRequests, "no blank address is posted");
-        Assert.IsEmpty(cut.FindAll("#affiliation-code"));
+        Assert.AreEqual(string.Empty, cut.Find("#affiliation-email").GetAttribute("value") ?? string.Empty);
+        Assert.AreEqual("Send a new code", cut.Find("[data-testid=send-code]").TextContent.Trim());
 
         cut.Find("#affiliation-email").Change("kim.frog@tcu.edu");
-        cut.Find("form").Submit();
+        cut.Find("#affiliation-email-form").Submit();
 
-        cut.WaitForAssertion(() => cut.Find("#affiliation-code"));
+        cut.WaitForAssertion(() => Assert.HasCount(1, api.CodeRequests));
         Assert.AreEqual("kim.frog@tcu.edu", api.CodeRequests.Single().Email);
+        Assert.IsNotNull(cut.Find("#affiliation-code"));
+    }
+
+    // Code review finding 2 on PR #149: a mistyped address can be corrected after a code was sent.
+    [TestMethod]
+    public void AMistypedAddressCanBeCorrectedAndSentAgain()
+    {
+        var sent = new TcuCodeResponse(DateTimeOffset.UtcNow.AddMinutes(10), DateTimeOffset.UtcNow.AddSeconds(-1));
+        var api = new ScriptedApi().Ok(ScriptedApi.Status())
+            .Reply(ScriptedApi.Codes, HttpStatusCode.Accepted, ApiResponse.Success(sent))
+            .Reply(ScriptedApi.Codes, HttpStatusCode.Accepted, ApiResponse.Success(sent));
+        using var context = new BunitContext();
+        var cut = Render(context, api);
+        cut.WaitForAssertion(() => cut.Find("#affiliation-email"));
+
+        cut.Find("#affiliation-email").Change("typo@tcu.edu");
+        cut.Find("#affiliation-email-form").Submit();
+        cut.WaitForAssertion(() => cut.Find("#affiliation-code"));
+        Assert.AreEqual("typo@tcu.edu", cut.Find("#affiliation-email").GetAttribute("value"), "the email box stays, with what was typed");
+
+        cut.Find("#affiliation-email").Change("kim@tcu.edu");
+        cut.Find("#affiliation-email-form").Submit();
+
+        cut.WaitForAssertion(() => Assert.HasCount(2, api.CodeRequests));
+        Assert.AreEqual("kim@tcu.edu", api.CodeRequests[1].Email);
+        Assert.AreNotEqual(api.CodeRequests[0].RequestId, api.CodeRequests[1].RequestId);
     }
 
     private static IRenderedComponent<AffiliationSection> Render(BunitContext context, ScriptedApi api)

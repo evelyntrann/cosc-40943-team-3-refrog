@@ -44,27 +44,30 @@
                 To shop, you need a verified TCU email or a current approved volunteer role.
             </p>
 
-            @if (!form.AwaitingCode)
+            @* The email form stays visible after a send, so a mistyped address can be corrected; its button is the resend (5a1). *@
+            <form id="affiliation-email-form" class="affiliation-form" @onsubmit="form.RequestCodeAsync" @onsubmit:preventDefault>
+                <div class="field-group">
+                    <label for="affiliation-email">TCU email address</label>
+                    <input id="affiliation-email" type="email" autocomplete="email" @bind="form.Email"
+                           aria-describedby="affiliation-email-guidance" />
+                    <p id="affiliation-email-guidance" class="field-help">Please use a tcu.edu email if you are a TCU affiliate.</p>
+                    @if (form.FieldError("email") is { } emailError)
+                    {
+                        <p class="field-error" role="alert" data-testid="email-error">@emailError</p>
+                    }
+                </div>
+                <button class="primary-action" type="submit" data-testid="send-code" disabled="@(form.Busy || !form.CanResend)">
+                    @(form.Busy ? "Sending code…" : form.AwaitingCode ? "Send a new code" : "Send code")
+                </button>
+                @if (!form.CanResend && form.Pending is not null)
+                {
+                    <p class="field-help">You can send a new code at @EventTime.FormatInstant(form.Pending.ResendAvailableAt).</p>
+                }
+            </form>
+
+            @if (form.AwaitingCode)
             {
-                <form class="affiliation-form" @onsubmit="form.RequestCodeAsync" @onsubmit:preventDefault>
-                    <div class="field-group">
-                        <label for="affiliation-email">TCU email address</label>
-                        <input id="affiliation-email" type="email" autocomplete="email" @bind="form.Email"
-                               aria-describedby="affiliation-email-guidance" />
-                        <p id="affiliation-email-guidance" class="field-help">Please use a tcu.edu email if you are a TCU affiliate.</p>
-                        @if (form.FieldError("email") is { } emailError)
-                        {
-                            <p class="field-error" role="alert" data-testid="email-error">@emailError</p>
-                        }
-                    </div>
-                    <button class="primary-action" type="submit" disabled="@form.Busy">
-                        @(form.Busy ? "Sending code…" : "Send code")
-                    </button>
-                </form>
-            }
-            else
-            {
-                <form class="affiliation-form" @onsubmit="form.SubmitCodeAsync" @onsubmit:preventDefault>
+                <form id="affiliation-code-form" class="affiliation-form" @onsubmit="form.SubmitCodeAsync" @onsubmit:preventDefault>
                     <div class="field-group">
                         <label for="affiliation-code">Six-digit code</label>
                         <input id="affiliation-code" inputmode="numeric" autocomplete="one-time-code" @bind="form.Code" />
@@ -79,16 +82,6 @@
                     </div>
                     <button class="primary-action" type="submit" disabled="@form.Busy">Verify</button>
                 </form>
-
-                @if (form.OffersResend)
-                {
-                    <button type="button" data-testid="resend" disabled="@(form.Busy || !form.CanResend)"
-                            @onclick="form.RequestCodeAsync">Send a new code</button>
-                    @if (!form.CanResend && form.Pending is not null)
-                    {
-                        <p class="field-help">You can send a new code at @EventTime.FormatInstant(form.Pending.ResendAvailableAt).</p>
-                    }
-                }
             }
         }
 

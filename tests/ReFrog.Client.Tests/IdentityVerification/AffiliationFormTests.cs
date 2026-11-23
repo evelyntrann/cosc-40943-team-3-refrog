@@ -61,7 +61,23 @@ public sealed class AffiliationFormTests
 
         Assert.HasCount(2, api.CodeRequests);
         Assert.AreEqual("kim@tcu.edu", api.CodeRequests[1].Email);
-        Assert.IsFalse(form.ChangingEmail);
+    }
+
+    // Code review finding 2 on PR #149: an expired code no longer counts as awaiting a code.
+    [TestMethod]
+    public async Task AnExpiredCodeIsNoLongerAwaited()
+    {
+        var clock = new FixedClock(Now);
+        var api = new ScriptedApi().Ok(ScriptedApi.Status())
+            .Reply(ScriptedApi.Codes, HttpStatusCode.Accepted, ApiResponse.Success(Sent));
+        var form = new AffiliationForm(api.Client(), clock) { Email = "kim@tcu.edu" };
+        await form.LoadStatusAsync();
+        await form.RequestCodeAsync();
+
+        clock.Now = Sent.ExpiresAt.AddSeconds(-1);
+        Assert.IsTrue(form.AwaitingCode);
+        clock.Now = Sent.ExpiresAt;
+        Assert.IsFalse(form.AwaitingCode);
     }
 
     [TestMethod]
