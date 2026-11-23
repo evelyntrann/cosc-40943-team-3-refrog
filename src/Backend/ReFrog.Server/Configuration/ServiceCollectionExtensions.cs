@@ -63,6 +63,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IVerificationChallengeStore>(provider => provider.GetRequiredService<EfVerificationChallengeStore>());
         services.AddScoped<VerificationChallengeService>();
         services.AddScoped<ITcuVerificationReader, EfTcuVerificationReader>();
+        services.AddHttpContextAccessor();
+        services.AddScoped<IVolunteerAccessStateProvider, EfVolunteerAccessStateProvider>();
+        services.AddScoped<ICurrentUser, CurrentUser>();
         services.AddScoped<IAuthRepository, EfAuthRepository>();
         services.AddScoped<IAccountEmailDirectory, EfAccountEmailDirectory>();
         services.AddScoped<IAdministratorSignInAudit, EfAdministratorSignInAudit>();
