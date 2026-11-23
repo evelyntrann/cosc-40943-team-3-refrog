@@ -253,6 +253,21 @@ public sealed class AffiliationSectionTests
 
     private static readonly DateTimeOffset ClockStart = new(2027, 4, 26, 15, 0, 0, TimeSpan.Zero);
 
+    // Code review finding 7 on PR #149: an expired session shows a sign-in prompt, not an empty section.
+    [TestMethod]
+    public void ExpiredSessionShowsASignInPrompt()
+    {
+        var api = new ScriptedApi().Fail(ScriptedApi.Eligibility, HttpStatusCode.Unauthorized, "AUTHENTICATION_REQUIRED");
+        using var context = new BunitContext();
+        var cut = Render(context, api);
+
+        cut.WaitForAssertion(() => Assert.AreEqual("Sign in to see your shopping access.",
+            cut.Find("[data-testid=signed-out]").TextContent));
+        Assert.AreEqual("/sign-in?returnPath=%2Faccount", cut.Find("a").GetAttribute("href"));
+        Assert.IsEmpty(cut.FindAll("form"));
+        Assert.IsEmpty(cut.FindAll("[data-testid=access-unavailable]"));
+    }
+
     // Code review finding 4 on PR #149: a 429 shows when the shopper can try again, in Chicago time.
     [TestMethod]
     public void TooManyCodeRequestsShowsTheRetryTime()

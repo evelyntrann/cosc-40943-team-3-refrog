@@ -11,6 +11,11 @@
     {
         <p role="status">Checking your shopping access…</p>
     }
+    else if (form.SignedOut)
+    {
+        <p role="status" data-testid="signed-out">Sign in to see your shopping access.</p>
+        <a href="/sign-in?returnPath=%2Faccount">Sign in</a>
+    }
     else if (form.StatusUnavailable)
     {
         <p role="alert" data-testid="access-unavailable">Unable to verify access—try again</p>
