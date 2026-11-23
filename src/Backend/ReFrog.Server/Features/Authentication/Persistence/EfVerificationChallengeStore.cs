@@ -1,3 +1,5 @@
+using System.Data;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -8,9 +10,133 @@ namespace ReFrog.Server.Features.Authentication.Persistence;
 /// (AUTH.md "SQL Server concurrency uses conditional writes and constraints", "Limits by owner").
 /// Callers own the transaction; this class never begins one.
 /// </summary>
-public sealed class EfVerificationChallengeStore(AuthDbContext db, VerificationCode codes, TimeProvider clock)
+public sealed class EfVerificationChallengeStore(
+    AuthDbContext db,
+    VerificationCode codes,
+    TimeProvider clock,
+    ILogger<EfVerificationChallengeStore> logger)
     : IVerificationChallengeStore
 {
+    // A serializable code request that loses a deadlock or a unique-index race is retried, so it sees the
+    // winner's committed challenge and answers with the cooldown or the replay instead of "not recorded".
+    private const int MaxRequestAttempts = 3;
+
+    private static readonly Action<ILogger, Exception?> PersistenceFailure =
+        LoggerMessage.Define(LogLevel.Warning, new EventId(7913, "AffiliationPersistenceFailure"),
+            "TCU affiliation persistence failed");
+
+    // Set just before the first write of an operation, so a failure can be told apart:
+    // before it nothing was written (state unavailable); after it the transaction did not commit (not recorded).
+    private bool writing;
+
+    public async Task<StoredChallengeRequest> RequestAffiliationAsync(Guid accountId, string normalizedEmail, Guid requestId,
+        CancellationToken cancellationToken)
+    {
+        var owner = ChallengeOwner.Affiliation(accountId);
+        for (var attempt = 1; ; attempt++)
+        {
+            writing = false;
+            db.ChangeTracker.Clear();
+            try
+            {
+                return await RequestAffiliationOnceAsync(owner, normalizedEmail, requestId, cancellationToken);
+            }
+            catch (Exception failure) when (attempt < MaxRequestAttempts && IsConflict(failure))
+            {
+            }
+            catch (Exception failure) when (failure is not OperationCanceledException)
+            {
+                PersistenceFailure(logger, null);
+                return new(writing ? ChallengeRequestOutcome.NotRecorded : ChallengeRequestOutcome.StateUnavailable);
+            }
+        }
+    }
+
+    public async Task<ChallengeVerifyResult> VerifyAffiliationAsync(Guid accountId, string code, CancellationToken cancellationToken)
+    {
+        var owner = ChallengeOwner.Affiliation(accountId);
+        writing = false;
+        try
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            var check = await CheckAsync(owner, code, transaction, cancellationToken);
+            switch (check.Outcome)
+            {
+                case CodeCheckOutcome.Expired or CodeCheckOutcome.LostRace:
+                    return new(ChallengeVerifyOutcome.ExpiredCode);
+                case CodeCheckOutcome.Invalid:
+                    return new(ChallengeVerifyOutcome.InvalidCode);
+                case CodeCheckOutcome.Limited:
+                    return new(ChallengeVerifyOutcome.Limited, RetryAt: check.RetryAt);
+                case CodeCheckOutcome.KeyRetired:
+                    return new(ChallengeVerifyOutcome.NotRecorded);
+            }
+
+            db.TcuEmailVerifications.Add(new TcuEmailVerification
+            {
+                AccountId = accountId,
+                NormalizedEmail = check.NormalizedEmail!,
+                VerifiedAt = check.At,
+            });
+            writing = true;
+            await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return new(ChallengeVerifyOutcome.Verified, VerifiedAt: check.At);
+        }
+        catch (Exception failure) when (failure is not OperationCanceledException)
+        {
+            PersistenceFailure(logger, null);
+            return new(writing ? ChallengeVerifyOutcome.NotRecorded : ChallengeVerifyOutcome.StateUnavailable);
+        }
+    }
+
+    private async Task<StoredChallengeRequest> RequestAffiliationOnceAsync(ChallengeOwner owner, string normalizedEmail,
+        Guid requestId, CancellationToken cancellationToken)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        var accountId = owner.Id;
+
+        // AUTH.md "Already verified": checked inside the serializable transaction, so two requests cannot both pass.
+        if (await db.TcuEmailVerifications.AnyAsync(item => item.AccountId == accountId, cancellationToken))
+        {
+            return new(ChallengeRequestOutcome.AlreadyVerified);
+        }
+
+        var existing = await FindByRequestIdAsync(owner, requestId, cancellationToken);
+        if (existing is not null)
+        {
+            return existing.NormalizedEmail == normalizedEmail
+                ? new(ChallengeRequestOutcome.Sent, ExpiresAt: existing.ExpiresAt,
+                    ResendAvailableAt: existing.CreatedAt + VerificationPolicy.ResendSpacing,
+                    Replayed: true, ReplayedSendOutcome: existing.SendOutcome)
+                : new(ChallengeRequestOutcome.RequestIdReused);
+        }
+
+        var result = await IssueAsync(owner, normalizedEmail, requestId, cancellationToken);
+        if (result.Issued is null)
+        {
+            return new(ChallengeRequestOutcome.Limited, RetryAt: result.RetryAt);
+        }
+
+        writing = true;
+        await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new(ChallengeRequestOutcome.Sent, result.Issued);
+    }
+
+    private static bool IsConflict(Exception failure)
+    {
+        for (var current = failure; current is not null; current = current.InnerException)
+        {
+            if (current is SqlException { Number: 1205 or 2601 or 2627 })
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public Task<VerificationChallenge?> FindByRequestIdAsync(ChallengeOwner owner, Guid requestId,
         CancellationToken cancellationToken) =>
         Owned(owner).SingleOrDefaultAsync(challenge => challenge.RequestId == requestId, cancellationToken);
@@ -124,10 +250,13 @@ public sealed class EfVerificationChallengeStore(AuthDbContext db, VerificationC
         }
 
         // AUTH.md key decision: conditional writes, not lock hints. Exactly one concurrent request consumes it.
+        writing = true;
         var consumed = await db.VerificationChallenges
             .Where(item => item.Id == challenge.Id && item.ConsumedAt == null && item.SupersededAt == null && item.ExpiresAt > now)
             .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.ConsumedAt, now), cancellationToken);
-        return new(consumed == 0 ? CodeCheckOutcome.LostRace : CodeCheckOutcome.Matched, now);
+        return consumed == 0
+            ? new(CodeCheckOutcome.LostRace, now)
+            : new(CodeCheckOutcome.Matched, now, NormalizedEmail: challenge.NormalizedEmail);
     }
 
     private async Task<CodeCheck> RecordFailureAsync(ChallengeOwner owner, Guid challengeId, DateTimeOffset now,
@@ -135,6 +264,7 @@ public sealed class EfVerificationChallengeStore(AuthDbContext db, VerificationC
     {
         // Atomic increment: concurrent wrong codes cannot overwrite each other's count, and the
         // fifth wrong code supersedes the challenge in the same statement (FR-AUTH-verification-limits).
+        writing = true;
         var counted = await db.VerificationChallenges
             .Where(item => item.Id == challengeId && item.ConsumedAt == null && item.SupersededAt == null &&
                 item.FailedAttempts < VerificationPolicy.MaxWrongPerCode)

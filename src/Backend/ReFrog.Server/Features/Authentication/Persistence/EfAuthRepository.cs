@@ -178,7 +178,7 @@ public sealed class EfAuthRepository(
             }
         }
 
-        var tcu = pending.NormalizedEmail.EndsWith("@TCU.EDU", StringComparison.Ordinal);
+        var tcu = TcuEmailAddress.HasExactTcuDomain(pending.NormalizedEmail);
         if (tcu)
         {
             db.TcuEmailVerifications.Add(new TcuEmailVerification
