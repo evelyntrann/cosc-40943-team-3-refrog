@@ -211,22 +211,27 @@ public sealed class AffiliationSectionTests
     }
 
     // Code review finding 3 on PR #149: the button re-enables itself when the resend time passes.
+    // The clock is advanced by hand, so the test does not depend on real time.
     [TestMethod]
     public void SendANewCodeEnablesItselfWhenTheResendTimeArrives()
     {
-        var sent = new TcuCodeResponse(DateTimeOffset.UtcNow.AddMinutes(10), DateTimeOffset.UtcNow.AddSeconds(1));
+        var clock = new ManualTimeProvider(ClockStart);
+        var sent = new TcuCodeResponse(ClockStart.AddMinutes(10), ClockStart.AddSeconds(60));
         var api = new ScriptedApi().Ok(ScriptedApi.Status())
             .Reply(ScriptedApi.Codes, HttpStatusCode.Accepted, ApiResponse.Success(sent));
         using var context = new BunitContext();
-        var cut = Render(context, api);
+        var cut = Render(context, api, clock);
         cut.WaitForAssertion(() => cut.Find("#affiliation-email"));
         cut.Find("#affiliation-email").Change("kim@tcu.edu");
         cut.Find("#affiliation-email-form").Submit();
         cut.WaitForAssertion(() => cut.Find("#affiliation-code"));
         Assert.IsTrue(cut.Find("[data-testid=send-code]").HasAttribute("disabled"));
 
-        cut.WaitForAssertion(() => Assert.IsFalse(cut.Find("[data-testid=send-code]").HasAttribute("disabled")),
-            TimeSpan.FromSeconds(5));
+        clock.Advance(TimeSpan.FromSeconds(59));
+        Assert.IsTrue(cut.Find("[data-testid=send-code]").HasAttribute("disabled"), "not before the resend time");
+        clock.Advance(TimeSpan.FromSeconds(1));
+
+        cut.WaitForAssertion(() => Assert.IsFalse(cut.Find("[data-testid=send-code]").HasAttribute("disabled")));
         Assert.DoesNotContain("You can send a new code at", cut.Markup);
     }
 
@@ -234,14 +239,19 @@ public sealed class AffiliationSectionTests
     [TestMethod]
     public void TheCodeFieldDisappearsWhenTheCodeExpires()
     {
-        var api = new ScriptedApi().Ok(ScriptedApi.Status(pending: DateTimeOffset.UtcNow.AddSeconds(1)));
+        var clock = new ManualTimeProvider(ClockStart);
+        var api = new ScriptedApi().Ok(ScriptedApi.Status(pending: ClockStart.AddMinutes(5)));
         using var context = new BunitContext();
-        var cut = Render(context, api);
+        var cut = Render(context, api, clock);
         cut.WaitForAssertion(() => cut.Find("#affiliation-code"));
 
-        cut.WaitForAssertion(() => Assert.IsEmpty(cut.FindAll("#affiliation-code")), TimeSpan.FromSeconds(5));
+        clock.Advance(TimeSpan.FromMinutes(5));
+
+        cut.WaitForAssertion(() => Assert.IsEmpty(cut.FindAll("#affiliation-code")));
         Assert.AreEqual("Send code", cut.Find("[data-testid=send-code]").TextContent.Trim());
     }
+
+    private static readonly DateTimeOffset ClockStart = new(2027, 4, 26, 15, 0, 0, TimeSpan.Zero);
 
     // Code review finding 4 on PR #149: a 429 shows when the shopper can try again, in Chicago time.
     [TestMethod]
@@ -296,9 +306,11 @@ public sealed class AffiliationSectionTests
     private static ApiResponse<object> Limited(DateTimeOffset retryAt) => ApiResponse.Failure<object>(new ApiError(
         ApiErrorCategory.Validation, "TOO_MANY_REQUESTS", "Try again after the stated time.", RetryAt: retryAt));
 
-    private static IRenderedComponent<AffiliationSection> Render(BunitContext context, ScriptedApi api)
+    private static IRenderedComponent<AffiliationSection> Render(BunitContext context, ScriptedApi api,
+        TimeProvider? clock = null)
     {
         context.Services.AddSingleton(api.Client());
+        context.Services.AddSingleton(clock ?? TimeProvider.System);
         return context.Render<AffiliationSection>();
     }
 }
