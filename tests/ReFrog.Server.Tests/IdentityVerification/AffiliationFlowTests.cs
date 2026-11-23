@@ -217,6 +217,11 @@ public sealed class AffiliationFlowTests
 
         var retry = await EligibilityAsync(client);
         Assert.IsTrue(retry.Eligible, "retry after recovery succeeds");
+
+        // Code review finding 6 on PR #149: the failure reaches the logs for operators, without personal data.
+        Assert.IsTrue(fixture.Logs.Entries.Any(entry => entry.Level == Microsoft.Extensions.Logging.LogLevel.Error &&
+            entry.Text.StartsWith("AccessStateUnavailable ", StringComparison.Ordinal)));
+        Assert.IsFalse(fixture.Logs.Messages.Any(line => line.Contains("KIM.FROG@TCU.EDU", StringComparison.OrdinalIgnoreCase)));
     }
 
     // IDV.md row "2d, cookie stage".

@@ -37,6 +37,9 @@ if (args.Contains("--apply-migrations", StringComparer.Ordinal))
 
 var logUnexpected = LoggerMessage.Define(LogLevel.Error, new EventId(7902, "UnexpectedRequestFailure"),
     "Unexpected request failure");
+// Operator notification for 2d (§8.2.7, MNT-error-notification): the failure's type only, never its message.
+var logAccessUnavailable = LoggerMessage.Define<string>(LogLevel.Error, new EventId(7914, "AccessStateUnavailable"),
+    "Current access state could not be read ({FailureType})");
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api/v1/auth") ||
@@ -60,8 +63,9 @@ app.Use(async (context, next) =>
             new ApiError(ApiErrorCategory.Unavailable, "AUTHENTICATION_UNAVAILABLE",
                 "Authentication is temporarily unavailable. Try again.")));
     }
-    catch (AccessStateUnavailableException) when (!context.Response.HasStarted)
+    catch (AccessStateUnavailableException failure) when (!context.Response.HasStarted)
     {
+        logAccessUnavailable(app.Logger, failure.InnerException?.GetType().Name ?? "none", null);
         context.Response.Clear();
         context.Response.Headers.CacheControl = "no-store";
         context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
