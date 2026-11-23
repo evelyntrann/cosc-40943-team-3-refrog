@@ -6,6 +6,7 @@ using ReFrog.Server.Features.Administration;
 using ReFrog.Server.Features.Administration.Persistence;
 using ReFrog.Server.Features.Authentication;
 using ReFrog.Server.Features.Authentication.Persistence;
+using ReFrog.Server.Features.IdentityVerification;
 using ReFrog.Server.Features.Info;
 using ReFrog.Server.Features.Info.Persistence;
 using ReFrog.Server.Features.Volunteer;
@@ -66,6 +67,7 @@ public static class ServiceCollectionExtensions
         services.AddHttpContextAccessor();
         services.AddScoped<IVolunteerAccessStateProvider, EfVolunteerAccessStateProvider>();
         services.AddScoped<ICurrentUser, CurrentUser>();
+        services.AddScoped<AffiliationService>();
         services.AddScoped<IAuthRepository, EfAuthRepository>();
         services.AddScoped<IAccountEmailDirectory, EfAccountEmailDirectory>();
         services.AddScoped<IAdministratorSignInAudit, EfAdministratorSignInAudit>();
