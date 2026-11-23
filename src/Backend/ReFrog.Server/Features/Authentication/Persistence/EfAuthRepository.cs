@@ -12,13 +12,10 @@ public sealed class EfAuthRepository(
     UserManager<AuthAccount> accounts,
     RoleManager<IdentityRole<Guid>> roles,
     IPasswordHasher<AuthAccount> passwords,
-    RegistrationCode codes,
+    EfVerificationChallengeStore challenges,
     TimeProvider clock,
     IConfiguration configuration) : IAuthRepository
 {
-    private const string RegistrationPurpose = "ACCOUNT_REGISTRATION";
-    private const int MaxWrongPerCode = 5;
-    private const int MaxRecentFailures = 10;
 
     public async Task<RegistrationResult> StartAsync(
         string email, string normalizedEmail, string password, Guid requestId, CancellationToken cancellationToken)
@@ -39,9 +36,8 @@ public sealed class EfAuthRepository(
                 return new(RegistrationOutcome.RequestIdReused);
             }
 
-            var original = await db.VerificationChallenges.SingleOrDefaultAsync(
-                challenge => challenge.PendingRegistrationId == pending.Id && challenge.RequestId == requestId,
-                cancellationToken);
+            var original = await challenges.FindByRequestIdAsync(
+                ChallengeOwner.Registration(pending.Id), requestId, cancellationToken);
             if (original is null)
             {
                 var delayed = await IssueAsync(pending, email, requestId, cancellationToken);
@@ -89,9 +85,8 @@ public sealed class EfAuthRepository(
             return new(RegistrationOutcome.Completed);
         }
 
-        var existing = await db.VerificationChallenges.SingleOrDefaultAsync(
-            challenge => challenge.PendingRegistrationId == registrationId && challenge.RequestId == requestId,
-            cancellationToken);
+        var existing = await challenges.FindByRequestIdAsync(
+            ChallengeOwner.Registration(registrationId), requestId, cancellationToken);
         if (existing is not null)
         {
             return Replay(pending, existing);
@@ -105,13 +100,6 @@ public sealed class EfAuthRepository(
         }
 
         return issued;
-    }
-
-    public async Task<bool> RecordSendOutcomeAsync(Guid challengeId, EmailDeliveryOutcome outcome, CancellationToken cancellationToken)
-    {
-        var updated = await db.VerificationChallenges.Where(challenge => challenge.Id == challengeId && challenge.SendOutcome == null)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(challenge => challenge.SendOutcome, outcome.ToString().ToUpperInvariant()), cancellationToken);
-        return updated == 1;
     }
 
     // AUTH.md key decision: verification uses conditional writes, not lock hints. Each write below
@@ -132,36 +120,20 @@ public sealed class EfAuthRepository(
             return new(RegistrationOutcome.Completed);
         }
 
-        var now = clock.GetUtcNow();
-        var challenge = await db.VerificationChallenges.AsNoTracking()
-            .Where(item => item.PendingRegistrationId == registrationId && item.ConsumedAt == null && item.SupersededAt == null)
-            .SingleOrDefaultAsync(cancellationToken);
-        if (challenge is null || now >= challenge.ExpiresAt)
+        var check = await challenges.CheckAsync(ChallengeOwner.Registration(registrationId), code, transaction, cancellationToken);
+        var now = check.At;
+        switch (check.Outcome)
         {
-            return new(RegistrationOutcome.ExpiredCode);
-        }
-
-        if (await LimitedUntilAsync(registrationId, now, MaxRecentFailures, cancellationToken) is { } retryAt)
-        {
-            return new(RegistrationOutcome.Limited, RetryAt: retryAt);
-        }
-
-        if (!codes.HasKey(challenge.KeyVersion))
-        {
-            return new(RegistrationOutcome.Unavailable);
-        }
-
-        if (!codes.Matches(challenge.KeyVersion, registrationId, challenge.Id, code, challenge.CodeHmac))
-        {
-            return await RecordFailureAsync(registrationId, challenge.Id, now, transaction, cancellationToken);
-        }
-
-        var consumed = await db.VerificationChallenges
-            .Where(item => item.Id == challenge.Id && item.ConsumedAt == null && item.SupersededAt == null && item.ExpiresAt > now)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.ConsumedAt, now), cancellationToken);
-        if (consumed == 0)
-        {
-            return await AfterLostRaceAsync(registrationId, cancellationToken);
+            case CodeCheckOutcome.Expired:
+                return new(RegistrationOutcome.ExpiredCode);
+            case CodeCheckOutcome.Limited:
+                return new(RegistrationOutcome.Limited, RetryAt: check.RetryAt);
+            case CodeCheckOutcome.KeyRetired:
+                return new(RegistrationOutcome.Unavailable);
+            case CodeCheckOutcome.Invalid:
+                return new(RegistrationOutcome.InvalidCode);
+            case CodeCheckOutcome.LostRace:
+                return await AfterLostRaceAsync(registrationId, cancellationToken);
         }
 
         if (await db.Users.AnyAsync(user => user.NormalizedEmail == pending.NormalizedEmail, cancellationToken))
@@ -232,52 +204,6 @@ public sealed class EfAuthRepository(
         return new(RegistrationOutcome.Saved, Account: new(account.Id, account.Email, tcu), IsAdministrator: isAdministrator);
     }
 
-    private async Task<RegistrationResult> RecordFailureAsync(Guid registrationId, Guid challengeId, DateTimeOffset now,
-        IDbContextTransaction transaction, CancellationToken cancellationToken)
-    {
-        // Atomic increment: concurrent wrong codes cannot overwrite each other's count, and the
-        // fifth wrong code supersedes the challenge in the same statement (FR-AUTH-verification-limits).
-        var counted = await db.VerificationChallenges
-            .Where(item => item.Id == challengeId && item.ConsumedAt == null && item.SupersededAt == null &&
-                item.FailedAttempts < MaxWrongPerCode)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(item => item.FailedAttempts, item => item.FailedAttempts + 1)
-                .SetProperty(item => item.SupersededAt,
-                    item => item.FailedAttempts + 1 >= MaxWrongPerCode ? now : item.SupersededAt), cancellationToken);
-        if (counted == 0)
-        {
-            return await AfterLostRaceAsync(registrationId, cancellationToken);
-        }
-
-        db.VerificationFailures.Add(new VerificationFailure { Id = Guid.NewGuid(), ChallengeId = challengeId, FailedAt = now });
-        await db.SaveChangesAsync(cancellationToken);
-
-        // Re-count with this failure included; the challenge row is locked until commit, so
-        // concurrent wrong codes for this registration are counted one at a time.
-        if (await LimitedUntilAsync(registrationId, now, MaxRecentFailures + 1, cancellationToken) is { } retryAt)
-        {
-            return new(RegistrationOutcome.Limited, RetryAt: retryAt);
-        }
-
-        await transaction.CommitAsync(cancellationToken);
-        return new(RegistrationOutcome.InvalidCode);
-    }
-
-    private async Task<DateTimeOffset?> LimitedUntilAsync(Guid registrationId, DateTimeOffset now, int threshold,
-        CancellationToken cancellationToken)
-    {
-        var window = now.AddMinutes(-15);
-        var recent = db.VerificationFailures.AsNoTracking()
-            .Where(failure => failure.Challenge.PendingRegistrationId == registrationId && failure.FailedAt > window);
-        if (await recent.CountAsync(cancellationToken) < threshold)
-        {
-            return null;
-        }
-
-        var first = await recent.OrderBy(failure => failure.FailedAt).Select(failure => failure.FailedAt).FirstAsync(cancellationToken);
-        return first.AddMinutes(15);
-    }
-
     // Another request changed the challenge first; report what it left behind.
     private async Task<RegistrationResult> AfterLostRaceAsync(Guid registrationId, CancellationToken cancellationToken)
     {
@@ -289,76 +215,21 @@ public sealed class EfAuthRepository(
     private async Task<RegistrationResult> IssueAsync(
         PendingRegistration pending, string email, Guid requestId, CancellationToken cancellationToken)
     {
-        var now = clock.GetUtcNow();
-        var subjectChallenges = await db.VerificationChallenges
-            .Where(challenge => challenge.PendingRegistrationId == pending.Id && challenge.CreatedAt > now.AddHours(-1))
-            .OrderBy(challenge => challenge.CreatedAt)
-            .ToListAsync(cancellationToken);
-        var destinationChallenges = await db.VerificationChallenges
-            .Where(challenge => challenge.NormalizedEmail == pending.NormalizedEmail && challenge.CreatedAt > now.AddHours(-1))
-            .OrderBy(challenge => challenge.CreatedAt)
-            .ToListAsync(cancellationToken);
-        var latest = subjectChallenges.LastOrDefault();
-        DateTimeOffset? retryAt = null;
-        if (latest is not null && latest.CreatedAt.AddSeconds(60) > now)
+        var result = await challenges.IssueAsync(
+            ChallengeOwner.Registration(pending.Id), pending.NormalizedEmail, requestId, cancellationToken);
+        if (result.Issued is not { } issued)
         {
-            retryAt = latest.CreatedAt.AddSeconds(60);
+            return new(RegistrationOutcome.Limited, RetryAt: result.RetryAt);
         }
 
-        if (subjectChallenges.Count >= 5)
-        {
-            retryAt = Max(retryAt, subjectChallenges[0].CreatedAt.AddHours(1));
-        }
-
-        if (destinationChallenges.Count >= 5)
-        {
-            retryAt = Max(retryAt, destinationChallenges[0].CreatedAt.AddHours(1));
-        }
-
-        if (retryAt is not null)
-        {
-            return new(RegistrationOutcome.Limited, RetryAt: retryAt);
-        }
-
-        var active = await db.VerificationChallenges.SingleOrDefaultAsync(
-            challenge => challenge.PendingRegistrationId == pending.Id &&
-                challenge.ConsumedAt == null && challenge.SupersededAt == null,
-            cancellationToken);
-        if (active is not null)
-        {
-            active.SupersededAt = now;
-        }
-
-        var challengeId = Guid.NewGuid();
-        var code = codes.Generate();
-        while (active is not null && codes.Matches(active.KeyVersion, pending.Id, active.Id, code, active.CodeHmac))
-        {
-            code = codes.Generate();
-        }
-        var challenge = new VerificationChallenge
-        {
-            Id = challengeId,
-            Purpose = RegistrationPurpose,
-            PendingRegistrationId = pending.Id,
-            NormalizedEmail = pending.NormalizedEmail,
-            CodeHmac = codes.Hash(pending.Id, challengeId, code),
-            KeyVersion = codes.KeyVersion,
-            RequestId = requestId,
-            CreatedAt = now,
-            ExpiresAt = now.AddMinutes(10),
-        };
-        db.VerificationChallenges.Add(challenge);
         return new(RegistrationOutcome.Issued,
-            new(pending.Id, challenge.ExpiresAt, now.AddSeconds(60)),
-            Email: email, Code: code, ChallengeId: challengeId);
+            new(pending.Id, issued.ExpiresAt, issued.ResendAvailableAt),
+            Email: email, Issued: issued);
     }
 
     private static RegistrationResult Replay(PendingRegistration pending, VerificationChallenge challenge) =>
         new(RegistrationOutcome.Replayed,
-            new(pending.Id, challenge.ExpiresAt, challenge.CreatedAt.AddSeconds(60)),
-            ChallengeId: challenge.Id,
+            new(pending.Id, challenge.ExpiresAt, challenge.CreatedAt + VerificationPolicy.ResendSpacing),
             SendOutcome: challenge.SendOutcome);
 
-    private static DateTimeOffset Max(DateTimeOffset? first, DateTimeOffset second) =>
-        first is null || second > first ? second : first.Value;
 }

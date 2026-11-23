@@ -59,6 +59,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IPostConfigureOptions<CookieAuthenticationOptions>, CookieTimeProviderConfiguration>();
         services.AddAuthorization();
         services.AddAntiforgery();
+        services.AddScoped<EfVerificationChallengeStore>();
+        services.AddScoped<IVerificationChallengeStore>(provider => provider.GetRequiredService<EfVerificationChallengeStore>());
+        services.AddScoped<VerificationChallengeService>();
         services.AddScoped<IAuthRepository, EfAuthRepository>();
         services.AddScoped<IAccountEmailDirectory, EfAccountEmailDirectory>();
         services.AddScoped<IAdministratorSignInAudit, EfAdministratorSignInAudit>();
@@ -111,7 +114,7 @@ public static class ServiceCollectionExtensions
                 throw new InvalidOperationException("Verification HMAC keys are not configured.");
             }
 
-            return new RegistrationCode(keys, activeVersion);
+            return new VerificationCode(keys, activeVersion);
         });
         return services;
     }
