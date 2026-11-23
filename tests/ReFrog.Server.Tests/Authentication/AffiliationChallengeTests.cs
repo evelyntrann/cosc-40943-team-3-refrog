@@ -157,6 +157,22 @@ public sealed class AffiliationChallengeTests
     }
 
     [TestMethod]
+    public async Task SupersededAffiliationCodeIsExpiredAndCountsNoFailure()
+    {
+        await using var fixture = await AffiliationFixture.CreateAsync();
+        var account = await fixture.CreateAccountAsync(Shopper);
+        await RequestAsync(fixture, account, "kim@tcu.edu");
+        var old = fixture.Email.LastCode;
+        fixture.Clock.Advance(VerificationPolicy.ResendSpacing);
+        await RequestAsync(fixture, account, "kim@tcu.edu");
+        var current = fixture.Email.LastCode;
+
+        Assert.AreEqual(ChallengeVerifyOutcome.ExpiredCode, (await VerifyAsync(fixture, account, old)).Outcome);
+        Assert.AreEqual(0, await fixture.WithAuthAsync(db => db.VerificationFailures.CountAsync()));
+        Assert.AreEqual(ChallengeVerifyOutcome.Verified, (await VerifyAsync(fixture, account, current)).Outcome);
+    }
+
+    [TestMethod]
     public async Task AlreadyVerifiedAccountGetsNoNewCode()
     {
         await using var fixture = await AffiliationFixture.CreateAsync();

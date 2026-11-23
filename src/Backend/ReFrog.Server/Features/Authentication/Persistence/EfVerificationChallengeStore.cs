@@ -246,6 +246,13 @@ public sealed class EfVerificationChallengeStore(
 
         if (!codes.Matches(challenge.KeyVersion, owner, challenge.Id, code, challenge.CodeHmac))
         {
+            // IDV.md API contract: a superseded or already-used affiliation code is CODE_EXPIRED and counts no
+            // failure. Registration keeps its built behavior (counted as a wrong code).
+            if (!owner.IsRegistration && await MatchesAnEarlierChallengeAsync(owner, code, cancellationToken))
+            {
+                return new(CodeCheckOutcome.Expired, now);
+            }
+
             return await RecordFailureAsync(owner, challenge.Id, now, transaction, cancellationToken);
         }
 
@@ -290,6 +297,15 @@ public sealed class EfVerificationChallengeStore(
 
         await transaction.CommitAsync(cancellationToken);
         return new(CodeCheckOutcome.Invalid, now);
+    }
+
+    private async Task<bool> MatchesAnEarlierChallengeAsync(ChallengeOwner owner, string code, CancellationToken cancellationToken)
+    {
+        var earlier = await Owned(owner).AsNoTracking()
+            .Where(item => item.ConsumedAt != null || item.SupersededAt != null)
+            .Select(item => new { item.Id, item.KeyVersion, item.CodeHmac })
+            .ToListAsync(cancellationToken);
+        return earlier.Any(item => codes.Matches(item.KeyVersion, owner, item.Id, code, item.CodeHmac));
     }
 
     private async Task<DateTimeOffset?> LimitedUntilAsync(ChallengeOwner owner, DateTimeOffset now, int threshold,
