@@ -84,6 +84,17 @@ public sealed class AffiliationService(
             return Invalid<TcuVerificationResponse>("code", "Enter the six-digit code.");
         }
 
+        // Already verified, for example in another tab: answer with the saved verification instead of
+        // "send a new code", which would only lead to 409 ALREADY_VERIFIED (code review of PR #149, finding 8).
+        // Nothing is written and no failure is counted.
+        var saved = await reader.ForAccountAsync(accountId, cancellationToken);
+        if (saved is { Verified: true, VerifiedAt: { } verifiedAt })
+        {
+            var (savedEligible, savedBasis) = Decide(access, tcuEmailVerified: true);
+            return new(200, ApiResponse.Success(new TcuVerificationResponse(
+                savedEligible, savedBasis, true, Wire(access), null, verifiedAt)));
+        }
+
         var result = await challenges.VerifyTcuAffiliationAsync(accountId, code, cancellationToken);
         switch (result.Outcome)
         {

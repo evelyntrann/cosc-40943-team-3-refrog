@@ -106,6 +106,7 @@ classDiagram
 - The verification `200` is built from the committed result, not a re-read, so a failed read after the commit cannot report a saved verification as an error.
 - The verification `POST` does not read persisted TCU verification. Its 2d case is a failure of the access read or of AUTH's own challenge reads, both `503 ACCESS_UNAVAILABLE`.
 - `/api/v1/me/*` responses are `no-store`.
+- A code submitted by an account that is already verified (for example from a second tab) answers `200` with the saved verification and its stored `verifiedAt`, writing nothing and counting no failure; the contract had no case for it (code review of PR #149, finding 8).
 - The email field stays visible after a code is sent and its send button is the resend (5a1), so a mistyped address can be corrected; the code field shows only while a code is live (code review of PR #149, findings 1 and 2).
 - AUTH-side details (conflict retry, superseded code as `CODE_EXPIRED`, failure classification) are in [AUTH.md](AUTH.md) "Shared service build note".
 

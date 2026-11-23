@@ -580,6 +580,32 @@ public sealed class AffiliationFlowTests
         Assert.AreEqual(before.VerifiedAt, after.VerifiedAt);
     }
 
+    // Code review finding 8 on PR #149: a code submitted after the account is verified (another tab) answers with
+    // the saved verification, not CODE_EXPIRED, and writes and counts nothing.
+    [TestMethod]
+    public async Task CodeSubmittedAfterVerificationAnswersWithTheSavedVerification()
+    {
+        await using var fixture = await AffiliationFixture.CreateAsync();
+        await fixture.CreateAccountAsync(Shopper);
+        using var firstTab = await fixture.SignedInClientAsync(Shopper);
+        using var secondTab = await fixture.SignedInClientAsync(Shopper);
+        var code = await VerifiedThroughApiAsync(firstTab, fixture, TcuEmail);
+        fixture.Clock.Advance(TimeSpan.FromMinutes(1));
+
+        foreach (var submitted in new[] { code, WrongCode(code) })
+        {
+            using var response = await VerifyAsync(secondTab, submitted);
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, submitted);
+            var body = (await response.Content.ReadFromJsonAsync<ApiResponse<TcuVerificationResponse>>())!.Data!;
+            Assert.IsTrue(body.TcuEmailVerified);
+            Assert.IsTrue(body.Eligible);
+            Assert.AreEqual(AffiliationFixture.Now, body.VerifiedAt, "the saved time, not now");
+        }
+
+        Assert.AreEqual(0, await fixture.WithAuthAsync(db => db.VerificationFailures.CountAsync()));
+        Assert.AreEqual(1, await fixture.WithAuthAsync(db => db.TcuEmailVerifications.CountAsync()));
+    }
+
     // IDV.md row "Ownership" (first half; the sign-in email change half waits for that operation to exist).
     [TestMethod]
     public async Task EachAccountCompletesItsOwnVerification()
