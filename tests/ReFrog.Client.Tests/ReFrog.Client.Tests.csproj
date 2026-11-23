@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="bunit" Version="2.15.2" />
     <PackageReference Include="MSTest" Version="4.0.2" />
   </ItemGroup>
 
