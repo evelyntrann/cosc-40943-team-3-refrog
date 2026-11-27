@@ -1,0 +1,157 @@
+@using ReFrog.Contracts.Time
+@implements IDisposable
+@inject HttpClient Http
+@inject TimeProvider Clock
+
+@* The identity section of UI-account-profile (UC-IDV-verify-affiliation, IDV.md AffiliationSection). *@
+<section class="affiliation-section" aria-labelledby="affiliation-heading">
+    <h2 id="affiliation-heading">Shopping access</h2>
+
+    @if (form.Busy && form.Status is null && !form.StatusUnavailable)
+    {
+        <p role="status">Checking your shopping access…</p>
+    }
+    else if (form.SignedOut)
+    {
+        <p role="status" data-testid="signed-out">Sign in to see your shopping access.</p>
+        <a href="/sign-in?returnPath=%2Faccount">Sign in</a>
+    }
+    else if (form.StatusUnavailable)
+    {
+        <p role="alert" data-testid="access-unavailable">Unable to verify access—try again</p>
+        <button type="button" disabled="@form.Busy" @onclick="form.LoadStatusAsync">Try again</button>
+    }
+    else if (form.Status is not null)
+    {
+        @if (form.Restricted)
+        {
+            <p role="status" data-testid="restricted">Volunteer access inactive—administrator review required</p>
+        }
+        else
+        {
+            @if (form.IsVolunteer)
+            {
+                <p class="verification-badge" data-testid="volunteer">Volunteer</p>
+            }
+
+            @if (form.ShowsTcuVerified)
+            {
+                <p class="verification-badge" data-testid="tcu-verified">TCU email verified</p>
+            }
+
+            @if (form.Status.Eligible)
+            {
+                <p>Show this screen to a volunteer at the location.</p>
+            }
+        }
+
+        @if (form.OffersVerification)
+        {
+            <p data-testid="qualifying-paths">
+                To shop, you need a verified TCU email or a current approved volunteer role.
+            </p>
+
+            @* The email form stays visible after a send, so a mistyped address can be corrected; its button is the resend (5a1). *@
+            <form id="affiliation-email-form" class="affiliation-form" @onsubmit="form.RequestCodeAsync" @onsubmit:preventDefault>
+                <div class="field-group">
+                    <label for="affiliation-email">TCU email address</label>
+                    <input id="affiliation-email" type="email" autocomplete="email" @bind="form.Email"
+                           aria-describedby="affiliation-email-guidance" />
+                    <p id="affiliation-email-guidance" class="field-help">Please use a tcu.edu email if you are a TCU affiliate.</p>
+                    @if (form.FieldError("email") is { } emailError)
+                    {
+                        <p class="field-error" role="alert" data-testid="email-error">@emailError</p>
+                    }
+                </div>
+                <button class="primary-action" type="submit" data-testid="send-code" disabled="@(form.Busy || !form.CanResend)">
+                    @(form.Busy ? "Sending code…" : form.AwaitingCode ? "Send a new code" : "Send code")
+                </button>
+                @if (!form.CanResend && form.Pending is not null)
+                {
+                    <p class="field-help">You can send a new code at @EventTime.FormatInstant(form.Pending.ResendAvailableAt).</p>
+                }
+            </form>
+
+            @if (form.AwaitingCode)
+            {
+                <form id="affiliation-code-form" class="affiliation-form" @onsubmit="form.SubmitCodeAsync" @onsubmit:preventDefault>
+                    <div class="field-group">
+                        <label for="affiliation-code">Six-digit code</label>
+                        <input id="affiliation-code" inputmode="numeric" autocomplete="one-time-code" @bind="form.Code" />
+                        @if (form.CodeExpiresAt is { } expiresAt)
+                        {
+                            <p class="field-help">The code works until @EventTime.FormatInstant(expiresAt).</p>
+                        }
+                        @if (form.FieldError("code") is { } codeError)
+                        {
+                            <p class="field-error" role="alert">@codeError</p>
+                        }
+                    </div>
+                    <button class="primary-action" type="submit" disabled="@form.Busy">Verify</button>
+                </form>
+            }
+        }
+
+        @if (form.Error is { } error && error.Fields is null)
+        {
+            <p role="alert" data-testid="affiliation-error">@error.Message</p>
+            @if (error.RetryAt is { } retryAt)
+            {
+                <p data-testid="retry-at">Try again after @EventTime.FormatInstant(retryAt).</p>
+            }
+        }
+    }
+</section>
+
+@code {
+    private AffiliationForm form = null!;
+
+    private static readonly TimeSpan MaxWait = TimeSpan.FromHours(1);
+
+    private ITimer? refreshTimer;
+
+    private DateTimeOffset? refreshAt;
+
+    protected override async Task OnInitializedAsync()
+    {
+        form = new AffiliationForm(Http, Clock);
+        await form.LoadStatusAsync();
+    }
+
+    // Re-render when the resend time opens or the live code expires, as RegisterPage does for registration,
+    // so the button and the code field change without another UI event (code review of PR #149, finding 3).
+    // The timer comes from the injected clock (§8.2.2), so tests advance time instead of waiting for it.
+    protected override void OnAfterRender(bool firstRender)
+    {
+        var next = form?.NextChangeAt;
+        if (next == refreshAt && (refreshTimer is not null || next is null))
+        {
+            return;
+        }
+
+        // A new send or a verification moved the next change: replace the waiting timer.
+        refreshTimer?.Dispose();
+        refreshTimer = null;
+        refreshAt = next;
+        if (next is { } at && form!.NextChangeIn is { } wait)
+        {
+            // Capped, because a timer cannot wait more than about 49 days; an early wake-up just re-arms.
+            var due = wait <= TimeSpan.Zero ? TimeSpan.Zero : wait > MaxWait ? MaxWait : wait;
+            refreshTimer = Clock.CreateTimer(_ => _ = InvokeAsync(() => Refresh(at)), null, due, Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    private void Refresh(DateTimeOffset at)
+    {
+        if (refreshAt != at)
+        {
+            return;
+        }
+
+        refreshTimer?.Dispose();
+        refreshTimer = null;
+        StateHasChanged();
+    }
+
+    public void Dispose() => refreshTimer?.Dispose();
+}

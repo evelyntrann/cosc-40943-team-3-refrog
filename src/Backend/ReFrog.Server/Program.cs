@@ -4,6 +4,7 @@ using ReFrog.Server.Features.Administration.Persistence;
 using Microsoft.EntityFrameworkCore;
 using ReFrog.Server.Features.Authentication;
 using ReFrog.Server.Features.Authentication.Persistence;
+using ReFrog.Server.Features.IdentityVerification;
 using ReFrog.Server.Features.Info;
 using ReFrog.Server.Features.Info.Persistence;
 using ReFrog.Server.Features.Volunteer;
@@ -36,10 +37,13 @@ if (args.Contains("--apply-migrations", StringComparer.Ordinal))
 
 var logUnexpected = LoggerMessage.Define(LogLevel.Error, new EventId(7902, "UnexpectedRequestFailure"),
     "Unexpected request failure");
+// Operator notification for 2d (§8.2.7, MNT-error-notification): the failure's type only, never its message.
+var logAccessUnavailable = LoggerMessage.Define<string>(LogLevel.Error, new EventId(7914, "AccessStateUnavailable"),
+    "Current access state could not be read ({FailureType})");
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api/v1/auth") ||
-        context.Request.Path.Equals("/api/v1/me/session") ||
+        context.Request.Path.StartsWithSegments("/api/v1/me") ||
         context.Request.Path.Equals("/reset-password"))
     {
         context.Response.Headers.CacheControl = "no-store";
@@ -58,6 +62,16 @@ app.Use(async (context, next) =>
         await context.Response.WriteAsJsonAsync(ApiResponse.Failure<object>(
             new ApiError(ApiErrorCategory.Unavailable, "AUTHENTICATION_UNAVAILABLE",
                 "Authentication is temporarily unavailable. Try again.")));
+    }
+    catch (AccessStateUnavailableException failure) when (!context.Response.HasStarted)
+    {
+        logAccessUnavailable(app.Logger, failure.InnerException?.GetType().Name ?? "none", null);
+        context.Response.Clear();
+        context.Response.Headers.CacheControl = "no-store";
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await context.Response.WriteAsJsonAsync(ApiResponse.Failure<object>(
+            new ApiError(ApiErrorCategory.Unavailable, "ACCESS_UNAVAILABLE",
+                "Unable to verify access. Try again.")));
     }
     catch (Exception)
     {
@@ -88,6 +102,7 @@ app.MapInfoEndpoints();
 app.MapAdminShiftEndpoints();
 app.MapAdminDashboardEndpoints();
 app.MapVolunteerEndpoints();
+app.MapAffiliationEndpoints();
 app.Map("/api/{**path}", () => Results.Json(ApiResponse.Failure<object>(
     new ApiError(ApiErrorCategory.Validation, "NOT_FOUND", "The requested resource was not found.")),
     statusCode: StatusCodes.Status404NotFound));

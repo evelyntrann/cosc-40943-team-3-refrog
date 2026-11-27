@@ -23,6 +23,8 @@ else if (session is not null)
         }
         <button type="button" disabled="@busy" @onclick="SignOutAsync">@(busy ? "Signing out…" : "Sign out")</button>
     </section>
+
+    <ReFrog.Client.Features.IdentityVerification.AffiliationSection />
 }
 else
 {

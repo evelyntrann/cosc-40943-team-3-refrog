@@ -15,7 +15,7 @@ public sealed class RegistrationService(
     UserManager<AuthAccount> accounts,
     SignInManager<AuthAccount> signIn,
     ILookupNormalizer normalizer,
-    IEmailSender emailSender,
+    VerificationChallengeService challenges,
     TimeProvider clock,
     ILogger<RegistrationService> logger)
 {
@@ -147,24 +147,13 @@ public sealed class RegistrationService(
     {
         switch (result.Outcome)
         {
-            case RegistrationOutcome.Issued when result.Challenge is not null && result.Email is not null && result.Code is not null && result.ChallengeId is not null:
-                EmailDeliveryOutcome delivery;
-                try
-                {
-                    delivery = await emailSender.SendAsync(
-                        new EmailMessage(result.Email, "ReFrog verification code", $"Your ReFrog verification code is {result.Code}."),
-                        cancellationToken);
-                }
-                catch (Exception)
-                {
-                    delivery = EmailDeliveryOutcome.Unknown;
-                }
-
-                if (!await repository.RecordSendOutcomeAsync(result.ChallengeId.Value, delivery, cancellationToken))
+            case RegistrationOutcome.Issued when result.Challenge is not null && result.Email is not null && result.Issued is not null:
+                var delivery = await challenges.DeliverAsync(result.Email, result.Issued, cancellationToken);
+                if (!delivery.Recorded)
                 {
                     return Unavailable<RegistrationChallengeResponse>();
                 }
-                return delivery == EmailDeliveryOutcome.Accepted
+                return delivery.Outcome == EmailDeliveryOutcome.Accepted
                     ? new(202, ApiResponse.Success(result.Challenge))
                     : Error<RegistrationChallengeResponse>(503, ApiErrorCategory.Unavailable,
                         "EMAIL_NOT_SENT", "The verification message could not be confirmed. Try again when allowed.");

@@ -6,6 +6,7 @@ using ReFrog.Server.Features.Administration;
 using ReFrog.Server.Features.Administration.Persistence;
 using ReFrog.Server.Features.Authentication;
 using ReFrog.Server.Features.Authentication.Persistence;
+using ReFrog.Server.Features.IdentityVerification;
 using ReFrog.Server.Features.Info;
 using ReFrog.Server.Features.Info.Persistence;
 using ReFrog.Server.Features.Volunteer;
@@ -59,6 +60,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IPostConfigureOptions<CookieAuthenticationOptions>, CookieTimeProviderConfiguration>();
         services.AddAuthorization();
         services.AddAntiforgery();
+        services.AddScoped<EfVerificationChallengeStore>();
+        services.AddScoped<IVerificationChallengeStore>(provider => provider.GetRequiredService<EfVerificationChallengeStore>());
+        services.AddScoped<VerificationChallengeService>();
+        services.AddScoped<ITcuVerificationReader, EfTcuVerificationReader>();
+        services.AddHttpContextAccessor();
+        services.AddScoped<IVolunteerAccessStateProvider, EfVolunteerAccessStateProvider>();
+        services.AddScoped<ICurrentUser, CurrentUser>();
+        services.AddScoped<AffiliationService>();
         services.AddScoped<IAuthRepository, EfAuthRepository>();
         services.AddScoped<IAccountEmailDirectory, EfAccountEmailDirectory>();
         services.AddScoped<IAdministratorSignInAudit, EfAdministratorSignInAudit>();
@@ -111,7 +120,7 @@ public static class ServiceCollectionExtensions
                 throw new InvalidOperationException("Verification HMAC keys are not configured.");
             }
 
-            return new RegistrationCode(keys, activeVersion);
+            return new VerificationCode(keys, activeVersion);
         });
         return services;
     }
