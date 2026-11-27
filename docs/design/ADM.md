@@ -17,6 +17,12 @@ The Administration (`ADM`) area lets authorized ReFrog organizers view a consoli
 
 ## Components & classes
 
+| Manual grant boundary | Status | Responsibility |
+|---|---|---|
+| Administrator grant page and `AdminVolunteerEmailApprovalEndpoints` | New, ADM | Present the current event, collect the email and confirmation, and reconcile an uncertain save. Reuse live administrator authorization and antiforgery. |
+| `VolunteerEmailApprovalService` | New, AUTH-owned | Resolve the verified sign-in identity, manage approval storage, and coordinate immediate grant and sign-in claim through the shared access and transaction contracts. |
+| `SessionService`, `EventConfigService`, `AssignmentService`, administrator audit | Reused boundaries | AUTH provides the sign-in hook, INF locks the selector, VOL confirms existing claims, and ADM supplies the administrator audit contract. |
+
 These are **planned application boundaries**, not claims that the files already exist. They use the approved C# / ASP.NET Core, Blazor PWA, Entity Framework Core, and Microsoft SQL Server stack (`KD-tcu-it-stack`). Logical paths must follow the existing `src/Backend` and `src/Frontend` solution conventions. The email provider remains unresolved under `OI-25`.
 
 ```mermaid
@@ -185,6 +191,44 @@ classDiagram
 **Integration boundary fixed by VOL:** ADM uses `AssignmentQueryService.CountsByShiftAsync(shiftIds)` for active/pending counts, and VOL uses `ShiftService.FindSignupCandidatesAsync(now)`, `FindByIdAsync(id)`, and `LockForAssignmentAsync(id)`. `ShiftService` returns UTC instants; user-facing time is `America/Chicago`. One location-level `required_count` default is configured per event; a shift copies it at creation and may be overridden by an administrator. `ACTIVE + PENDING <= shift.required_count` must hold after every successful change. Assignment approval/denial goes through VOL's `AssignmentService`, never direct writes to `shift_assignment`.
 
 ## Sequence
+
+### UC-ADM-grant-volunteer-access: Add a volunteer by email
+
+**Designed against:** `cd7846f` (#149). **Realizes:** `UC-ADM-grant-volunteer-access`. **Depends on:** `BR-volunteer-role-approval`, `BR-volunteer-role-lifecycle`, `FR-AUTH-account-signup`, `FR-AUTH-volunteer-role`, `FR-AUTH-volunteer-lifecycle`, `FR-SAVE-confirmed-success`, `FR-SAVE-unknown-outcome`, `SEC-audit-log`, and architecture §8.
+
+```mermaid
+sequenceDiagram
+    actor A as Administrator
+    participant UI as Admin grant page
+    participant ADM as ADM grant endpoints
+    participant INF as INF EventConfigService
+    participant AUTH as AUTH grant service
+    participant VOL as VOL AssignmentService
+    participant AUD as Administrator audit
+    A->>UI: Open Add volunteer by email (1)
+    UI->>ADM: Load authorized grant context (2)
+    ADM->>INF: Resolve current event after admin authorization (2)
+    ADM-->>UI: Event context and email form (2)
+    A->>UI: Enter email and confirm (3)
+    UI->>ADM: POST email and confirmation context (3)
+    ADM->>ADM: Reauthorize, check antiforgery and validate email (4)
+    ADM->>INF: Lock current event in shared transaction (4)
+    ADM->>AUTH: Resolve verified sign-in account and lock approval key (4)
+    alt One verified match eligible for grant (5)
+        AUTH->>AUTH: Stage event-scoped role and approval (5)
+        AUTH->>VOL: Confirm existing same-event pending claims (5)
+        ADM->>AUD: Stage administrator grant audit (5)
+        ADM->>ADM: Commit together (5)
+        ADM-->>UI: Confirm granted access (6)
+    else No eligible match (4b)
+        AUTH->>AUTH: Stage outstanding event/email approval (4b)
+        ADM->>AUD: Stage administrator approval audit (4b)
+        ADM->>ADM: Commit together (4b)
+        ADM-->>UI: Confirm approval awaits verified sign-in (4b)
+    end
+```
+
+On a later successful credential check (4b), AUTH invokes the shared claim operation before issuing the session response. In one transaction, use the same INF selector lock, lock and re-read the authenticated account and approval, and check verified email, event, restriction, and revocation. For a claim that creates access, stage the role, claimed approval, same-event assignment confirmations and grant audit, then commit. If the role already exists for the same event, resolve an otherwise valid approval as claimed without replaying the grant or recording a duplicate grant audit. AUTH reports the claim separately from sign-in. See [AUTH sign-in integration](AUTH.md#manual-volunteer-approval-claim).
 
 ### UC-ADM-view-dashboard: View the event dashboard
 
@@ -423,7 +467,7 @@ sequenceDiagram
         UI->>C: POST /api/v1/admin/volunteers/{volunteerId}/approve
         C->>VR: approve(volunteerId)
         Note over VR,VOL: One database transaction
-        VR->>AUTH: Set volunteerStatus=APPROVED and Volunteer role
+        VR->>AUTH: Grant volunteer role for the assignment's event
         VR->>VOL: confirmPending(volunteerId)
         VOL-->>VR: All PENDING claims become ACTIVE; held counts unchanged
     else Deny this pending claim (3a1)
@@ -451,9 +495,15 @@ sequenceDiagram
     end
 ```
 
-**Concurrency and ownership:** Approval sets `volunteerStatus=APPROVED` once and calls VOL’s `confirmPending` in the **same transaction**. Denial calls `denyPending(volunteerId, shiftId)` and leaves the user not approved and all other assignments unchanged. `DENIED` is terminal for that one shift/person pair, so subsequent sign-ups for the same shift are rejected by VOL. The operation never increases held counts, because `PENDING → ACTIVE` is one-for-one and `PENDING → DENIED` releases a slot. Send the decision message only after a successful commit; message failure never reverses the approval/denial. The account and VOL database must support a shared transaction; if not, this is an architecture decision to resolve **before implementation**, not a silent eventual-consistency assumption.
+**Concurrency and ownership:** Approval stages the AUTH grant for the event and calls VOL’s `confirmPending` in the **same transaction**. Denial calls `denyPending(volunteerId, shiftId)` and leaves the user not approved and all other assignments unchanged. `DENIED` is terminal for that one shift/person pair, so subsequent sign-ups for the same shift are rejected by VOL. The operation never increases held counts, because `PENDING → ACTIVE` is one-for-one and `PENDING → DENIED` releases a slot. Send the decision message only after a successful commit; message failure never reverses the approval/denial. The account and VOL database must support a shared transaction; if not, this is an architecture decision to resolve **before implementation**, not a silent eventual-consistency assumption.
 
 ## API contract
+
+| Grant endpoint | Caller | Input | Result |
+|---|---|---|---|
+| `GET /api/v1/admin/volunteer-email-approvals/context` | Live administrator | None | Current event identity for confirmation. Use shared auth and availability responses, including `NO_CURRENT_EVENT` when no event is configured. |
+| `POST /api/v1/admin/volunteer-email-approvals` | Live administrator with antiforgery proof | Email, attempt ID and original event ID from the displayed context | `201 GRANTED` or `201 AWAITING_VERIFIED_SIGN_IN` for a committed change. `200 EXISTING` for already-saved state from a different attempt. A replay of a recorded attempt returns its historical result. Return attempt ID, event ID, and saved outcome. Use shared auth, antiforgery and validation errors. `409 ACCOUNT_RESOLUTION_REQUIRED` for multiple matches, `409 VOLUNTEER_ACCESS_INACTIVE` for a restricted account, `409 REQUEST_ID_REUSED` for changed input on a saved attempt, `409 NO_CURRENT_EVENT` or `409 EVENT_CONTEXT_STALE` for event guards, `503 UNAVAILABLE` for unreadable dependencies, `503 NOT_RECORDED` for a confirmed save failure, and `503 REQUEST_OUTCOME_UNKNOWN` when commit may have succeeded. INF determines grant scope. |
+| `GET /api/v1/admin/volunteer-email-approvals/attempts/{attemptId}?eventId={eventId}` | Live administrator who submitted the attempt | Original attempt ID and event ID | `200` with the recorded outcome of that attempt and the approval's latest disposition, including after rollover. This is historical evidence. `404 NOT_FOUND` for missing or out-of-scope evidence and `503 UNAVAILABLE` when it cannot be read. Neither settles an uncertain write. Return shared auth errors where applicable. |
 
 Every route is under `/api/v1/admin` and answers in the shared `ApiResponse<T>` envelope with the error categories and codes fixed by architecture §8.2.3 and [AUTH.md](AUTH.md): `401 AUTHENTICATION_REQUIRED` when signed out, `403 ADMINISTRATOR_REQUIRED` for a signed-in non-administrator (2a), `503 AUTHENTICATION_UNAVAILABLE` when the role cannot be read, `400 ANTIFORGERY_INVALID` when a write (`POST`, `PUT`, `PATCH`, `DELETE`) lacks a valid `RequestVerificationToken` header from `GET /api/v1/auth/antiforgery` (the same rule as sign-out), `422 VALIDATION_FAILED` with field messages, and `503 NOT_RECORDED` when a write is not confirmed. The `UC-ADM-manage-shifts` rows are fixed by this revision; the other rows keep their earlier content.
 
@@ -468,7 +518,7 @@ Every route is under `/api/v1/admin` and answers in the shared `ApiResponse<T>` 
 | `DELETE /api/v1/admin/shifts/{shiftId}?expectedVersion=` (second PR) | Administrator; the actor comes from the session | `expectedVersion` in the query | `200`: the removed shift's id; one `SHIFT_REMOVED` audit entry | `401` / `403`; `400 ANTIFORGERY_INVALID`; `404 NOT_FOUND`; `409 SHIFT_VERSION_STALE`; `409 ASSIGNED_SHIFT_CHANGE_UNRESOLVED`; `409 NO_CURRENT_EVENT`; `422 VALIDATION_FAILED` (`expectedVersion`); `503 NOT_RECORDED`, nothing changed |
 | `PUT /api/v1/admin/events/{eventId}/locations/{locationId}/staffing` | Administrator | `defaultRequiredCount` (positive integer). Operating days and hours are INF's and are not set here | `200`: the saved default; it applies to shifts created afterwards and existing shifts are unchanged | `401` / `403 ADMINISTRATOR_REQUIRED` (2a); `404` unknown event or location; `422 VALIDATION_FAILED` (`defaultRequiredCount`); `503 NOT_RECORDED` |
 | `GET /api/v1/admin/volunteer-reviews` | Authenticated administrator | Optional event filter | `200`: accounts with pending claims, contact/display fields permitted for review, claimed shifts and counts | `401`/`403`; `503` if required source unavailable |
-| `POST /api/v1/admin/volunteers/{volunteerId}/approve` | Authenticated administrator | No body; person chosen from review list | `200`: `volunteerStatus=APPROVED`, all current PENDING assignments become ACTIVE atomically; idempotent repeat changes nothing | `401`/`403`; `404` unknown account; `5xx` transaction failure; notification failure reported separately without rollback |
+| `POST /api/v1/admin/volunteers/{volunteerId}/approve` | Authenticated administrator | No body; person chosen from review list | `200`: AUTH confirms the role for the event and VOL confirms that event's existing pending assignments atomically; idempotent repeat changes nothing | `401`/`403`; `404` unknown account; `5xx` transaction failure; notification failure reported separately without rollback |
 | `POST /api/v1/admin/volunteers/{volunteerId}/shifts/{shiftId}/deny` | Authenticated administrator | One PENDING signup to deny | `200`: specified signup becomes DENIED, freeing one held slot; account and other sign-ups unchanged; idempotent repeat changes nothing | `401`/`403`; `404` unknown account/assignment; `409` if approval already made claim ACTIVE (policy needs client/team decision); `5xx` failure; notification status separate |
 | `POST /api/v1/admin/notifications/open-shifts` | Authenticated administrator, explicit UI confirmation | Audience = `all_volunteers` or `no_shift_signups`; no arbitrary recipient list or automatic trigger | `200` or `202`: provider accepted sending; show number of resolved recipients if available, not guaranteed delivery | `401`/`403`; `422` invalid audience; `503 NOTIFICATION_NOT_SENT` (4a); if partial sends occur, return a **truthful partial result** and do not blindly resend to successful recipients |
 
@@ -497,6 +547,22 @@ Every route is under `/api/v1/admin` and answers in the shared `ApiResponse<T>` 
 
 ## Key decisions
 
+**Grant by verified sign-in identity.** The ADM endpoint uses the existing live `AdminAuthorization` and admin write conventions. Reuse AUTH registration's email validation and Identity normalization. The AUTH-owned lookup uses the unique `AuthAccount.NormalizedEmail` key and persisted `EmailConfirmed` established by registration. The existing account directory serves display lookups. Invalid email returns a field error. More than one normalized account match is ambiguous (4c), even if only one candidate is verified. One unverified match is eligible only for the pending-approval path. An explicit restriction prevents direct grant and claim without changing the restriction or approval. Claim rechecks the authenticated account's currently stored verified sign-in address. An existing grant remains tied to the account ID when its verified email changes. Rejected alternatives include matching profile or affiliation email, creating an account from admin input, and granting access before proof.
+
+**Share the grant operation across ADM and AUTH.** The ADM grant service invokes AUTH's identity and role operations. AUTH's `SessionService` invokes the claim operation after a successful credential check. Both use INF's `GetCurrentEventForUpdateAsync` and `SqlUnitOfWork`. Authorize writes against the locked current event and retain the original event ID on the approval. For a matching account, take the AUTH account lock, then the approval row or key, then VOL's assignment locks. For an absent match, protect the normalized Identity email lookup through the pending commit and take the approval key after that lookup. Revalidate match and access before staging changes. Removal and revocation must use the same ordering for the applicable keys. Rejected alternatives include retargeting an older approval after rollover or issuing the role and marking the claim in separate commits.
+
+INF's existing selector uses an indexed lock, including the absent current-event key, and holds it through transaction end (#122). The event it supplies is the single `PLANNED` or `ACTIVE` event. A rollover writer must serialize on that selector before changing it. The grant and claim also check the AUTH lifecycle cutoff from #150 using the injected clock. The precise cutoff is still a dependency. AUTH's store must protect a missing normalized-email match against a competing registration, and protect the missing approval key against insertion, until commit. Verify those guarantees in SQL Server without prescribing the exact SQL in the business service.
+
+**Duplicate handling uses saved state.** Under the approval key lock, return an existing current grant or outstanding approval rather than writing another. The database enforces the outstanding-approval invariant for the event/email pair. Preserve terminal history and avoid replaying a previously claimed or revoked approval. The shared staged audit records administrator approval and any new role grant without exposing raw email in logs. Neither route creates a shift assignment, changes a VOL request or TCU verification, or dispatches an invitation. VOL owns confirmation of existing pending claims and leaves other events untouched.
+
+**Reconcile by exact attempt.** The form creates one attempt ID before submission and retains it with the original event context and email on retry. Persist the attempt ID and original outcome with a successful change in the same transaction, keyed to the initiating administrator. Check for a recorded attempt before applying the current-event write guard. Same input returns the historical result without writing; changed input is refused. A competing submission that finds saved state returns `EXISTING` without claiming it created that state. After an ambiguous POST, the form uses the read-back GET and retains the input. If the lookup cannot verify that attempt, show the outcome as unconfirmed. Retrying uses the same attempt and original event. A new event requires a new explicit confirmation. Rejected alternative: looking up event and email alone, which can mistake another administrator's commit for this attempt.
+
+**Audit the administrator's action and any later grant.** Record a pending approval once with the original administrator, approval and event identifiers, and time. An immediate verified-account grant uses one audit entry for the complete action. A later claim that creates access stages one grant audit entry in the same transaction, attributed to the original approving administrator, using the claim time and stable identifiers. If access is already active, record the resolution on the approval without a second grant or assignment change. A duplicate read or refused operation records no grant action.
+
+**Preserve ordinary sign-in on a failed claim.** AUTH reports the claim as unavailable or unconfirmed while preserving an otherwise successful sign-in. Confirmed rollback permits a later sign-in to retry an outstanding approval. When commit cannot be established, subsequent protected checks read authoritative access and another claim attempt rechecks persisted state before writing. The sign-in result must distinguish successful authentication from confirmation of volunteer access. Rejected alternative: treating valid authentication as proof of a saved grant.
+
+Retry the claim only on a later successful credential sign-in. The claim is never initiated by registration, cookie refresh, or a profile read.
+
 **1. Dashboard is computed from authoritative records, not an independent mutable counter.** Choose: combine configured locations with persisted donation, shopping and volunteer-assignment records, showing zeros for locations with no activity. Reject: storing a second independent dashboard total that may drift from submitted records. Reason: dashboard counts must agree with confirmed saves and include otherwise-empty sites (`UC-ADM-view-dashboard` steps 3–4, 3a; `FR-SAVE-confirmed-success`).
 
 **2. Central shift definition; Volunteer Scheduling owns enrollments.** Choose: store shift configuration once and have `VOL` reference it, with assigned count read from authoritative assignments. Reject: a separate ADM roster or sign-up counter. Reason: two owners for capacity/assignments cause misleading coverage and booking conflicts (`UC-ADM-manage-shifts`, `UC-VOL-signup`, `BR-location-staffing`).
@@ -524,6 +590,18 @@ Every route is under `/api/v1/admin` and answers in the shared `ApiResponse<T>` 
 **13. Creating a shift is idempotent.** Choose: the page sends one `requestId` per form fill, stored uniquely with the shift; a retry with the same input returns the existing shift, and the same ID with different input is refused. Reject: no key, which lets a lost response plus a retry create two shifts. Reason: `ROB-duplicate-submission`, and the same pattern as registration ([AUTH.md](AUTH.md)).
 
 ## Data model
+
+AUTH owns the email approval record behind its shared grant service. Store the original INF event ID, Identity-normalized sign-in email key, approving administrator ID, approval timestamp, and unique attempt identity for that administrator with the original committed outcome. Record claim against the stable account ID and preserve claim or revocation history under `OI-6`. An immediate grant records the approval as claimed in the grant transaction. Enforce at most one outstanding approval per event and normalized email. The shared AUTH access record remains authoritative for permissions, and ADM reuses its audit store. Approval and request history are separate records.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Outstanding: approval recorded for later verified sign-in
+    [*] --> Claimed: immediate verified-account grant
+    Outstanding --> Claimed: verified matching sign-in and eligible original event
+    Outstanding --> Revoked: administrator revokes approval
+```
+
+An event cutoff makes an outstanding approval ineligible without authorizing a new stored status or deleting history. The cutoff comes from the lifecycle contract in #150.
 
 The `UC-ADM-manage-shifts` tables below are fixed against `1bf931e`; column types and lengths are left to the build. The dashboard, notification, and review entities keep their earlier logical description.
 
@@ -582,7 +660,7 @@ erDiagram
 - **Notification outcome:** the shared Notifications component may need a minimal dispatch ID, audience and accepted/failed status for accurate reporting and retry; this is an **integration question**, not authorization to build a broad campaign/marketing or analytics system. Any retained recipient-level delivery data follows approved privacy and retention policy (`OI-6`).
 - **Migration:** a first `AdmDbContext` migration creates the `adm` schema with `Shifts`, `LocationStaffing`, and `AdminAuditEntries`, with the check constraints drawn above and a unique index on `create_request_id`. It is its own commit, like INF's `InitialInfo`.
 
-**VOL contract is authoritative:** ADM's `Shifts` table holds `required_count`, and VOL's separate `shift_assignment` table holds `PENDING`, `ACTIVE`, `CANCELLED`, or `DENIED` with unique `(shift_id, volunteer_id)`. ADM does **not** re-create that table. Authentication accounts gain `volunteerStatus=NONE | APPROVED`; approval sets this account status/role in the same transaction in which VOL confirms pending assignments. Each location's default count for an event is ADM's `LocationStaffing`; the location itself and its operating hours are INF's.
+**VOL contract is authoritative:** ADM's `Shifts` table holds `required_count`, and VOL's separate `shift_assignment` table holds `PENDING`, `ACTIVE`, `CANCELLED`, or `DENIED` with unique `(shift_id, volunteer_id)`. ADM does **not** re-create that table. AUTH owns the event-scoped role and account restriction. `APPROVED` belongs to the VOL request's decision history and does not establish current access. Each location's default count for an event is ADM's `LocationStaffing`; the location itself and its operating hours are INF's.
 
 ## Reuse & cross-cutting
 
@@ -640,14 +718,30 @@ Tests below are **specifications**, not code. They correspond to each main path 
 | Notification partial/ambiguous outcome | Integration with fake provider | Partial acceptance or timeout does not incorrectly report all recipients as sent; retry does not intentionally duplicate previously confirmed recipients |
 | Time-zone boundary | Unit | A shift scheduled/displayed across daylight-saving transitions obeys configured `America/Chicago` semantics and validates the actual event operating window |
 | Audit/privacy | Integration | Successful admin shift changes generate audit entries; logs and normal dashboard results exclude secrets and unnecessary volunteer PII |
+| `UC-ADM-grant-volunteer-access` main | SQL Server integration + client | Commit approval, event-scoped role, same-event pending confirmations, and audit atomically. Other-event assignments, VOL requests and TCU verification stay unchanged. A later verified email change on the same account preserves access. |
+| `UC-ADM-grant-volunteer-access` 2a | Integration | Reject signed-out, non-admin, unreadable authorization and invalid-antiforgery requests without writes. |
+| `UC-ADM-grant-volunteer-access` 3a | Client | Cancel sends no POST. |
+| `UC-ADM-grant-volunteer-access` 4a | Integration + client | Reject invalid email with a field error and retain the entered value. |
+| `UC-ADM-grant-volunteer-access` 4b | SQL Server integration + client | Commit a pending approval and audit together. No access until verified matching sign-in. Wrong, unverified, affiliation-only or profile-only identity cannot claim it. |
+| `UC-ADM-grant-volunteer-access` 4c | Integration with controlled AUTH lookup | Ambiguous identity returns account-resolution error and writes nothing. |
+| `UC-ADM-grant-volunteer-access` 5a | SQL Server integration | Concurrent or repeated grants and claims produce one effective grant. A matching outstanding approval can be marked claimed for an already-active account without another grant. |
+| `UC-ADM-grant-volunteer-access` 5b | SQL Server integration + client | Inject failures after staging and at commit. Check atomic rollback or honest uncertain outcome, original-event read-back, safe retry, and ordinary sign-in with a separate unconfirmed claim result. |
+| Manual grant attempt recovery | SQL Server integration + client | Lose the winning POST response, race a second administrator and roll to a new event. Only the winner's saved attempt verifies its original result. A missing, unauthorized or unavailable read-back cannot confirm a save. Same-input replay adds no audit or grant. A recorded attempt rejects changed input. |
+| Manual grant audit and sign-in result | SQL Server integration + client | Verify one audit for immediate grant or pending approval, then original-administrator attribution if a later claim creates access. An already-active claim changes only approval state. A known failure and an unknown commit both preserve a valid sign-in and display distinct claim outcomes. |
+| Manual grant lifecycle races | SQL Server integration | Race claim or direct grant against rollover, revocation and restriction. No cross-event grant, restoration through an older approval, or duplicate grant audit. No invitation is sent. |
 
 ## Changes to the architecture-of-record
+
+`UC-ADM-grant-volunteer-access` uses the ownership boundaries in architecture §5.2. The design adds no architecture decision.
 
 **Administration includes `UC-ADM-review-volunteer` in its responsibility in architecture §5.2.** The existing architecture already identifies Administration, Volunteer Scheduling, shared Authentication/Notifications and the supporting Donation/Shopping areas. **A future clarification is needed** on canonical event/location operating-window ownership and notification-provider/dispatch semantics; if this changes component responsibilities or dependencies, update `architectural-design.md` and record an appropriate `KD-*` decision **in the same PR** before implementing that change.
 
 **`UC-ADM-manage-shifts` revision (issue #108):** architecture §5.2 now records INF as the owner of events, locations, and operating hours, with Administration and Volunteer Scheduling depending on INF for them, and replaces the note that folded location setup into Administration with `OI-31`. [VOL.md](VOL.md) and [INF.md](INF.md) were updated in the same pull request to name INF's `EventConfigService`.
 
 ## Open questions & risks
+
+- **Shared contracts.** Confirm #150's event cutoff, account locking and enlistment, VOL's assignment-confirmation and concurrent sign-up or denial contracts, and the removal design's revocation contract. Confirm AUTH can stage the ADM audit through the same transaction. If same-event pending claims coexist with an already-active role, confirm reconciliation with VOL before implementation.
+- **Retry after an existing-state response and later revocation.** A competing attempt that returns `EXISTING` produces no approval record of its own. Confirm with the removal design how an uncertain replay of that attempt stays distinct from a fresh, explicit approval after revocation. The UI uses read-back for uncertain outcomes and must never automatically issue a new approval.
 
 | Question / risk | Owner or source | Impact / interim handling |
 |---|---|---|

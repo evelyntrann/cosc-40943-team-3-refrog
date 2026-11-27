@@ -225,6 +225,14 @@ sequenceDiagram
 
 Registration completion uses a SQL Server transaction. A unique normalized-email index and a unique completed-account reference prevent concurrent completion from creating two accounts. A failed account or TCU-verification write rolls back the whole completion and creates no session.
 
+### Manual volunteer approval claim
+
+`UC-ADM-grant-volunteer-access` 4b adds an AUTH claim step after a successful credential check in `SessionService`. Use the stored, registration-verified sign-in email and stable account ID. Apply the approval only while its original event remains current and eligible and AUTH confirms the approval is unrevoked and the account unrestricted. Claim, role, applicable existing VOL pending-claim confirmations and grant audit use the shared transaction in [ADM.md](ADM.md#uc-adm-grant-volunteer-access-add-a-volunteer-by-email). A new grant is audited under the original approving administrator at claim time.
+
+Successful authentication keeps HTTP `200`. Include an optional `volunteerApprovalClaim` outcome with `GRANTED`, `ALREADY_ACTIVE`, `NOT_RECORDED` for a known claim failure, or `OUTCOME_UNKNOWN` when commit may have succeeded. Omit the field when no eligible claim is found. Signal known failures separately from sign-in and offer another credential sign-in. An unknown outcome remains unconfirmed. Protected checks continue to read authoritative access.
+
+A later successful credential sign-in is the retry path. Registration, session refresh, and profile reads do not initiate a claim. The claim matches the verified sign-in email stored at claim time. An already-granted role remains bound to the stable account and original event.
+
 ### UC-AUTH-sign-in and sign-out
 
 ```mermaid
